@@ -3,7 +3,7 @@
 pub(all) enum Lookup[T] {
   NotFound
   Found(T)
-  Ambiguous(Array[T])
+  Ambiguous(ReadOnlyArray[T])
 } derive(Eq, Debug)
 
 ///|
@@ -19,7 +19,7 @@ fn[T] lookup_of(items : Array[T]) -> Lookup[T] {
   match items {
     [] => NotFound
     [x] => Found(x)
-    _ => Ambiguous(items)
+    _ => Ambiguous(ReadOnlyArray::from_array(items))
   }
 }
 
@@ -53,14 +53,13 @@ pub fn Knowledge::Knowledge(
 /// are strays.
 pub fn discover(
   set : DocumentSet,
-  under~ : ArrayView[String] = [],
+  under~ : StoreDir = StoreDir::root(),
   options~ : Options = Options::default(),
   profiles~ : ArrayView[&Profile] = [],
 ) -> Knowledge {
-  let under = under.to_owned()
-  let roots : Array[Array[String]] = []
+  let roots : Array[StoreDir] = []
   for entry in set.entries() {
-    guard under.is_empty() || entry.path.is_under(under) else { continue }
+    guard under.contains(entry.path) else { continue }
     guard entry.path.name().to_lower() == "index.md" else { continue }
     let header = split_header(entry.content.text())
     let declares = match header.shape {
@@ -71,42 +70,46 @@ pub fn discover(
       roots.push(entry.path.parent())
     }
   }
+  // Outer roots first, so that a bundle inside a bundle is skipped.
   roots.sort_by((a, b) => {
-    if a.length() != b.length() {
-      a.length().compare(b.length())
+    let (la, lb) = (a.segments().length(), b.segments().length())
+    if la != lb {
+      la.compare(lb)
     } else {
-      lexical_compare(a.join("/"), b.join("/"))
+      a.compare(b)
     }
   })
-  let accepted : Array[Array[String]] = []
+  let accepted : Array[StoreDir] = []
   for root in roots {
-    let nested = accepted.any(outer => {
-      outer.length() < root.length() &&
-      root[:outer.length()].to_owned() == outer
-    })
-    if !nested {
+    if !accepted.any(outer => outer != root && outer.encloses(root)) {
       accepted.push(root)
     }
   }
-  accepted.sort_by((a, b) => lexical_compare(a.join("/"), b.join("/")))
+  accepted.sort()
+  let depth = under.segments().length()
   let bundles = accepted.map(root => {
+    let segments = root.segments()
     // A bundle at the discovery root, or one level below it, has no group.
-    let group = if root.length() <= under.length() + 1 {
+    let group = if segments.length() <= depth + 1 {
       []
     } else {
-      root[under.length():root.length() - 1].to_owned()
+      segments.exact_view(start=depth, end=segments.length() - 1).to_owned()
     }
-    load_bundle(set, root~, group~, options~, profiles~)
+    let name = root.name().unwrap_or(".")
+    load_bundle(
+      set,
+      root~,
+      label=BundleLabel::of_parts(group, name),
+      options~,
+      profiles~,
+    )
   })
   let strays = []
   for entry in set.entries() {
-    guard under.is_empty() || entry.path.is_under(under) else { continue }
+    guard under.contains(entry.path) else { continue }
     guard is_markdown_name(entry.path.name()) else { continue }
     guard entry.path.name().to_lower() != "readme.md" else { continue }
-    let inside = accepted.any(root => {
-      root.is_empty() || entry.path.is_under(root)
-    })
-    if !inside {
+    if !accepted.any(root => root.contains(entry.path)) {
       strays.push(entry.path)
     }
   }
@@ -129,14 +132,17 @@ pub fn Knowledge::options(self : Knowledge) -> Options {
 }
 
 ///|
-/// Finds a bundle by its full label, or by its bare name when only one bundle
-/// has that name.
-pub fn Knowledge::bundle(self : Knowledge, label : String) -> Lookup[Bundle] {
+/// Finds a bundle by its full label, or by its name when the label is bare and
+/// no bundle has it as a full label.
+pub fn Knowledge::bundle(
+  self : Knowledge,
+  label : BundleLabel,
+) -> Lookup[Bundle] {
   let exact = self.bundles.iter().filter(b => b.label() == label).collect()
-  if !exact.is_empty() {
+  if !exact.is_empty() || !label.is_bare() {
     return lookup_of(exact)
   }
-  lookup_of(self.bundles.iter().filter(b => b.name() == label).collect())
+  lookup_of(self.bundles.iter().filter(b => b.name() == label.name()).collect())
 }
 
 ///|
@@ -164,13 +170,14 @@ pub fn Knowledge::documents(self : Knowledge) -> Array[(Bundle, Document)] {
 }
 
 ///|
-/// The bundle that contains a store path, if any.
+/// The bundle that contains a store path, if any. The innermost bundle wins.
 pub fn Knowledge::bundle_at(self : Knowledge, path : StorePath) -> Bundle? {
   let mut best : Bundle? = None
   for bundle in self.bundles {
-    if bundle.root().is_empty() || path.is_under(bundle.root().iter().collect()) {
+    if bundle.root().contains(path) {
       match best {
-        Some(b) if b.root().length() >= bundle.root().length() => ()
+        Some(b) if b.root().segments().length() >=
+          bundle.root().segments().length() => ()
         _ => best = Some(bundle)
       }
     }
@@ -201,13 +208,13 @@ pub fn Knowledge::document_at(
 ///|
 /// A document key: the bundle label and the bundle path.
 pub(all) struct DocKey {
-  bundle : String
+  bundle : BundleLabel
   path : BundlePath
 } derive(Eq, Hash, Debug)
 
 ///|
 pub impl Compare for DocKey with fn compare(self, other) {
-  let c = lexical_compare(self.bundle, other.bundle)
+  let c = self.bundle.compare(other.bundle)
   if c != 0 {
     c
   } else {
@@ -222,15 +229,15 @@ pub fn DocKey::of(bundle : Bundle, doc : Document) -> DocKey {
 
 ///|
 pub fn DocKey::to_string(self : DocKey) -> String {
-  self.bundle + ":" + self.path.to_string()
+  self.bundle.to_string() + ":" + self.path.to_string()
 }
 
 ///|
-/// The document for a key.
+/// The document for a key. The bundle label must match exactly.
 pub fn Knowledge::document(self : Knowledge, key : DocKey) -> Document? {
-  match self.bundle(key.bundle) {
-    Found(bundle) => bundle.document(key.path)
-    _ => None
+  match self.bundles.iter().find_first(b => b.label() == key.bundle) {
+    Some(bundle) => bundle.document(key.path)
+    None => None
   }
 }
 

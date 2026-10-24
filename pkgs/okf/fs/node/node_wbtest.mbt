@@ -15,20 +15,22 @@ async fn remove_directory(path : String) -> Unit raise @provider.StoreError {
 ///|
 async test "the Node.js store meets the store contract" {
   let dir = temporary_directory("okf-node-")
-  @conformance.check_store(NodeStore(dir))
+  @conformance.check_store(NodeStore(@provider.StoreRoot(dir)))
   remove_directory(dir)
 }
 
 ///|
 async test "the Node.js store reports missing directories" {
-  let store = NodeStore("/definitely/not/here/okf")
-  let missing = try store.list([]) catch {
-    @provider.NotFound(_) => true
-    _ => false
+  let store = NodeStore(@provider.StoreRoot("/definitely/not/here/okf"))
+  let missing = try store.list(@okf.StoreDir::root()) catch {
+    e => Some(e)
   } noraise {
-    _ => false
+    _ => None
   }
-  assert_true(missing)
+  assert_eq(
+    missing,
+    Some(@provider.NotFound(DirectoryAt(@okf.StoreDir::root()))),
+  )
 }
 
 ///|
@@ -55,8 +57,10 @@ async test "the Node.js store refuses symlinks that leave its root" {
   fs_sync("symlink", outside + "/secret.md", root + "/link.md") |> ignore
   fs_sync("symlink", outside, root + "/out") |> ignore
   fs_sync("symlink", root + "/inside.md", root + "/alias.md") |> ignore
-  let store = NodeStore(root)
-  assert_eq(store.list([]).map(e => e.name), ["alias.md", "inside.md"])
+  let store = NodeStore(@provider.StoreRoot(root))
+  assert_eq(store.list(@okf.StoreDir::root()).map(e => e.name.to_string()), [
+    "alias.md", "inside.md",
+  ])
   let read_denied = try store.read_text(@okf.StorePath("link.md")) catch {
     @provider.PermissionDenied(_) => true
     _ => false

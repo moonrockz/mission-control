@@ -152,16 +152,38 @@ pub(all) enum Status {
   Draft
   Stable
   Deprecated
-  Unknown(String)
+  /// Any other status word.
+  Unknown(UnknownStatus)
 } derive(Eq, Debug)
 
 ///|
-pub fn Status::parse(text : String) -> Status {
-  match text.to_lower() {
-    "draft" => Draft
-    "stable" => Stable
-    "deprecated" => Deprecated
-    _ => Unknown(text)
+/// A status word that is not draft, stable or deprecated. Only `Status::parse`
+/// makes one, so it is never blank and never a known word.
+struct UnknownStatus {
+  text : String
+} derive(Eq, Hash, Debug)
+
+///|
+pub fn UnknownStatus::to_string(self : UnknownStatus) -> String {
+  self.text
+}
+
+///|
+pub impl Show for UnknownStatus with fn output(self, logger) {
+  logger.write_string(self.text)
+}
+
+///|
+/// Parses a status word, ignoring letter case and surrounding white space. A
+/// blank text has no status.
+pub fn Status::parse(text : String) -> Status? {
+  let t = text.trim(chars=" \t").to_owned()
+  match t.to_lower() {
+    "" => None
+    "draft" => Some(Draft)
+    "stable" => Some(Stable)
+    "deprecated" => Some(Deprecated)
+    _ => Some(Unknown({ text: t, }))
   }
 }
 
@@ -171,35 +193,41 @@ pub fn Status::to_string(self : Status) -> String {
     Draft => "draft"
     Stable => "stable"
     Deprecated => "deprecated"
-    Unknown(text) => text
+    Unknown(word) => word.text
   }
 }
 
 ///|
-/// Who produced or verified knowledge (OKF v0.2, section 7).
-pub(all) enum Actor {
+/// Who produced or verified knowledge (OKF v0.2, section 7). Only
+/// `Actor::parse` makes one, so no case holds an empty ID.
+pub enum Actor {
   /// An automated producer, `<producer>/<version>`.
   Producer(name~ : String, version~ : String)
-  /// A person, `human:<id>`.
+  /// A person, `human:<id>`, with an ID that is not empty.
   Human(String)
-  /// A process, `process:<id>`.
+  /// A process, `process:<id>`, with an ID that is not empty.
   Process(String)
-  /// Any other form, kept as written.
+  /// Any other form that is not blank, kept as written.
   Other(String)
 } derive(Eq, Debug)
 
 ///|
-pub fn Actor::parse(text : String) -> Actor {
-  if text.has_prefix("human:") {
-    return Human(text[6:].to_owned())
+/// Parses an actor. A blank text names no actor.
+pub fn Actor::parse(text : String) -> Actor? {
+  let text = text.trim(chars=" \t").to_owned()
+  if text.length() == 0 {
+    return None
   }
-  if text.has_prefix("process:") {
-    return Process(text[8:].to_owned())
+  if text.has_prefix("human:") && text.length() > 6 {
+    return Some(Human(text[6:].to_owned()))
+  }
+  if text.has_prefix("process:") && text.length() > 8 {
+    return Some(Process(text[8:].to_owned()))
   }
   match text.rev_find("/") {
     Some(i) if i > 0 && i < text.length() - 1 && !text.contains(":") =>
-      Producer(name=text[:i].to_owned(), version=text[i + 1:].to_owned())
-    _ => Other(text)
+      Some(Producer(name=text[:i].to_owned(), version=text[i + 1:].to_owned()))
+    _ => Some(Other(text))
   }
 }
 
@@ -228,9 +256,10 @@ pub(all) struct UsageWindow {
 } derive(Eq, Debug)
 
 ///|
-/// A `{by, at}` record, as in `generated` and `verified`.
+/// A `{by, at}` record, as in `generated` and `verified`. An attribution
+/// without an actor, such as a v0.1 `timestamp`, has no `by`.
 pub(all) struct Attribution {
-  by : Actor
+  by : Actor?
   at : String?
 } derive(Eq, Debug)
 
@@ -254,7 +283,7 @@ pub(all) struct Parameter {
 /// The `executor` of an Attested Computation.
 pub(all) struct Executor {
   resource : String?
-  receipt : Array[String]
+  receipt : ReadOnlyArray[String]
 } derive(Eq, Debug)
 
 ///|
@@ -271,11 +300,16 @@ fn attribution_of(fields : Fields) -> Attribution? {
 }
 
 ///|
-/// The OKF `type`, or `None` when it is missing or empty.
-pub fn Metadata::concept_type(self : Metadata) -> String? {
+/// The OKF `type`, or `None` when it is missing or blank.
+pub fn Metadata::concept_type(self : Metadata) -> ConceptType? {
   match self.text("type") {
-    Some(t) if t.trim(chars=" \t").length() > 0 => Some(t)
-    _ => None
+    Some(t) =>
+      try ConceptType(t) catch {
+        _ => None
+      } noraise {
+        c => Some(c)
+      }
+    None => None
   }
 }
 
@@ -346,7 +380,7 @@ pub fn Metadata::generated(
     [] =>
       if options.v01_fields {
         match self.text("timestamp") {
-          Some(at) => Some({ by: Other(""), at: Some(at), })
+          Some(at) => Some({ by: None, at: Some(at), })
           None => None
         }
       } else {
@@ -367,7 +401,7 @@ pub fn Metadata::trust_tier(self : Metadata) -> TrustTier {
   let verified = self.verified()
   if verified.is_empty() {
     Unverified
-  } else if verified.any(a => a.by.is_human()) {
+  } else if verified.any(a => a.by is Some(Human(_))) {
     HumanReviewed
   } else {
     MachineConfirmed
@@ -378,7 +412,7 @@ pub fn Metadata::trust_tier(self : Metadata) -> TrustTier {
 /// The written `status`, or `None` when it is absent.
 pub fn Metadata::status(self : Metadata) -> Status? {
   match self.text("status") {
-    Some(text) => Some(Status::parse(text))
+    Some(text) => Status::parse(text)
     None => None
   }
 }
@@ -454,7 +488,7 @@ pub fn Metadata::executor(self : Metadata) -> Executor? {
     [fields, ..] =>
       Some({
         resource: fields.text("resource"),
-        receipt: fields.texts("receipt"),
+        receipt: ReadOnlyArray::from_array(fields.texts("receipt")),
       })
     [] => None
   }
@@ -539,3 +573,15 @@ pub extend Executor with Eq::{not_equal, equal}
 
 ///|
 pub extend Executor with @debug.Debug::{to_repr}
+
+///|
+pub extend UnknownStatus with Eq::{not_equal, equal}
+
+///|
+pub extend UnknownStatus with Hash::{hash, hash_combine}
+
+///|
+pub extend UnknownStatus with @debug.Debug::{to_repr}
+
+///|
+pub extend UnknownStatus with Show::{output}

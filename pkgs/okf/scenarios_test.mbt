@@ -5,17 +5,65 @@ fn set_of(files : Array[(String, String)]) -> @okf.DocumentSet raise {
 
 ///|
 test "GitHub source URL parts" {
-  let parts = @okf.GitHubSource::parse(
+  let p = @okf.GitHubSource(
     "https://github.com/finos/morphir/blob/ab8d5c91/spec/ir.md",
   )
   assert_eq(
-    parts.map(p => (p.org, p.repo, p.commit, p.path)),
-    Some(("finos", "morphir", "ab8d5c91", "spec/ir.md")),
+    (p.org(), p.repo(), p.commit().to_string(), p.path()),
+    ("finos", "morphir", "ab8d5c91", "spec/ir.md"),
   )
-  assert_eq(
-    @okf.GitHubSource::parse("https://github.com/finos/morphir/blob/main/x.md"),
-    None,
+  let errors = [
+    "https://github.com/finos/morphir/blob/main/x.md", "https://gitlab.com/a/b/blob/ab8d5c91/x.md",
+    "https://github.com/finos/morphir/blob/ab8d5c91/", "https://github.com//morphir/blob/ab8d5c91/x.md",
+    "https://github.com/finos/morphir/blob/ab8d5c/x.md",
+  ].map(url => {
+    let e = try @okf.GitHubSource(url) catch {
+      e => e
+    } noraise {
+      _ => fail("parsed \{url}")
+    }
+    match e {
+      NotGitHub(_) => "not-github"
+      MissingPart(_) => "missing-part"
+      NotACommit(_) => "not-a-commit"
+    }
+  })
+  assert_eq(errors, [
+    "not-a-commit", "not-github", "missing-part", "missing-part", "not-a-commit",
+  ])
+  // 7 and 40 hexadecimal characters are the limits.
+  assert_eq(@okf.CommitSha("abcdef0").to_string(), "abcdef0")
+  let forty = "a".repeat(40)
+  assert_eq(@okf.CommitSha(forty).to_string(), forty)
+  let too_long = try @okf.CommitSha("a".repeat(41)) catch {
+    _ => None
+  } noraise {
+    c => Some(c)
+  }
+  assert_eq(too_long, None)
+}
+
+///|
+test "document references parse labels and paths at the boundary" {
+  let same = @okf.DocRef("/tables/orders.md")
+  assert_eq(same.bundle(), None)
+  assert_eq(same.path().to_string(), "/tables/orders.md")
+  let other = @okf.DocRef("morphir/ir:/names.md")
+  assert_eq(other.bundle().map(l => l.to_string()), Some("morphir/ir"))
+  let kinds = ["names.md", ":/names.md", "Bad Label:/names.md", "ir:/../x.md"].map(text => {
+      let e = try @okf.DocRef(text) catch {
+        e => e
+      } noraise {
+        _ => fail("parsed \{text}")
+      }
+      match e {
+        NotADocRef(_) => "not-a-ref"
+        BadLabel(..) => "bad-label"
+        BadPath(..) => "bad-path"
+      }
+    },
   )
+  assert_eq(kinds, ["not-a-ref", "not-a-ref", "bad-label", "bad-path"])
 }
 
 ///|
@@ -50,11 +98,11 @@ test "a cross-bundle link resolves and gives a backlink" {
         "bundles/morphir/cli/use.md", "---\ntype: Design Note\n---\nSee [names](../ir/names.md).\n",
       ),
     ]),
-    under=["bundles"],
+    under=@okf.StoreDir("bundles"),
   )
   let g = @okf.Graph::build(k)
   let names : @okf.DocKey = {
-    bundle: "morphir/ir",
+    bundle: @okf.BundleLabel("morphir/ir"),
     path: @okf.BundlePath("/names.md"),
   }
   assert_eq(g.linked_from(names).map(key => key.to_string()), [
@@ -70,9 +118,9 @@ test "a resolver that knows files outside the bundle" {
   ])
   let k = @okf.discover(set)
   assert_eq(@okf.Graph::build(k).broken().length(), 1)
-  let resolver : &@okf.LinkResolver = @okf.PathListResolver::{
-    paths: [@okf.StorePath("spec/x.md")],
-  }
+  let resolver : &@okf.LinkResolver = @okf.PathListResolver([
+    @okf.StorePath("spec/x.md"),
+  ])
   assert_eq(@okf.Graph::build(k, resolver~).broken().length(), 0)
 }
 
@@ -84,16 +132,19 @@ test "an ambiguous bare bundle name" {
       ("finos/ir/index.md", "---\nokf_version: \"0.2\"\n---\n"),
     ]),
   )
-  guard k.bundle("ir") is Ambiguous(list) else {
+  guard k.bundle(@okf.BundleLabel("ir")) is Ambiguous(list) else {
     fail("expected an ambiguous lookup")
   }
-  assert_eq(list.map(b => b.label()), ["finos/ir", "morphir/ir"])
-  assert_true(k.bundle("morphir/ir") is Found(_))
+  assert_eq(list.map(b => b.label().to_string()), ["finos/ir", "morphir/ir"])
+  assert_true(k.bundle(@okf.BundleLabel("morphir/ir")) is Found(_))
 }
 
 ///|
 test "padded record IDs and duplicate IDs" {
-  let reg = @okf.Register("decision", "Decision Record")
+  let reg = @okf.Register(
+    @okf.RegisterName("decision"),
+    @okf.ConceptType("Decision Record"),
+  )
   let b = @okf.load_bundle(
     set_of([
       ("decisions/42-use-yaml.md", "---\ntype: Decision Record\n---\n"),
@@ -102,8 +153,12 @@ test "padded record IDs and duplicate IDs" {
     ]),
   )
   let records = reg.records(b)
-  assert_eq(records.map(r => r.id.unwrap_or("")), ["0042", "0042", "0007"])
-  assert_eq(reg.duplicates(records).map(d => (d.0, d.1.length())), [("0042", 2)])
+  assert_eq(records.map(r => r.id.map(i => i.to_string()).unwrap_or("")), [
+    "0042", "0042", "0007",
+  ])
+  assert_eq(reg.duplicates(records).map(d => (d.0.to_string(), d.1.length())), [
+    ("0042", 2),
+  ])
   assert_true(reg.find(records, "42") is Ambiguous(_))
 }
 
@@ -127,7 +182,7 @@ impl @okf.Profile for StateProfile with fn name(self) {
 
 ///|
 impl @okf.Profile for StateProfile with fn vocabulary(self) {
-  [@okf.KeyDefinition("state", values=self.values)]
+  [@okf.KeyDefinition(@okf.FieldKey("state"), values=self.values)]
 }
 
 ///|
@@ -145,7 +200,11 @@ test "an empty profile changes nothing, and conflicting profiles are reported" {
   let a : &@okf.Profile = StateProfile::{ values: ["open", "closed"], }
   let b : &@okf.Profile = StateProfile::{ values: ["Backlog"], }
   assert_eq(@okf.profile_conflicts([a, b]), [
-    KeyConflict(key="state", first="state-open-closed", second="state-Backlog"),
+    KeyConflict(
+      key=@okf.FieldKey("state"),
+      first="state-open-closed",
+      second="state-Backlog",
+    ),
   ])
   assert_eq(@okf.profile_conflicts([a, a]), [])
 }
@@ -166,7 +225,9 @@ test "findings carry their fields and keep a stable order" {
   assert_eq(first.findings(), second.findings())
   let rows = first
     .findings()
-    .map(f => (f.severity.to_string(), f.rule, f.path))
+    .map(f => {
+      (f.severity.to_string(), f.rule.to_string(), f.subject.path_text())
+    })
     .iter()
     .collect()
   assert_eq(rows, [
@@ -221,7 +282,7 @@ test "derived metadata is marked and does not change the text" {
   guard b.document(@okf.BundlePath("/specs/a/spec.md")) is Some(doc) else {
     fail("no doc")
   }
-  assert_eq(doc.concept_type(), Some("Specification"))
+  assert_eq(doc.concept_type().map(t => t.to_string()), Some("Specification"))
   assert_true(doc.is_derived())
   assert_eq(doc.text(), "# a Specification\n")
 }
@@ -249,7 +310,11 @@ test "a bundle at the discovery root has no group" {
     set_of([("index.md", "---\nokf_version: \"0.2\"\n---\n")]),
   )
   assert_eq(
-    root.bundles().map(b => (b.label(), b.group().length())).iter().collect(),
+    root
+    .bundles()
+    .map(b => (b.label().to_string(), b.group().length()))
+    .iter()
+    .collect(),
     [(".", 0)],
   )
   let under = @okf.discover(
@@ -257,12 +322,12 @@ test "a bundle at the discovery root has no group" {
       ("kb/index.md", "---\nokf_version: \"0.2\"\n---\n"),
       ("kb/a.md", "---\ntype: A\n---\n"),
     ]),
-    under=["kb"],
+    under=@okf.StoreDir("kb"),
   )
   assert_eq(
     under
     .bundles()
-    .map(b => (b.label(), b.concepts().length()))
+    .map(b => (b.label().to_string(), b.concepts().length()))
     .iter()
     .collect(),
     [("kb", 1)],
@@ -290,7 +355,72 @@ test "a log heading that is not a real date is undated" {
     ]),
   )
   guard b.root_log() is Some(log) else { fail("no log") }
-  assert_eq(log.log_model().undated_sections().map(s => s.date), [
-    "2026-13-45", "2026-02-30",
+  assert_eq(
+    log.log_model().undated_sections().map(s => s.heading.to_string()),
+    ["2026-13-45", "2026-02-30"],
+  )
+}
+
+///|
+priv struct BrokenProfile {}
+
+///|
+impl @okf.Profile for BrokenProfile with fn name(_) {
+  "broken"
+}
+
+///|
+impl @okf.Profile for BrokenProfile with fn severities(_) {
+  [(@okf.RuleName("Not Kebab"), Warning)]
+}
+
+///|
+priv struct DanglingRef {}
+
+///|
+impl @okf.Profile for DanglingRef with fn name(_) {
+  "dangling"
+}
+
+///|
+impl @okf.Profile for DanglingRef with fn reference_fields(_) {
+  [
+    {
+      key: @okf.FieldKey("decision"),
+      kind: RecordRef(register=@okf.RegisterName("decision")),
+    },
+  ]
+}
+
+///|
+test "validation reports invalid profiles and unknown config rule names" {
+  let k = @okf.discover(
+    set_of([("index.md", "---\nokf_version: \"0.2\"\n---\n")]),
+  )
+  let clock = @okf.FixedClock(@okf.Instant::of_millis(0L))
+  let config = @okf.ValidationConfig(
+    overrides=[(@okf.RuleName("no-such-rule"), Info)],
+    disabled=[@okf.RuleName("concept-missing-type")],
+  )
+  let report = @okf.validate(k, [@okf.okf_v02_conformance()], clock, config~, profiles=[
+    BrokenProfile::{ },
   ])
+  let rows = report
+    .findings()
+    .map(f => (f.severity.to_string(), f.rule.to_string(), f.subject))
+    .iter()
+    .collect()
+  assert_eq(rows, [
+    ("error", "profile-invalid", ProfileSubject("broken")),
+    ("warn", "validation-config-unknown-rule", ConfigSubject),
+  ])
+  let conflicts = @okf.profile_conflicts([DanglingRef::{ }])
+  assert_eq(conflicts.length(), 1)
+  assert_true(
+    conflicts[0]
+    is ProfileInvalid(
+      profile="dangling",
+      error=UnknownRegister(register="decision")
+    ),
+  )
 }

@@ -9,21 +9,38 @@ pub(all) struct IndexEntry {
 } derive(Eq, Debug)
 
 ///|
-/// One section of an `index.md`: a heading with its entries and other lines.
-pub(all) struct IndexSection {
-  /// The heading text, or `None` for lines before the first heading.
-  heading : String?
-  level : Int32
-  line : Int32
-  entries : Array[IndexEntry]
-  /// Lines that are not entries, such as prose.
-  text : Array[String]
+/// The heading of an index section.
+pub(all) enum IndexHeading {
+  /// The lines before the first heading.
+  Preamble
+  /// A heading line with its text and level.
+  Titled(String, HeadingLevel)
 } derive(Eq, Debug)
 
 ///|
+/// One section of an `index.md`: a heading with its entries and other lines.
+pub struct IndexSection {
+  heading : IndexHeading
+  /// The file line of the heading, or of the body start for the preamble.
+  line : Int32
+  entries : ReadOnlyArray[IndexEntry]
+  /// Lines that are not entries, such as prose.
+  text : ReadOnlyArray[String]
+} derive(Eq, Debug)
+
+///|
+/// The heading text, or `None` for the preamble.
+pub fn IndexSection::title(self : IndexSection) -> String? {
+  match self.heading {
+    Preamble => None
+    Titled(text, _) => Some(text)
+  }
+}
+
+///|
 /// The parsed body of an `index.md` (OKF v0.2, section 8).
-pub(all) struct IndexModel {
-  sections : Array[IndexSection]
+pub struct IndexModel {
+  sections : ReadOnlyArray[IndexSection]
 } derive(Eq, Debug)
 
 ///|
@@ -44,12 +61,12 @@ pub fn IndexModel::section(
   self : IndexModel,
   heading : String,
 ) -> IndexSection? {
-  self.sections.iter().find_first(s => s.heading == Some(heading))
+  self.sections.iter().find_first(s => s.title() == Some(heading))
 }
 
 ///|
 /// Parses an ATX heading line, `## Text`.
-fn parse_heading_line(line : String) -> (Int32, String)? {
+fn parse_heading_line(line : String) -> (HeadingLevel, String)? {
   let trimmed = line.trim_start(chars=" ").to_owned()
   if line.length() - trimmed.length() > 3 {
     return None
@@ -67,7 +84,8 @@ fn parse_heading_line(line : String) -> (Int32, String)? {
   let text = trimmed[level:].trim(chars=" \t").to_owned()
   // A closing sequence of `#` characters is not part of the text.
   let text = text.trim_end(chars="#").trim_end(chars=" \t").to_owned()
-  Some((level, text))
+  // The loop above keeps the level from 1 to 6.
+  Some(({ value: level, }, text))
 }
 
 ///|
@@ -176,46 +194,39 @@ fn body_lines(doc : Document) -> Array[(Int32, String)] {
 /// Parses the body of an index document.
 pub fn Document::index_model(self : Document) -> IndexModel {
   let sections : Array[IndexSection] = []
-  let mut current : IndexSection = {
-    heading: None,
-    level: 0,
-    line: self.body_line(),
-    entries: [],
-    text: [],
+  let mut heading = Preamble
+  let mut start = self.body_line()
+  let entries : Array[IndexEntry] = []
+  let text : Array[String] = []
+  let flush = () => {
+    if heading is Titled(_, _) || !entries.is_empty() || !text.is_empty() {
+      sections.push({
+        heading,
+        line: start,
+        entries: ReadOnlyArray::from_array(entries.copy()),
+        text: ReadOnlyArray::from_array(text.copy()),
+      })
+    }
+    entries.clear()
+    text.clear()
   }
   for pair in body_lines(self) {
     let (number, line) = pair
     match parse_heading_line(line) {
-      Some((level, text)) => {
-        if current.heading is Some(_) ||
-          !current.entries.is_empty() ||
-          !current.text.is_empty() {
-          sections.push(current)
-        }
-        current = {
-          heading: Some(text),
-          level,
-          line: number,
-          entries: [],
-          text: [],
-        }
+      Some((level, title)) => {
+        flush()
+        heading = Titled(title, level)
+        start = number
       }
       None =>
         match parse_index_entry(line, line_number=number) {
-          Some(entry) => current.entries.push(entry)
-          None =>
-            if line.trim(chars=" \t").length() > 0 {
-              current.text.push(line)
-            }
+          Some(entry) => entries.push(entry)
+          None => if line.trim(chars=" \t").length() > 0 { text.push(line) }
         }
     }
   }
-  if current.heading is Some(_) ||
-    !current.entries.is_empty() ||
-    !current.text.is_empty() {
-    sections.push(current)
-  }
-  { sections, }
+  flush()
+  { sections: ReadOnlyArray::from_array(sections), }
 }
 
 ///|
@@ -330,18 +341,19 @@ pub fn Bundle::description_drift(self : Bundle) -> Array[Drift] {
 /// a subdirectory. The root index keeps the `okf_version` of the bundle.
 pub fn generate_index(
   bundle : Bundle,
-  dir~ : ArrayView[String] = [],
-  describe~ : (Array[String]) -> String? = _ => None,
+  dir~ : StoreDir = StoreDir::root(),
+  describe~ : (StoreDir) -> String? = _ => None,
 ) -> String {
-  let dir = dir.to_owned()
-  let groups : Map[String, Array[(String, String, String?)]] = Map([])
-  let add = (group : String, entry : (String, String, String?)) => {
-    match groups.get(group) {
-      Some(list) => list.push(entry)
-      None => groups[group] = [entry]
+  let base = dir
+  let dir = dir.segments()
+  let groups : Array[(IndexGroup, Array[(String, String, String?)])] = []
+  let add = (group : IndexGroup, entry : (String, String, String?)) => {
+    match groups.search_by(g => g.0 == group) {
+      Some(i) => groups[i].1.push(entry)
+      None => groups.push((group, [entry]))
     }
   }
-  let subdirs : Array[String] = []
+  let subdirs : Array[EntryName] = []
   for doc in bundle.documents() {
     let segments = doc.path().segments()
     let n = segments.length()
@@ -356,30 +368,41 @@ pub fn generate_index(
     guard inside else { continue }
     if n == dir.length() + 1 {
       guard !doc.kind().is_index() && !(doc.kind() is Log) else { continue }
-      let typ = doc.concept_type().unwrap_or("Other")
+      let group = match doc.concept_type() {
+        Some(t) => Typed(t)
+        None => Untyped
+      }
       add(
-        typ,
+        group,
         (doc.display_title(), doc.path().name(), doc.metadata().description()),
       )
     } else {
-      let child = segments[dir.length()]
+      // A segment of a bundle path is always a valid entry name.
+      let child = EntryName(segments[dir.length()]) catch { _ => continue }
       if !subdirs.contains(child) {
         subdirs.push(child)
       }
     }
   }
-  subdirs.sort_by(lexical_compare)
+  subdirs.sort_by((a, b) => lexical_compare(a.to_string(), b.to_string()))
   for child in subdirs {
-    let path = dir.copy()
-    path.push(child)
-    add("Subdirectories", (child, child + "/index.md", describe(path)))
+    let name = child.to_string()
+    add(Subdirectories, (name, name + "/index.md", describe(base.child(child))))
   }
-  let types = groups.keys().collect()
-  types.sort_by(lexical_compare)
-  let sections = types.map(typ => {
-    let entries = groups.get(typ).unwrap_or([])
+  // Sections sort by heading text, as the reference generator does; a concept
+  // type and a group with the same heading stay separate sections.
+  groups.sort_by((a, b) => {
+    let c = lexical_compare(a.0.heading(), b.0.heading())
+    if c != 0 {
+      c
+    } else {
+      a.0.rank().compare(b.0.rank())
+    }
+  })
+  let sections = groups.map(group => {
+    let entries = group.1
     entries.sort_by((a, b) => lexical_compare(a.0.to_lower(), b.0.to_lower()))
-    let lines = ["# \{typ}", ""]
+    let lines = ["# \{group.0.heading()}", ""]
     for e in entries {
       let suffix = match e.2 {
         Some(d) => " - " + d
@@ -392,7 +415,7 @@ pub fn generate_index(
   let body = sections.join("\n\n") + "\n"
   if dir.is_empty() {
     match bundle.okf_version() {
-      Some(v) => "---\nokf_version: \"\{v}\"\n---\n\n" + body
+      Some(v) => "---\nokf_version: \"\{v.to_string()}\"\n---\n\n" + body
       None => body
     }
   } else {
@@ -417,3 +440,45 @@ pub extend IndexModel with Eq::{not_equal, equal}
 
 ///|
 pub extend IndexModel with @debug.Debug::{to_repr}
+
+///|
+/// A section of a generated index.
+pub(all) enum IndexGroup {
+  /// The concepts of one type.
+  Typed(ConceptType)
+  /// The concepts without a type, under `Other`.
+  Untyped
+  /// The subdirectories.
+  Subdirectories
+} derive(Eq, Debug)
+
+///|
+/// The heading text of the section.
+pub fn IndexGroup::heading(self : IndexGroup) -> String {
+  match self {
+    Typed(t) => t.to_string()
+    Untyped => "Other"
+    Subdirectories => "Subdirectories"
+  }
+}
+
+///|
+fn IndexGroup::rank(self : IndexGroup) -> Int32 {
+  match self {
+    Typed(_) => 0
+    Untyped => 1
+    Subdirectories => 2
+  }
+}
+
+///|
+pub extend IndexGroup with Eq::{not_equal, equal}
+
+///|
+pub extend IndexGroup with @debug.Debug::{to_repr}
+
+///|
+pub extend IndexHeading with Eq::{not_equal, equal}
+
+///|
+pub extend IndexHeading with @debug.Debug::{to_repr}

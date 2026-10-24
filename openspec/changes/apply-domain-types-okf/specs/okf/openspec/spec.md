@@ -9,6 +9,10 @@ The OpenSpec profile SHALL parse capability paths, change names and requirement 
 - **WHEN** the profile loads an archived change
 - **THEN** the change has the archived state value
 
+#### Scenario: Invalid name in a native concept
+- **WHEN** a native `Specification` concept has `capability: ../x`
+- **THEN** the view leaves the concept out and validation reports `openspec-invalid-name`
+
 ### Requirement: Task numbers
 The OpenSpec profile SHALL parse a task number as dot-separated positive integers and SHALL order task numbers by their numbers, so that `1.2` comes before `1.10`. A task without a number SHALL have no number.
 
@@ -21,4 +25,4 @@ The OpenSpec profile SHALL give a rename only when it has both a from name and a
 
 #### Scenario: Rename without TO
 - **WHEN** a `RENAMED Requirements` section has `- FROM: X` and no `TO:` line
-- **THEN** the view has no rename for `X` and validation reports the incomplete rename
+- **THEN** the view has no rename for `X` and validation reports `openspec-rename-incomplete`

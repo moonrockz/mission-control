@@ -29,9 +29,9 @@ test "discovery matches morphir kb list" {
     .bundles()
     .map(b => {
       (
-        b.label(),
+        b.label().to_string(),
         b.group().join("/"),
-        b.okf_version().unwrap_or(""),
+        b.okf_version().map(v => v.to_string()).unwrap_or(""),
         b.concepts().length(),
         b.indexes().filter(d => d.kind() is SubIndex).length(),
         b.root_log() is Some(_),
@@ -77,18 +77,30 @@ fn golden_findings(
 }
 
 ///|
+/// The path of a finding subject in the form that `morphir kb check` prints.
+fn morphir_path(subject : @okf.FindingSubject) -> String {
+  match subject {
+    InBundle(label, path) =>
+      "kb/bundles/" + label.to_string() + path.to_string()
+    Stray(path) => "kb/" + path.to_string()
+    ProfileSubject(name) => "profile:" + name
+    ConfigSubject => "config"
+  }
+}
+
+///|
 fn as_morphir_rows(
   report : @okf.Report,
   checks : Array[String],
 ) -> Array[(String, String, String, Int32)] {
   let out = []
   for f in report.findings() {
-    if checks.contains(f.rule) {
+    if checks.contains(f.rule.to_string()) {
       out.push(
         (
           f.severity.to_string(),
-          f.rule,
-          "kb/bundles/" + f.bundle + f.path,
+          f.rule.to_string(),
+          morphir_path(f.subject),
           f.line.unwrap_or(0),
         ),
       )
@@ -106,7 +118,9 @@ test "broken links and drift match morphir kb check" {
     knowledge,
     [@okf.okf_v02_conformance(), @okf.advisory()],
     @okf.FixedClock::at("2026-10-23T00:00:00Z"),
-    config=@okf.ValidationConfig(overrides=[("link-broken", Error)]),
+    config=@okf.ValidationConfig(overrides=[
+      (@okf.RuleName("link-broken"), Error),
+    ]),
   )
   assert_eq(as_morphir_rows(report, checks), golden_findings(checks))
   assert_eq(report.count(Error), 32)
@@ -116,14 +130,20 @@ test "broken links and drift match morphir kb check" {
 test "the OKF sample bundles report no conformance error" {
   for name in ["acme_retail", "ga4"] {
     let set = load_fixture("okf-fixtures/okf-samples/" + name)
-    let knowledge = @okf.Knowledge([@okf.load_bundle(set, name~)])
+    let knowledge = @okf.Knowledge([
+      @okf.load_bundle(set, label=@okf.BundleLabel(name)),
+    ])
     let report = @okf.validate(
       knowledge,
       [@okf.okf_v02_conformance()],
       @okf.FixedClock::at("2026-10-23T00:00:00Z"),
     )
     assert_eq(
-      report.findings().map(f => f.rule + " " + f.path).iter().collect(),
+      report
+      .findings()
+      .map(f => f.rule.to_string() + " " + f.subject.path_text())
+      .iter()
+      .collect(),
       [],
       msg=name,
     )

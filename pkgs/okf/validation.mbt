@@ -7,6 +7,7 @@ pub(all) enum Severity {
 } derive(Eq, Compare, Hash, Debug)
 
 ///|
+/// The short form of a severity, as reports print it: `error`, `warn` or `info`.
 pub fn Severity::to_string(self : Severity) -> String {
   match self {
     Error => "error"
@@ -16,14 +17,53 @@ pub fn Severity::to_string(self : Severity) -> String {
 }
 
 ///|
-/// One validation result.
-pub(all) struct Finding {
+/// What a finding is about.
+pub(all) enum FindingSubject {
+  /// A document of a bundle.
+  InBundle(BundleLabel, BundlePath)
+  /// A Markdown file outside every bundle.
+  Stray(StorePath)
+  /// A profile, by name, for a profile definition that breaks a rule.
+  ProfileSubject(String)
+  /// The validation config.
+  ConfigSubject
+} derive(Eq, Debug)
+
+///|
+/// The bundle label of the subject, when it is a document of a bundle.
+pub fn FindingSubject::bundle(self : FindingSubject) -> BundleLabel? {
+  match self {
+    InBundle(label, _) => Some(label)
+    _ => None
+  }
+}
+
+///|
+/// The path text of the subject: a bundle path, a store path, or `""`.
+pub fn FindingSubject::path_text(self : FindingSubject) -> String {
+  match self {
+    InBundle(_, path) => path.to_string()
+    Stray(path) => path.to_string()
+    ProfileSubject(_) | ConfigSubject => ""
+  }
+}
+
+///|
+fn FindingSubject::sort_key(self : FindingSubject) -> (Int32, String, String) {
+  match self {
+    ConfigSubject => (0, "", "")
+    ProfileSubject(name) => (1, name, "")
+    InBundle(label, path) => (2, label.to_string(), path.to_string())
+    Stray(path) => (3, "", path.to_string())
+  }
+}
+
+///|
+/// One validation result. Only `validate` makes findings.
+pub struct Finding {
   severity : Severity
-  rule : String
-  /// The bundle label, or `""` for a file outside every bundle.
-  bundle : String
-  /// The document path: a bundle path, or a store path for a stray.
-  path : String
+  rule : RuleName
+  subject : FindingSubject
   line : Int32?
   message : String
   hint : String?
@@ -31,24 +71,12 @@ pub(all) struct Finding {
 
 ///|
 /// What a rule reports. Validation adds the rule name and the severity.
-pub(all) struct Issue {
-  bundle : String
-  path : String
+pub struct Issue {
+  subject : FindingSubject
   line : Int32?
   message : String
   hint : String?
 } derive(Eq, Debug)
-
-///|
-pub fn Issue::Issue(
-  bundle : String,
-  path : String,
-  message : String,
-  line? : Int32,
-  hint? : String,
-) -> Issue {
-  { bundle, path, line, message, hint, }
-}
 
 ///|
 /// An issue about one document of a bundle.
@@ -59,31 +87,52 @@ pub fn Issue::at(
   line? : Int32,
   hint? : String,
 ) -> Issue {
-  { bundle: bundle.label(), path: doc.path().to_string(), line, message, hint, }
+  { subject: InBundle(bundle.label(), doc.path()), line, message, hint, }
+}
+
+///|
+/// An issue about a document of a bundle, by its key.
+pub fn Issue::in_bundle(
+  key : DocKey,
+  message : String,
+  line? : Int32,
+  hint? : String,
+) -> Issue {
+  { subject: InBundle(key.bundle, key.path), line, message, hint, }
+}
+
+///|
+/// An issue about a Markdown file outside every bundle.
+pub fn Issue::stray(
+  path : StorePath,
+  message : String,
+  hint? : String,
+) -> Issue {
+  { subject: Stray(path), line: None, message, hint, }
 }
 
 ///|
 /// The inputs that every rule can read.
-pub(all) struct ValidationContext {
+pub struct ValidationContext {
   knowledge : Knowledge
   graph : Graph
   now : Instant
   options : Options
   vocabulary : Vocabulary
-  profiles : Array[&Profile]
+  profiles : ReadOnlyArray[&Profile]
 }
 
 ///|
 /// One named check with a default severity.
 struct Rule {
-  name : String
+  name : RuleName
   severity : Severity
   check : (ValidationContext) -> Array[Issue]
 }
 
 ///|
 pub fn Rule::Rule(
-  name : String,
+  name : RuleName,
   severity : Severity,
   check : (ValidationContext) -> Array[Issue],
 ) -> Rule {
@@ -91,7 +140,7 @@ pub fn Rule::Rule(
 }
 
 ///|
-pub fn Rule::name(self : Rule) -> String {
+pub fn Rule::name(self : Rule) -> RuleName {
   self.name
 }
 
@@ -101,7 +150,7 @@ pub fn Rule::severity(self : Rule) -> Severity {
 }
 
 ///|
-/// A named group of rules.
+/// A named group of rules. The name is a label for reports.
 struct RuleSet {
   name : String
   rules : ReadOnlyArray[Rule]
@@ -123,24 +172,46 @@ pub fn RuleSet::rules(self : RuleSet) -> ReadOnlyArray[Rule] {
 }
 
 ///|
-/// How a caller adjusts validation.
-pub(all) struct ValidationConfig {
-  /// Severity changes, by rule name.
-  overrides : Map[String, Severity]
-  /// Rules that do not run, by name.
-  disabled : Array[String]
+/// How a caller adjusts validation. The config keeps its own copies, so later
+/// changes to the arrays that built it do not change it.
+struct ValidationConfig {
+  overrides : ReadOnlyArray[(RuleName, Severity)]
+  disabled : ReadOnlyArray[RuleName]
 }
 
 ///|
 pub fn ValidationConfig::ValidationConfig(
-  overrides~ : ArrayView[(String, Severity)] = [],
-  disabled~ : ArrayView[String] = [],
+  overrides~ : ArrayView[(RuleName, Severity)] = [],
+  disabled~ : ArrayView[RuleName] = [],
 ) -> ValidationConfig {
-  let map : Map[String, Severity] = Map([])
-  for pair in overrides {
-    map[pair.0] = pair.1
+  {
+    overrides: ReadOnlyArray::from_array(overrides.to_owned()),
+    disabled: ReadOnlyArray::from_array(disabled.to_owned()),
   }
-  { overrides: map, disabled: disabled.to_owned(), }
+}
+
+///|
+/// The severity changes, by rule name.
+pub fn ValidationConfig::overrides(
+  self : ValidationConfig,
+) -> ReadOnlyArray[(RuleName, Severity)] {
+  self.overrides
+}
+
+///|
+/// The rules that do not run.
+pub fn ValidationConfig::disabled(
+  self : ValidationConfig,
+) -> ReadOnlyArray[RuleName] {
+  self.disabled
+}
+
+///|
+fn ValidationConfig::override_of(
+  self : ValidationConfig,
+  name : RuleName,
+) -> Severity? {
+  self.overrides.iter().find_first(p => p.0 == name).map(p => p.1)
 }
 
 ///|
@@ -164,11 +235,16 @@ fn compare_findings(a : Finding, b : Finding) -> Int32 {
   if c != 0 {
     return c
   }
-  let c = lexical_compare(a.bundle, b.bundle)
+  let (ka, kb) = (a.subject.sort_key(), b.subject.sort_key())
+  let c = ka.0.compare(kb.0)
   if c != 0 {
     return c
   }
-  let c = lexical_compare(a.path, b.path)
+  let c = lexical_compare(ka.1, kb.1)
+  if c != 0 {
+    return c
+  }
+  let c = lexical_compare(ka.2, kb.2)
   if c != 0 {
     return c
   }
@@ -176,7 +252,7 @@ fn compare_findings(a : Finding, b : Finding) -> Int32 {
   if c != 0 {
     return c
   }
-  let c = lexical_compare(a.rule, b.rule)
+  let c = a.rule.compare(b.rule)
   if c != 0 {
     return c
   }
@@ -184,8 +260,9 @@ fn compare_findings(a : Finding, b : Finding) -> Int32 {
 }
 
 ///|
-/// A report from findings, sorted by severity, bundle, path, line and rule.
-pub fn Report::Report(findings : ArrayView[Finding]) -> Report {
+/// A report from findings, sorted by severity, subject (bundle label, then
+/// path), line and rule.
+fn Report::of_findings(findings : ArrayView[Finding]) -> Report {
   let sorted = findings.to_owned()
   sorted.sort_by(compare_findings)
   { findings: ReadOnlyArray::from_array(sorted), }
@@ -209,12 +286,21 @@ pub fn Report::fails(self : Report, strict~ : Bool = false) -> Bool {
 
 ///|
 /// The findings of one rule.
-pub fn Report::of_rule(self : Report, rule : String) -> Array[Finding] {
+pub fn Report::of_rule(self : Report, rule : RuleName) -> Array[Finding] {
   self.findings.iter().filter(f => f.rule == rule).collect()
 }
 
 ///|
-/// Runs the rule sets over the knowledge and returns the sorted findings.
+/// A rule name that this library defines, written in code.
+fn builtin_rule(text : String) -> RuleName {
+  { text, }
+}
+
+///|
+/// Runs the rule sets over the knowledge and returns the sorted findings. A
+/// profile whose definitions break a rule gives a `profile-invalid` error, and
+/// a config that names a rule that no active rule set defines gives a
+/// `validation-config-unknown-rule` warning.
 pub fn validate(
   knowledge : Knowledge,
   rule_sets : ArrayView[RuleSet],
@@ -230,36 +316,52 @@ pub fn validate(
     now: clock.now(),
     options: knowledge.options(),
     vocabulary: Vocabulary::of_profiles(profiles),
-    profiles: profiles.to_owned(),
+    profiles: ReadOnlyArray::from_array(profiles.to_owned()),
   }
-  let findings = []
+  let findings : Array[Finding] = []
   let sets = rule_sets.to_owned()
+  let profile_severity : Array[(RuleName, Severity)] = []
   for profile in profiles {
-    for set in profile.rule_sets() {
-      sets.push(set)
-    }
-  }
-  let profile_severity : Map[String, Severity] = Map([])
-  for profile in profiles {
-    for pair in profile.severities() {
-      if !profile_severity.contains(pair.0) {
-        profile_severity[pair.0] = pair.1
+    try {
+      for set in profile.rule_sets() {
+        sets.push(set)
       }
+      for pair in profile.severities() {
+        if !profile_severity.any(p => p.0 == pair.0) {
+          profile_severity.push(pair)
+        }
+      }
+    } catch {
+      e =>
+        findings.push({
+          severity: Error,
+          rule: builtin_rule("profile-invalid"),
+          subject: ProfileSubject(profile.name()),
+          line: None,
+          message: "the profile \{profile.name()} has an invalid definition: \{@debug.to_string(e)}",
+          hint: None,
+        })
     }
   }
+  let known : Array[RuleName] = []
   for set in sets {
     for rule in set.rules {
+      known.push(rule.name)
       guard !config.disabled.contains(rule.name) else { continue }
-      let severity = match config.overrides.get(rule.name) {
+      let severity = match config.override_of(rule.name) {
         Some(s) => s
-        None => profile_severity.get(rule.name).unwrap_or(rule.severity)
+        None =>
+          profile_severity
+          .iter()
+          .find_first(p => p.0 == rule.name)
+          .map(p => p.1)
+          .unwrap_or(rule.severity)
       }
       for issue in (rule.check)(context) {
         findings.push({
           severity,
           rule: rule.name,
-          bundle: issue.bundle,
-          path: issue.path,
+          subject: issue.subject,
           line: issue.line,
           message: issue.message,
           hint: issue.hint,
@@ -267,7 +369,23 @@ pub fn validate(
       }
     }
   }
-  Report(findings)
+  let named = config.overrides.iter().map(p => p.0).collect()
+  for name in config.disabled {
+    named.push(name)
+  }
+  for name in named {
+    if !known.contains(name) {
+      findings.push({
+        severity: Warning,
+        rule: builtin_rule("validation-config-unknown-rule"),
+        subject: ConfigSubject,
+        line: None,
+        message: "the validation config names `\{name}`, which no active rule set defines",
+        hint: None,
+      })
+    }
+  }
+  Report::of_findings(findings)
 }
 
 ///|
@@ -279,7 +397,8 @@ struct Vocabulary {
 
 ///|
 /// The OKF vocabulary plus the vocabulary of each profile. The value of each
-/// key is the name of the profile that defines it, or `okf`.
+/// key is the name of the profile that defines it, or `okf`. A profile whose
+/// definitions break a rule adds no keys; `validate` reports it.
 pub fn Vocabulary::of_profiles(profiles : ArrayView[&Profile]) -> Vocabulary {
   let concept_keys : Map[String, String] = Map([])
   for key in okf_concept_keys {
@@ -288,14 +407,18 @@ pub fn Vocabulary::of_profiles(profiles : ArrayView[&Profile]) -> Vocabulary {
   let bundle_keys : Map[String, String] = Map([])
   bundle_keys["okf_version"] = "okf"
   for profile in profiles {
-    for def in profile.vocabulary() {
-      if !concept_keys.contains(def.key) {
-        concept_keys[def.key] = profile.name()
+    let defs = profile.vocabulary() catch { _ => [] }
+    for def in defs {
+      let key = def.key.to_string()
+      if !concept_keys.contains(key) {
+        concept_keys[key] = profile.name()
       }
     }
-    for def in profile.bundle_keys() {
-      if !bundle_keys.contains(def.key) {
-        bundle_keys[def.key] = profile.name()
+    let defs = profile.bundle_keys() catch { _ => [] }
+    for def in defs {
+      let key = def.key.to_string()
+      if !bundle_keys.contains(key) {
+        bundle_keys[key] = profile.name()
       }
     }
   }
@@ -303,11 +426,13 @@ pub fn Vocabulary::of_profiles(profiles : ArrayView[&Profile]) -> Vocabulary {
 }
 
 ///|
+/// True when the key is an OKF or profile concept key.
 pub fn Vocabulary::knows(self : Vocabulary, key : String) -> Bool {
   self.concept_keys.contains(key)
 }
 
 ///|
+/// True when the key is an OKF or profile root index key.
 pub fn Vocabulary::knows_bundle_key(self : Vocabulary, key : String) -> Bool {
   self.bundle_keys.contains(key)
 }
@@ -323,6 +448,12 @@ pub extend Severity with Hash::{hash, hash_combine}
 
 ///|
 pub extend Severity with @debug.Debug::{to_repr}
+
+///|
+pub extend FindingSubject with Eq::{not_equal, equal}
+
+///|
+pub extend FindingSubject with @debug.Debug::{to_repr}
 
 ///|
 pub extend Finding with Eq::{not_equal, equal}

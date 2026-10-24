@@ -1,4 +1,8 @@
 ///|
+/// The `status` key, as a typed frontmatter key.
+let status_key : @okf.FieldKey = @okf.FieldKey("status") catch { _ => panic() }
+
+///|
 test "law: loading keeps every frontmatter key in order and every scalar as written" {
   @expect.for_all(
     (input : BundleCase) => {
@@ -37,7 +41,7 @@ test "law: a Concept ID and its path convert both ways" {
       @expect.expect_all(s => {
         for p in input.paths() {
           let path = @okf.BundlePath(p) catch { _ => panic() }
-          let id = @okf.ConceptId::of_path(path)
+          guard @okf.ConceptId::of_path(path) is Some(id) else { panic() }
           s.expect(id.to_path(), label="path").to_equal(path)
           s
           .expect(
@@ -99,7 +103,9 @@ test "law: a key edit changes only the key line, and repeating it changes nothin
       @expect.expect_all(s => {
         for i, _ in input.paths() {
           let text = input.concept_text(i)
-          let r = @edit.set_key(text, "status", "draft") catch { _ => panic() }
+          let r = @edit.set_key(text, status_key, "draft") catch {
+            _ => panic()
+          }
           let before = @okf.split_lines(text).map(l => l.text)
           let after = @okf.split_lines(r.text).map(l => l.text)
           s
@@ -111,11 +117,11 @@ test "law: a key edit changes only the key line, and repeating it changes nothin
           s
           .expect(@okf.detect_line_ending(r.text), label="line ending")
           .to_equal(@okf.detect_line_ending(text))
-          let again = @edit.set_key(r.text, "status", "draft") catch {
+          let again = @edit.set_key(r.text, status_key, "draft") catch {
             _ => panic()
           }
           s.expect(again.changed, label="idempotent").to_equal(false)
-          let removed = @edit.remove_key(r.text, "status") catch {
+          let removed = @edit.remove_key(r.text, status_key) catch {
             _ => panic()
           }
           s.expect(removed.text, label="remove restores").to_equal(text)
@@ -141,7 +147,8 @@ test "law: a generated index lists every concept of its directory" {
           } else {
             d.split("/").map(x => x.to_owned()).collect()
           }
-          let text = @okf.generate_index(b, dir~)
+          let store_dir = @okf.StoreDir(d) catch { _ => panic() }
+          let text = @okf.generate_index(b, dir=store_dir)
           for doc in b.concepts() {
             if doc.path().directory() == dir {
               s
@@ -180,13 +187,15 @@ impl @shrink.Shrink for SupersessionCase with fn shrink(self) {
 }
 
 ///|
-let law_register : @okf.Register = @okf.Register(
-  "decision",
-  "Decision Record",
-  state_key="state",
-  supersedes_key="supersedes",
-  superseded_by_key="superseded_by",
-)
+fn law_register() -> @okf.Register raise @okf.ValueError {
+  @okf.Register(
+    @okf.RegisterName("decision"),
+    @okf.ConceptType("Decision Record"),
+    state_key=@okf.FieldKey("state"),
+    supersedes_key=@okf.FieldKey("supersedes"),
+    superseded_by_key=@okf.FieldKey("superseded_by"),
+  )
+}
 
 ///|
 test "law: supersession is reported as not mutual exactly when one side is missing" {
@@ -223,19 +232,25 @@ test "law: supersession is reported as not mutual exactly when one side is missi
         files.push(("000\{id}-d.md", lines.join("\n") + "\n"))
       }
       let set = @okf.DocumentSet::of_texts(files) catch { _ => panic() }
+      let law_register = law_register() catch { _ => panic() }
       let records = law_register.records(@okf.load_bundle(set))
       let names = (r : @okf.Record, key : String) => {
-        r.metadata().texts(key).map(t => law_register.normalize(t))
+        r.metadata().texts(key).map(t => law_register.parse_id(t))
+      }
+      let id_text = (r : @okf.Record) => {
+        r.id.map(i => i.to_string()).unwrap_or("")
       }
       // The model: a pair (a, b) is one-sided when a names b as successor and
       // b does not list a, or b lists a and a does not name b.
       let expected = []
       for a in records {
         for b in records {
-          let a_names_b = names(a, "superseded_by").contains(b.id.unwrap_or(""))
-          let b_lists_a = names(b, "supersedes").contains(a.id.unwrap_or(""))
+          let a_names_b = b.id is Some(_) &&
+            names(a, "superseded_by").contains(b.id)
+          let b_lists_a = a.id is Some(_) &&
+            names(b, "supersedes").contains(a.id)
           if a_names_b != b_lists_a {
-            expected.push((a.id.unwrap_or(""), b.id.unwrap_or("")))
+            expected.push((id_text(a), id_text(b)))
           }
         }
       }
@@ -243,7 +258,7 @@ test "law: supersession is reported as not mutual exactly when one side is missi
       for i in law_register.supersession_issues(records) {
         match i {
           NotMutual(a, b) => {
-            let pair = (a.id.unwrap_or(""), b.id.unwrap_or(""))
+            let pair = (id_text(a), id_text(b))
             if !actual.contains(pair) {
               actual.push(pair)
             }
@@ -284,15 +299,19 @@ test "law: importing OpenSpec and exporting it again keeps every file" {
         )
       }
       let original = @okf.DocumentSet::of_texts(files) catch { _ => panic() }
+      let (openspec_dir, kb_dir, date) = (
+        @okf.StoreDir("openspec"),
+        @okf.StoreDir("kb"),
+        @okf.LogDate("2026-10-23"),
+      ) catch {
+        _ => panic()
+      }
       let imported = (@openspec.import_openspec(
-        original,
-        ["openspec"],
-        ["kb"],
-        "2026-10-23",
+        original, openspec_dir, kb_dir, date,
       ) catch {
         _ => panic()
       }).apply_to(@okf.DocumentSet([]))
-      let exported = (@openspec.export_openspec(imported, ["kb"], ["openspec"]) catch {
+      let exported = (@openspec.export_openspec(imported, kb_dir, openspec_dir) catch {
         _ => panic()
       }).apply_to(@okf.DocumentSet([]))
       @expect.expect(

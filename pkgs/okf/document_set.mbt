@@ -68,14 +68,8 @@ pub fn DocumentSet::contains(self : DocumentSet, path : StorePath) -> Bool {
 }
 
 ///|
-/// True when a file exists under the directory `dir`, given as segments.
-pub fn DocumentSet::has_directory(
-  self : DocumentSet,
-  dir : Array[String],
-) -> Bool {
-  if dir.is_empty() {
-    return !self.entries.is_empty()
-  }
+/// True when a file exists under the directory `dir`.
+pub fn DocumentSet::has_directory(self : DocumentSet, dir : StoreDir) -> Bool {
   self.entries.any(e => e.path.is_under(dir))
 }
 

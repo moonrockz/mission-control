@@ -3,7 +3,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Finding order
-The library SHALL sort findings by severity, then by bundle label, then by path, then by line, so that the same input always gives the same order.
+The library SHALL sort findings by severity, then by subject (the validation config, then profiles by name, then documents of bundles by bundle label and path, then stray files by path), then by line, then by rule name, then by message, so that the same input always gives the same order.
 
 #### Scenario: Stable order
 - **WHEN** a caller validates the same bundle two times
@@ -24,3 +24,10 @@ A finding SHALL name its subject as a document of a bundle (a bundle label and a
 #### Scenario: Stray file
 - **WHEN** validation reports a stray Markdown file
 - **THEN** the finding has a stray subject with the store path of the file
+
+### Requirement: Invalid profiles
+The library SHALL report a profile whose definitions break a rule of a value type, such as a rule name that is not in kebab case, as a `profile-invalid` error, and SHALL use none of the definitions that fail.
+
+#### Scenario: Severity for a rule name with spaces
+- **WHEN** a profile gives a severity for the rule name `Not Kebab`
+- **THEN** validation reports `profile-invalid` for that profile

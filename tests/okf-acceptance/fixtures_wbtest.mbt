@@ -31,5 +31,8 @@ fn read_golden(name : String) -> Json raise {
 
 ///|
 fn morphir_knowledge() -> @okf.Knowledge raise {
-  @okf.discover(load_fixture("okf-fixtures/morphir/kb"), under=["bundles"])
+  @okf.discover(
+    load_fixture("okf-fixtures/morphir/kb"),
+    under=@okf.StoreDir("bundles"),
+  )
 }

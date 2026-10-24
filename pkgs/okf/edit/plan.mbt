@@ -124,36 +124,34 @@ pub fn EditPlan::apply_to(
 }
 
 ///|
-/// Why a new concept path is refused.
-pub(all) suberror PathRefused {
-  /// The file name is `index.md` or `log.md`.
-  ReservedName(String)
-  /// The path leaves the bundle.
-  EscapesBundle(String)
-  /// A document already exists at the path.
-  AlreadyExists(String)
-  /// The path does not end with `.md`.
-  NotMarkdown(String)
-} derive(Eq, Debug)
-
-///|
-/// Validates the path of a new concept in `bundle`.
+/// Parses the path of a new concept in `bundle`. Raises `PathRefused` with the
+/// reason.
 pub fn check_new_concept_path(
   bundle : @okf.Bundle,
   path : String,
-) -> @okf.BundlePath raise PathRefused {
-  let p = @okf.BundlePath(path) catch { _ => raise EscapesBundle(path) }
+) -> @okf.BundlePath raise PlanError {
+  let p = @okf.BundlePath(path) catch {
+    _ => raise PathRefused(EscapesBundle(path))
+  }
   let name = p.name().to_lower()
   if name == "index.md" || name == "log.md" {
-    raise ReservedName(p.name())
+    raise PathRefused(ReservedName(p.name()))
   }
   if !@okf.is_markdown_name(name) {
-    raise NotMarkdown(path)
+    raise PathRefused(NotMarkdown(path))
   }
   if bundle.document(p) is Some(_) {
-    raise AlreadyExists(p.to_string())
+    raise PathRefused(AlreadyExists(p.to_string()))
   }
   p
+}
+
+///|
+/// Runs a text edit in a planner, so that its error becomes `EditFailed`.
+fn[T] editing(f : () -> T raise EditError) -> T raise PlanError {
+  f() catch {
+    e => raise EditFailed(e)
+  }
 }
 
 ///|
@@ -191,16 +189,13 @@ fn entry_destination(concept : @okf.BundlePath) -> String {
 /// and the extra fields in order, then the template body. The template can use
 /// `{{title}}`, `{{description}}` and `{{type}}`.
 pub fn new_concept_text(
-  concept_type : String,
+  concept_type : @okf.ConceptType,
   title : String,
   description : String,
-  fields~ : ArrayView[(String, String)] = [],
+  fields~ : ArrayView[(@okf.FieldKey, RawYaml)] = [],
   template? : @okf.Template,
-) -> String raise EditError {
-  for f in fields {
-    check_key(f.0)
-    check_value(f.0, f.1)
-  }
+) -> String {
+  let concept_type = concept_type.to_string()
   let lines = [
     "---",
     "type: \{yaml_scalar(concept_type)}",
@@ -224,20 +219,24 @@ pub fn new_concept_text(
 
 ///|
 /// Plans a new concept: its file, an entry in its target index (in the
-/// section `section`), and a `Creation` entry in the root log for `date`.
-/// `fields` are raw YAML values.
+/// section `section`, by default the concept type), and a `Creation` entry in
+/// the root log for `date`.
 pub fn plan_add_concept(
   bundle : @okf.Bundle,
   path : String,
-  concept_type : String,
+  concept_type : @okf.ConceptType,
   title : String,
   description : String,
-  date : String,
-  fields~ : ArrayView[(String, String)] = [],
-  section~ : String = concept_type,
+  date : @okf.LogDate,
+  fields~ : ArrayView[(@okf.FieldKey, RawYaml)] = [],
+  section? : SectionName,
   template? : @okf.Template,
-) -> EditPlan raise {
+) -> EditPlan raise PlanError {
   let p = check_new_concept_path(bundle, path)
+  let section = match section {
+    Some(s) => s
+    None => editing(() => SectionName(concept_type.to_string()))
+  }
   let text = new_concept_text(
     concept_type,
     title,
@@ -250,12 +249,14 @@ pub fn plan_add_concept(
     Some(index_path) =>
       match bundle.document(index_path) {
         Some(index) => {
-          let entry = index_entry_line(
-            title,
-            entry_destination(p),
-            description~,
-          )
-          let r = add_index_entry(index.text(), section, entry)
+          let r = editing(() => {
+            let entry = index_entry_line(
+              title,
+              entry_destination(p),
+              description~,
+            )
+            add_index_entry(index.text(), section, entry)
+          })
           changes.push(
             Update(path=index.store_path(), before=index.text(), after=r.text),
           )
@@ -266,12 +267,14 @@ pub fn plan_add_concept(
   }
   match bundle.root_log() {
     Some(log) => {
-      let r = add_log_entry(
-        log.text(),
-        date,
-        "Added [\{title}](\{p}).",
-        label="Creation",
-      )
+      let r = editing(() => {
+        add_log_entry(
+          log.text(),
+          date,
+          "Added [\{title}](\{p}).",
+          label="Creation",
+        )
+      })
       changes.push(
         Update(path=log.store_path(), before=log.text(), after=r.text),
       )
@@ -283,14 +286,18 @@ pub fn plan_add_concept(
 
 ///|
 /// Plans the description refresh of every drifted index entry of `bundle`.
-pub fn plan_refresh_descriptions(bundle : @okf.Bundle) -> EditPlan raise {
+pub fn plan_refresh_descriptions(
+  bundle : @okf.Bundle,
+) -> EditPlan raise PlanError {
   let texts : Map[@okf.StorePath, String] = Map([])
   let originals : Map[@okf.StorePath, String] = Map([])
   for drift in bundle.description_drift() {
     let path = drift.index.store_path()
     let before = texts.get(path).unwrap_or(drift.index.text())
     originals[path] = originals.get(path).unwrap_or(drift.index.text())
-    let r = refresh_index_entry(before, drift.entry.destination, drift.expected)
+    let r = editing(() => {
+      refresh_index_entry(before, drift.entry.destination, drift.expected)
+    })
     texts[path] = r.text
   }
   EditPlan(
@@ -312,8 +319,8 @@ pub fn plan_refresh_descriptions(bundle : @okf.Bundle) -> EditPlan raise {
 /// the section `section` of its target index.
 pub fn plan_add_missing_entries(
   bundle : @okf.Bundle,
-  section : String,
-) -> EditPlan raise {
+  section : SectionName,
+) -> EditPlan raise PlanError {
   let texts : Map[@okf.StorePath, String] = Map([])
   let originals : Map[@okf.StorePath, String] = Map([])
   for concept in bundle.unindexed_concepts() {
@@ -324,12 +331,14 @@ pub fn plan_add_missing_entries(
             let path = index.store_path()
             let before = texts.get(path).unwrap_or(index.text())
             originals[path] = originals.get(path).unwrap_or(index.text())
-            let entry = index_entry_line(
-              concept.display_title(),
-              entry_destination(concept.path()),
-              description?=concept.metadata().description(),
-            )
-            texts[path] = add_index_entry(before, section, entry).text
+            texts[path] = editing(() => {
+                let entry = index_entry_line(
+                  concept.display_title(),
+                  entry_destination(concept.path()),
+                  description?=concept.metadata().description(),
+                )
+                add_index_entry(before, section, entry)
+              }).text
           }
           None => ()
         }
@@ -351,52 +360,40 @@ pub fn plan_add_missing_entries(
 }
 
 ///|
-/// Raised when a register refuses a transition.
-pub(all) suberror TransitionRefused {
-  /// The register refuses the transition.
-  TransitionRefused(@okf.TransitionCheck)
-  /// The register has no state key, so it has no transitions.
-  NoStateKey(register~ : String)
-  /// An extra key is the state key, which would replace the checked state.
-  StateKeyInExtra(String)
-  /// The edit would leave frontmatter that does not parse.
-  PreviewInvalid(@okf.MetadataError)
-} derive(Debug)
-
-///|
 /// Plans a register transition: it sets the state key to `to`, and sets the
-/// extra keys (raw YAML values) in the same edit. The check runs on the record
-/// as it would be after the extra keys apply, and the transition is refused
-/// before any edit when an obligation is unmet.
+/// extra keys in the same edit. The check runs on the record as it would be
+/// after the extra keys apply, and the transition is refused before any edit
+/// when an obligation is unmet.
 pub fn plan_transition(
   register : @okf.Register,
   record : @okf.Record,
-  to : String,
-  extra~ : ArrayView[(String, String)] = [],
-) -> EditPlan raise {
-  guard register.state_key is Some(state_key) else {
-    raise NoStateKey(register=register.name)
+  to : @okf.StateName,
+  extra~ : ArrayView[(@okf.FieldKey, RawYaml)] = [],
+) -> EditPlan raise PlanError {
+  guard register.state_key() is Some(state_key) else {
+    raise TransitionRefused(NoStateKey(register=register.name()))
   }
   for e in extra {
     if e.0 == state_key {
-      raise StateKeyInExtra(e.0)
+      raise TransitionRefused(StateKeyInExtra(e.0))
     }
   }
   let doc = record.document
-  let updates : Array[(String, String?)] = [(state_key, Some(yaml_scalar(to)))]
+  let updates : Array[(@okf.FieldKey, RawYaml?)] = [
+    (state_key, Some(RawYaml::scalar(to.to_string()))),
+  ]
   for e in extra {
     updates.push((e.0, Some(e.1)))
   }
-  let after = set_raw_keys(doc.text(), updates).text
+  let after = editing(() => set_raw_keys(doc.text(), updates)).text
   let preview = @okf.Document(doc.path(), doc.store_path(), after)
   match preview.metadata_error() {
-    Some(e) => raise PreviewInvalid(e)
+    Some(e) => raise TransitionRefused(PreviewInvalid(e))
     None => ()
   }
-  let check = register.check_transition({ ..record, document: preview, }, to)
-  match check {
+  match register.check_transition(record.with_document(preview), to) {
     Allowed => ()
-    other => raise TransitionRefused(other)
+    other => raise TransitionRefused(Refused(other))
   }
   EditPlan([Update(path=doc.store_path(), before=doc.text(), after~)])
 }
@@ -408,10 +405,3 @@ pub extend FileChange with Eq::{not_equal, equal}
 pub extend FileChange with @debug.Debug::{to_repr}
 
 ///|
-pub extend PathRefused with Eq::{not_equal, equal}
-
-///|
-pub extend PathRefused with @debug.Debug::{to_repr}
-
-///|
-pub extend TransitionRefused with @debug.Debug::{to_repr}

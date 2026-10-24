@@ -4,52 +4,71 @@
 priv struct MorphirProfile {}
 
 ///|
-let decision_register : @okf.Register = @okf.Register(
-  "decision",
-  "Decision Record",
-  id_rule=LeadingDigits(width=4),
-  state_key="state",
-  states=["Proposed", "Accepted", "Superseded", "Withdrawn"],
-  transitions=[
-    @okf.Transition("Accepted", from=["Proposed"]),
-    @okf.Transition("Superseded", from=["Accepted"], obligations=[
-      @okf.Obligation::requires_key("superseded_by"),
-    ]),
-    @okf.Transition("Withdrawn", from=["Proposed", "Accepted"], obligations=[
-      @okf.Obligation::requires_key("reason"),
-    ]),
-  ],
-  supersedes_key="supersedes",
-  superseded_by_key="superseded_by",
-  superseded_states=["Superseded"],
-)
+fn states(names : Array[String]) -> Array[@okf.StateName] raise @okf.ValueError {
+  names.map(n => @okf.StateName(n))
+}
 
 ///|
-let intent_register : @okf.Register = @okf.Register(
-  "intent",
-  "Intent",
-  id_rule=LeadingDigits(width=4),
-  state_key="state",
-  states=[
-    "Backlog", "Refinement", "InProgress", "Released", "Cancelled", "Superseded",
-  ],
-  transitions=[
-    @okf.Transition("Refinement", from=["Backlog"]),
-    @okf.Transition("InProgress", from=["Backlog", "Refinement"]),
-    @okf.Transition("Released", from=["InProgress"], obligations=[
-      @okf.Obligation::requires_key("capability"),
+fn key(text : String) -> @okf.FieldKey raise @okf.ValueError {
+  @okf.FieldKey(text)
+}
+
+///|
+fn transition(
+  to : String,
+  from~ : Array[String] = [],
+  requires~ : Array[String] = [],
+) -> @okf.Transition raise @okf.ValueError {
+  @okf.Transition(
+    @okf.StateName(to),
+    from=states(from),
+    obligations=requires.map(k => @okf.Obligation::requires_key(key(k))),
+  )
+}
+
+///|
+fn decision_register() -> @okf.Register raise @okf.ValueError {
+  @okf.Register(
+    @okf.RegisterName("decision"),
+    @okf.ConceptType("Decision Record"),
+    id_rule=LeadingDigits(@okf.IdWidth(4)),
+    state_key=key("state"),
+    states=states(["Proposed", "Accepted", "Superseded", "Withdrawn"]),
+    transitions=[
+      transition("Accepted", from=["Proposed"]),
+      transition("Superseded", from=["Accepted"], requires=["superseded_by"]),
+      transition("Withdrawn", from=["Proposed", "Accepted"], requires=["reason"]),
+    ],
+    supersedes_key=key("supersedes"),
+    superseded_by_key=key("superseded_by"),
+    superseded_states=states(["Superseded"]),
+  )
+}
+
+///|
+fn intent_register() -> @okf.Register raise @okf.ValueError {
+  @okf.Register(
+    @okf.RegisterName("intent"),
+    @okf.ConceptType("Intent"),
+    id_rule=LeadingDigits(@okf.IdWidth(4)),
+    state_key=key("state"),
+    states=states([
+      "Backlog", "Refinement", "InProgress", "Released", "Cancelled", "Superseded",
     ]),
-    @okf.Transition("Cancelled", from=["Backlog", "Refinement", "InProgress"], obligations=[
-      @okf.Obligation::requires_key("reason"),
-    ]),
-    @okf.Transition("Superseded", obligations=[
-      @okf.Obligation::requires_key("superseded_by"),
-    ]),
-  ],
-  superseded_by_key="superseded_by",
-  superseded_states=["Superseded"],
-  bundle_flag="intent",
-)
+    transitions=[
+      transition("Refinement", from=["Backlog"]),
+      transition("InProgress", from=["Backlog", "Refinement"]),
+      transition("Released", from=["InProgress"], requires=["capability"]),
+      transition("Cancelled", from=["Backlog", "Refinement", "InProgress"], requires=[
+        "reason",
+      ]),
+      transition("Superseded", requires=["superseded_by"]),
+    ],
+    superseded_by_key=key("superseded_by"),
+    superseded_states=states(["Superseded"]),
+    bundle_flag=key("intent"),
+  )
+}
 
 ///|
 let morphir_concept_keys : Array[String] = [
@@ -69,16 +88,15 @@ fn issue_for(
   message : String,
   hint? : String,
 ) -> @okf.Issue {
-  @okf.Issue(record.bundle, record.document.path().to_string(), message, hint?)
+  @okf.Issue::in_bundle(record.key(), message, hint?)
 }
 
 ///|
+/// The decision records of each bundle. The register parts are constants, so
+/// they always build.
 fn decision_records(ctx : @okf.ValidationContext) -> Array[Array[@okf.Record]] {
-  ctx.knowledge
-  .bundles()
-  .iter()
-  .map(b => decision_register.records(b))
-  .collect()
+  let register = decision_register() catch { _ => return [] }
+  ctx.knowledge.bundles().iter().map(b => register.records(b)).collect()
 }
 
 ///|
@@ -87,9 +105,20 @@ fn is_date(text : String) -> Bool {
 }
 
 ///|
-fn decision_rules() -> @okf.RuleSet {
+fn rule(
+  name : String,
+  severity : @okf.Severity,
+  check : (@okf.ValidationContext) -> Array[@okf.Issue],
+) -> @okf.Rule raise @okf.ValueError {
+  @okf.Rule(@okf.RuleName(name), severity, check)
+}
+
+///|
+fn decision_rules() -> @okf.RuleSet raise @okf.ValueError {
+  let register = decision_register()
+  let withdrawn = @okf.StateName("Withdrawn")
   @okf.RuleSet("morphir-decisions", [
-    @okf.Rule("decision-no-id", Error, ctx => {
+    rule("decision-no-id", Error, ctx => {
       let out = []
       for records in decision_records(ctx) {
         for r in records {
@@ -104,13 +133,13 @@ fn decision_rules() -> @okf.RuleSet {
       }
       out
     }),
-    @okf.Rule("decision-state-unknown", Error, ctx => {
+    rule("decision-state-unknown", Error, ctx => {
       let out = []
       for records in decision_records(ctx) {
         for r in records {
           match r.state {
             None => out.push(issue_for(r, "decision record has no `state`"))
-            Some(s) if !decision_register.states.contains(s) =>
+            Some(s) if !register.states().contains(s) =>
               out.push(issue_for(r, "`state: \{s}` is not a known state"))
             _ => ()
           }
@@ -118,7 +147,7 @@ fn decision_rules() -> @okf.RuleSet {
       }
       out
     }),
-    @okf.Rule("decision-decided-missing", Warning, ctx => {
+    rule("decision-decided-missing", Warning, ctx => {
       let out = []
       for records in decision_records(ctx) {
         for r in records {
@@ -133,21 +162,21 @@ fn decision_rules() -> @okf.RuleSet {
       }
       out
     }),
-    @okf.Rule("decision-withdrawn-no-reason", Error, ctx => {
+    rule("decision-withdrawn-no-reason", Error, ctx => {
       let out = []
       for records in decision_records(ctx) {
         for r in records {
-          if r.state == Some("Withdrawn") && r.metadata().text("reason") is None {
+          if r.state == Some(withdrawn) && r.metadata().text("reason") is None {
             out.push(issue_for(r, "Withdrawn decision has no `reason`"))
           }
         }
       }
       out
     }),
-    @okf.Rule("decision-duplicate-id", Error, ctx => {
+    rule("decision-duplicate-id", Error, ctx => {
       let out = []
       for records in decision_records(ctx) {
-        for dup in decision_register.duplicates(records) {
+        for dup in register.duplicates(records) {
           for r in dup.1 {
             out.push(
               issue_for(
@@ -160,10 +189,10 @@ fn decision_rules() -> @okf.RuleSet {
       }
       out
     }),
-    @okf.Rule("decision-supersession", Error, ctx => {
+    rule("decision-supersession", Error, ctx => {
       let out = []
       for records in decision_records(ctx) {
-        for i in decision_register.supersession_issues(records) {
+        for i in register.supersession_issues(records) {
           match i {
             MissingSuccessor(r) =>
               out.push(
@@ -178,8 +207,8 @@ fn decision_rules() -> @okf.RuleSet {
                 issue_for(r, "`supersedes: \{id}` names no decision record"),
               )
             NotMutual(a, b) => {
-              let x = a.id.unwrap_or("")
-              let y = b.id.unwrap_or("")
+              let x = a.id.map(i => i.to_string()).unwrap_or("")
+              let y = b.id.map(i => i.to_string()).unwrap_or("")
               out.push(issue_for(a, "\{x} and \{y} do not name each other"))
             }
           }
@@ -191,9 +220,9 @@ fn decision_rules() -> @okf.RuleSet {
 }
 
 ///|
-fn readme_rules() -> @okf.RuleSet {
+fn readme_rules() -> @okf.RuleSet raise @okf.ValueError {
   @okf.RuleSet("morphir-layout", [
-    @okf.Rule("readme-in-bundle", Error, ctx => {
+    rule("readme-in-bundle", Error, ctx => {
       let out = []
       for pair in ctx.knowledge.concepts() {
         if pair.1.path().name() == "README.md" {
@@ -212,22 +241,22 @@ impl @okf.Profile for MorphirProfile with fn name(_) {
 
 ///|
 impl @okf.Profile for MorphirProfile with fn vocabulary(_) {
-  morphir_concept_keys.map(k => @okf.KeyDefinition(k))
+  morphir_concept_keys.map(k => @okf.KeyDefinition(key(k)))
 }
 
 ///|
 impl @okf.Profile for MorphirProfile with fn bundle_keys(_) {
-  morphir_bundle_keys.map(k => @okf.KeyDefinition(k))
+  morphir_bundle_keys.map(k => @okf.KeyDefinition(key(k)))
 }
 
 ///|
 impl @okf.Profile for MorphirProfile with fn registers(_) {
-  [decision_register, intent_register]
+  [decision_register(), intent_register()]
 }
 
 ///|
 impl @okf.Profile for MorphirProfile with fn reference_fields(_) {
-  [{ key: "capability", kind: DocumentRef, }]
+  [{ key: key("capability"), kind: DocumentRef, }]
 }
 
 ///|
@@ -238,9 +267,9 @@ impl @okf.Profile for MorphirProfile with fn rule_sets(_) {
 ///|
 impl @okf.Profile for MorphirProfile with fn severities(_) {
   [
-    ("link-broken", Error),
-    ("link-escapes-bundle", Error),
-    ("stray-markdown", Error),
+    (@okf.RuleName("link-broken"), Error),
+    (@okf.RuleName("link-escapes-bundle"), Error),
+    (@okf.RuleName("stray-markdown"), Error),
   ]
 }
 
@@ -265,7 +294,7 @@ fn morphir_profiled_knowledge() -> @okf.Knowledge raise {
   let profiles = morphir_profiles()
   @okf.discover(
     load_fixture("okf-fixtures/morphir/kb"),
-    under=["bundles"],
+    under=@okf.StoreDir("bundles"),
     options=@okf.effective_options(profiles),
     profiles~,
   )
@@ -297,13 +326,13 @@ test "the morphir profile lists the same decision records as kb decision list" {
     (bundle, id, path, state, decided, title)
   })
   let actual = []
-  for record in decision_register.all_records(knowledge) {
+  for record in decision_register().all_records(knowledge) {
     actual.push(
       (
-        record.bundle,
-        record.id.unwrap_or(""),
+        record.bundle.to_string(),
+        record.id.map(i => i.to_string()).unwrap_or(""),
         record.document.path().to_string(),
-        record.state.unwrap_or(""),
+        record.state.map(s => s.to_string()).unwrap_or(""),
         record.metadata().text("decided").unwrap_or(""),
         record.document.display_title(),
       ),
@@ -329,8 +358,8 @@ test "the morphir profile reproduces kb check exactly" {
     rows.push(
       (
         f.severity.to_string(),
-        f.rule,
-        "kb/bundles/" + f.bundle + f.path,
+        f.rule.to_string(),
+        morphir_path(f.subject),
         f.line.unwrap_or(0),
       ),
     )
@@ -369,32 +398,36 @@ fn intent_bundle() -> @okf.Bundle raise {
 ///|
 test "the intent register applies only to bundles with the intent flag" {
   let b = intent_bundle()
-  assert_eq(intent_register.records(b).length(), 2)
+  let register = intent_register()
+  assert_eq(register.records(b).length(), 2)
   let other = @okf.load_bundle(
     @okf.DocumentSet::of_texts([
       ("0001-x.md", "---\ntype: Intent\nstate: Backlog\n---\n"),
     ]),
   )
-  assert_eq(intent_register.records(other).length(), 0)
+  assert_eq(register.records(other).length(), 0)
 }
 
 ///|
 test "intent transitions: allowed, refused for an obligation, not allowed" {
   let b = intent_bundle()
-  let records = intent_register.records(b)
-  guard intent_register.find(records, "1") is Found(backlog) else {
-    fail("no 0001")
-  }
-  guard intent_register.find(records, "0002") is Found(in_progress) else {
+  let register = intent_register()
+  let records = register.records(b)
+  guard register.find(records, "1") is Found(backlog) else { fail("no 0001") }
+  guard register.find(records, "0002") is Found(in_progress) else {
     fail("no 0002")
   }
-  assert_eq(intent_register.check_transition(backlog, "Refinement"), Allowed)
+  let released = @okf.StateName("Released")
   assert_eq(
-    intent_register.check_transition(in_progress, "Released"),
-    Refused(["capability"]),
+    register.check_transition(backlog, @okf.StateName("Refinement")),
+    Allowed,
   )
+  guard register.check_transition(in_progress, released) is Refused(names) else {
+    fail("not refused")
+  }
+  assert_eq(names.iter().collect(), ["capability"])
   assert_eq(
-    intent_register.check_transition(backlog, "Released"),
-    NotAllowed(from=Some("Backlog"), to="Released"),
+    register.check_transition(backlog, released),
+    NotAllowed(from=Some(@okf.StateName("Backlog")), to=released),
   )
 }

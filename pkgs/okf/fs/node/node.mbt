@@ -126,66 +126,92 @@ extern "js" fn node_call(
 async fn call(
   op : String,
   path : String,
+  at~ : @provider.StoreLocation = DirectoryAt(@okf.StoreDir::root()),
   root~ : String = "",
   text~ : String = "",
   bytes~ : Bytes = b"",
 ) -> NodeResult raise @provider.StoreError {
   if !node_available() {
     raise Failed(
-      path, "the Node.js file system API is not available; it needs Node.js 20.16 or later",
+      at, "the Node.js file system API is not available; it needs Node.js 20.16 or later",
     )
   }
   let result = node_call(root, op, path, text, bytes).wait() catch {
-    e => raise Failed(path, e.to_string())
+    e => raise Failed(at, without_root(e.to_string(), root))
   }
   if result.ok() {
     return result
   }
   match result.code() {
-    "ENOENT" | "ENOTDIR" => raise NotFound(path)
-    "EACCES" | "EPERM" | "EROFS" => raise PermissionDenied(path)
-    _ => raise Failed(path, result.message())
+    "ENOENT" | "ENOTDIR" => raise NotFound(at)
+    "EACCES" | "EPERM" | "EROFS" => raise PermissionDenied(at)
+    _ => raise Failed(at, without_root(result.message(), root))
+  }
+}
+
+///|
+/// A message with the root removed, so that it names no host path.
+fn without_root(message : String, root : String) -> String {
+  if root.length() == 0 {
+    message
+  } else {
+    message.replace_all(old=root + "/", new="").replace_all(old=root, new=".")
   }
 }
 
 ///|
 /// A document store over a directory, through the Node.js file system API.
+/// Errors name locations relative to the root, never host paths.
 struct NodeStore {
-  root : String
+  root : @provider.StoreRoot
 }
 
 ///|
-pub fn NodeStore::NodeStore(root : String) -> NodeStore {
-  let root = if root.length() > 1 && root.has_suffix("/") {
-    root[:root.length() - 1].to_owned()
-  } else {
-    root
-  }
+pub fn NodeStore::NodeStore(root : @provider.StoreRoot) -> NodeStore {
   { root, }
 }
 
 ///|
-pub fn NodeStore::root(self : NodeStore) -> String {
+pub fn NodeStore::root(self : NodeStore) -> @provider.StoreRoot {
   self.root
 }
 
 ///|
 fn NodeStore::full(self : NodeStore, segments : ArrayView[String]) -> String {
   if segments.is_empty() {
-    self.root
+    self.root.to_string()
   } else {
-    self.root + "/" + segments.iter().collect().join("/")
+    self.root.to_string() + "/" + segments.iter().collect().join("/")
   }
 }
 
 ///|
-fn NodeStore::file(self : NodeStore, path : @okf.StorePath) -> String {
-  self.full(path.segments().iter().collect())
+/// Runs an operation on the file at `path`.
+async fn NodeStore::on_file(
+  self : NodeStore,
+  op : String,
+  path : @okf.StorePath,
+  text~ : String = "",
+  bytes~ : Bytes = b"",
+) -> NodeResult raise @provider.StoreError {
+  call(
+    op,
+    self.full(path.segments().iter().collect()),
+    at=FileAt(path),
+    root=self.root.to_string(),
+    text~,
+    bytes~,
+  )
 }
 
 ///|
 pub impl @provider.DocumentStore for NodeStore with fn list(self, dir) {
-  let encoded = call("list", self.full(dir), root=self.root).text()
+  let encoded = call(
+    "list",
+    self.full(dir.segments().iter().collect()),
+    at=DirectoryAt(dir),
+    root=self.root.to_string(),
+  ).text()
   let out = []
   if encoded.length() > 0 {
     for item in encoded.split("\u0000") {
@@ -195,21 +221,25 @@ pub impl @provider.DocumentStore for NodeStore with fn list(self, dir) {
       } else {
         File
       }
-      out.push(@provider.StoreEntry::{ name: item[2:].to_owned(), kind, })
+      // A host name that is not one valid segment is not part of the store.
+      let name = @okf.EntryName(item[2:].to_owned()) catch { _ => continue }
+      out.push(@provider.StoreEntry::{ name, kind, })
     }
   }
-  out.sort_by((a, b) => @okf.lexical_compare(a.name, b.name))
+  out.sort_by((a, b) => {
+    @okf.lexical_compare(a.name.to_string(), b.name.to_string())
+  })
   out
 }
 
 ///|
 pub impl @provider.DocumentStore for NodeStore with fn read_text(self, path) {
-  call("readText", self.file(path), root=self.root).text()
+  self.on_file("readText", path).text()
 }
 
 ///|
 pub impl @provider.DocumentStore for NodeStore with fn read_bytes(self, path) {
-  call("readBytes", self.file(path), root=self.root).bytes()
+  self.on_file("readBytes", path).bytes()
 }
 
 ///|
@@ -218,7 +248,7 @@ pub impl @provider.DocumentStore for NodeStore with fn write_text(
   path,
   text,
 ) {
-  call("writeText", self.file(path), text~, root=self.root) |> ignore
+  self.on_file("writeText", path, text~) |> ignore
 }
 
 ///|
@@ -227,17 +257,17 @@ pub impl @provider.DocumentStore for NodeStore with fn write_bytes(
   path,
   bytes,
 ) {
-  call("writeBytes", self.file(path), bytes~, root=self.root) |> ignore
+  self.on_file("writeBytes", path, bytes~) |> ignore
 }
 
 ///|
 pub impl @provider.DocumentStore for NodeStore with fn delete(self, path) {
-  call("delete", self.file(path), root=self.root) |> ignore
+  self.on_file("delete", path) |> ignore
 }
 
 ///|
 pub impl @provider.DocumentStore for NodeStore with fn modified(self, path) {
-  let ms = call("mtime", self.file(path), root=self.root).number()
+  let ms = self.on_file("mtime", path).number()
   Some(@okf.Instant::of_millis(ms.to_int64()))
 }
 

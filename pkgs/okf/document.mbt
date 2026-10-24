@@ -183,14 +183,14 @@ pub fn Document::is_concept(self : Document) -> Bool {
 /// The Concept ID, for a concept.
 pub fn Document::concept_id(self : Document) -> ConceptId? {
   if self.kind is Concept {
-    Some(ConceptId::of_path(self.path))
+    ConceptId::of_path(self.path)
   } else {
     None
   }
 }
 
 ///|
-pub fn Document::concept_type(self : Document) -> String? {
+pub fn Document::concept_type(self : Document) -> ConceptType? {
   self.metadata().concept_type()
 }
 

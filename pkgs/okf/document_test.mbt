@@ -117,7 +117,10 @@ test "typed fields, trust tier and staleness" {
   )
   @debug.debug_inspect(m.verified().length(), content="1")
   @debug.debug_inspect(m.trust_tier(), content="HumanReviewed")
-  @debug.debug_inspect(m.status(), content="Some(Unknown(\"archived\"))")
+  @debug.debug_inspect(
+    m.status(),
+    content="Some(Unknown({ text: \"archived\" }))",
+  )
   let now = @okf.Instant::parse("2026-09-02T00:00:00Z").unwrap()
   @debug.debug_inspect(m.is_stale(now), content="true")
   let before = @okf.Instant::parse("2026-08-31T23:59:59+00:00").unwrap()
@@ -159,16 +162,16 @@ test "actors" {
   @debug.debug_inspect(
     @okf.Actor::parse("okf-agent/0.2"),
     content=(
-      #|Producer(name="okf-agent", version="0.2")
+      #|Some(Producer(name="okf-agent", version="0.2"))
     ),
   )
   @debug.debug_inspect(
     @okf.Actor::parse("human:jsmith@acme"),
-    content="Human(\"jsmith@acme\")",
+    content="Some(Human(\"jsmith@acme\"))",
   )
   @debug.debug_inspect(
     @okf.Actor::parse("team:ga4-docs"),
-    content="Other(\"team:ga4-docs\")",
+    content="Some(Other(\"team:ga4-docs\"))",
   )
 }
 
@@ -223,7 +226,9 @@ test "links have file lines and kinds" {
     ),
   )
   @debug.debug_inspect(
-    d.links().map(l => (l.text, l.destination, l.line, l.kind)),
+    d
+    .links()
+    .map(l => (l.text, l.destination, l.line_number().unwrap_or(0), l.kind)),
     content=(
       #|[
       #|  ("Customers", "/tables/customers.md", 6, BundleRooted),

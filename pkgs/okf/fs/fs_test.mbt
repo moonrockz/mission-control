@@ -1,7 +1,7 @@
 ///|
 async test "the filesystem store meets the store contract" {
   let dir = @afs.tmpdir(prefix="okf-fs-")
-  @conformance.check_store(@fs.FsStore(dir))
+  @conformance.check_store(@fs.FsStore(@provider.StoreRoot(dir)))
   @afs.rmdir(dir, recursive=true)
 }
 
@@ -21,8 +21,8 @@ async test "the filesystem store refuses symlinks that leave its root" {
   @afs.symlink(target=outside + "/secret.md", root + "/link.md")
   @afs.symlink(target=outside, root + "/out")
   @afs.symlink(target=root + "/inside.md", root + "/alias.md")
-  let store = @fs.FsStore(root)
-  let names = store.list([]).map(e => e.name)
+  let store = @fs.FsStore(@provider.StoreRoot(root))
+  let names = store.list(@okf.StoreDir::root()).map(e => e.name.to_string())
   assert_eq(names, ["alias.md", "inside.md"])
   let denied = (op : async () -> Unit) => {
     op() catch {

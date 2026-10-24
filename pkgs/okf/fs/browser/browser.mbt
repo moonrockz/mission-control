@@ -117,39 +117,42 @@ extern "js" fn picker() -> @js_async.Promise[CallResult] =
   #| })()
 
 ///|
-fn store_error(path : String, result : CallResult) -> @provider.StoreError {
+fn store_error(
+  at : @provider.StoreLocation,
+  result : CallResult,
+) -> @provider.StoreError {
   match result.code() {
-    "NotFoundError" | "TypeMismatchError" => NotFound(path)
+    "NotFoundError" | "TypeMismatchError" => NotFound(at)
     "NotAllowedError" | "SecurityError" | "NoModificationAllowedError" =>
-      PermissionDenied(path)
-    _ => Failed(path, result.message())
+      PermissionDenied(at)
+    _ => Failed(at, result.message())
   }
 }
 
 ///|
 async fn settle(
-  path : String,
+  at : @provider.StoreLocation,
   promise : @js_async.Promise[CallResult],
 ) -> CallResult raise @provider.StoreError {
-  let result = promise.wait() catch { e => raise Failed(path, e.to_string()) }
+  let result = promise.wait() catch { e => raise Failed(at, e.to_string()) }
   if result.ok() {
     result
   } else {
-    raise store_error(path, result)
+    raise store_error(at, result)
   }
 }
 
 ///|
 /// The root of the origin private file system (`navigator.storage.getDirectory()`).
 pub async fn origin_private_root() -> DirectoryHandle raise @provider.StoreError {
-  settle("", storage_root()).handle()
+  settle(DirectoryAt(@okf.StoreDir::root()), storage_root()).handle()
 }
 
 ///|
 /// Asks the user to select a directory, with read and write access
 /// (`showDirectoryPicker`). It needs a user gesture in the page.
 pub async fn pick_directory() -> DirectoryHandle raise @provider.StoreError {
-  settle("", picker()).handle()
+  settle(DirectoryAt(@okf.StoreDir::root()), picker()).handle()
 }
 
 ///|
@@ -169,17 +172,20 @@ pub fn BrowserStore::BrowserStore(root : DirectoryHandle) -> BrowserStore {
 async fn BrowserStore::call(
   self : BrowserStore,
   op : String,
-  path : String,
+  at : @provider.StoreLocation,
   text~ : String = "",
   bytes~ : Bytes = b"",
 ) -> CallResult raise @provider.StoreError {
-  settle(path, browser_call(self.root, op, path, text, bytes))
+  let path = match at {
+    FileAt(path) => path.to_string()
+    DirectoryAt(dir) => dir.to_string()
+  }
+  settle(at, browser_call(self.root, op, path, text, bytes))
 }
 
 ///|
 pub impl @provider.DocumentStore for BrowserStore with fn list(self, dir) {
-  let path = dir.iter().collect().join("/")
-  let encoded = self.call("list", path).text()
+  let encoded = self.call("list", DirectoryAt(dir)).text()
   let out = []
   if encoded.length() > 0 {
     for item in encoded.split("\u0000") {
@@ -189,21 +195,25 @@ pub impl @provider.DocumentStore for BrowserStore with fn list(self, dir) {
       } else {
         File
       }
-      out.push(@provider.StoreEntry::{ name: item[2:].to_owned(), kind, })
+      // A browser name that is not one valid segment is not part of the store.
+      let name = @okf.EntryName(item[2:].to_owned()) catch { _ => continue }
+      out.push(@provider.StoreEntry::{ name, kind, })
     }
   }
-  out.sort_by((a, b) => @okf.lexical_compare(a.name, b.name))
+  out.sort_by((a, b) => {
+    @okf.lexical_compare(a.name.to_string(), b.name.to_string())
+  })
   out
 }
 
 ///|
 pub impl @provider.DocumentStore for BrowserStore with fn read_text(self, path) {
-  self.call("readText", path.to_string()).text()
+  self.call("readText", FileAt(path)).text()
 }
 
 ///|
 pub impl @provider.DocumentStore for BrowserStore with fn read_bytes(self, path) {
-  self.call("readBytes", path.to_string()).bytes()
+  self.call("readBytes", FileAt(path)).bytes()
 }
 
 ///|
@@ -212,7 +222,7 @@ pub impl @provider.DocumentStore for BrowserStore with fn write_text(
   path,
   text,
 ) {
-  self.call("writeText", path.to_string(), text~) |> ignore
+  self.call("writeText", FileAt(path), text~) |> ignore
 }
 
 ///|
@@ -221,17 +231,17 @@ pub impl @provider.DocumentStore for BrowserStore with fn write_bytes(
   path,
   bytes,
 ) {
-  self.call("writeBytes", path.to_string(), bytes~) |> ignore
+  self.call("writeBytes", FileAt(path), bytes~) |> ignore
 }
 
 ///|
 pub impl @provider.DocumentStore for BrowserStore with fn delete(self, path) {
-  self.call("delete", path.to_string()) |> ignore
+  self.call("delete", FileAt(path)) |> ignore
 }
 
 ///|
 pub impl @provider.DocumentStore for BrowserStore with fn modified(self, path) {
-  let ms = self.call("mtime", path.to_string()).number()
+  let ms = self.call("mtime", FileAt(path)).number()
   Some(@okf.Instant::of_millis(ms.to_int64()))
 }
 

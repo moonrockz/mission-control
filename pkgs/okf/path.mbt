@@ -74,14 +74,17 @@ pub fn StorePath::name(self : StorePath) -> String {
 }
 
 ///|
-/// The directory segments, without the file name.
-pub fn StorePath::parent(self : StorePath) -> Array[String] {
-  self.segments.exact_view(end=self.segments.length() - 1).to_owned()
+/// The directory of the file: the root for a file at the root.
+pub fn StorePath::parent(self : StorePath) -> StoreDir {
+  StoreDir::of_segments(
+    self.segments.exact_view(end=self.segments.length() - 1).to_owned(),
+  )
 }
 
 ///|
-/// True when `self` is inside the directory `dir` (given as segments).
-pub fn StorePath::is_under(self : StorePath, dir : Array[String]) -> Bool {
+/// True when `self` is inside the directory `dir`, at any depth.
+pub fn StorePath::is_under(self : StorePath, dir : StoreDir) -> Bool {
+  let dir = dir.segments()
   if dir.length() >= self.segments.length() {
     return false
   }
@@ -126,6 +129,18 @@ pub fn BundlePath::BundlePath(text : String) -> BundlePath raise PathError {
 ///|
 fn BundlePath::of_segments(segments : Array[String]) -> BundlePath {
   { segments: ReadOnlyArray::from_array(segments), }
+}
+
+///|
+/// The root index, `/index.md`.
+pub fn BundlePath::root_index() -> BundlePath {
+  BundlePath::of_segments(["index.md"])
+}
+
+///|
+/// The root log, `/log.md`.
+pub fn BundlePath::root_log() -> BundlePath {
+  BundlePath::of_segments(["log.md"])
 }
 
 ///|
@@ -186,22 +201,29 @@ struct ConceptId {
 
 ///|
 /// Validates `text` as a Concept ID. A trailing `.md` and a leading `/` are
-/// removed, so `/tables/customers.md` and `tables/customers` are equal.
+/// removed, so `/tables/customers.md` and `tables/customers` are equal. A path
+/// whose file name is only `.md`, such as `/.md`, raises `EmptyPath`.
 pub fn ConceptId::ConceptId(text : String) -> ConceptId raise PathError {
-  let path = BundlePath(text)
-  ConceptId::of_path(path)
+  match ConceptId::of_path(BundlePath(text)) {
+    Some(id) => id
+    None => raise EmptyPath(text)
+  }
 }
 
 ///|
-/// The Concept ID of the file at `path`.
-pub fn ConceptId::of_path(path : BundlePath) -> ConceptId {
-  let text = path.segments.join("/")
-  let text = if text.has_suffix(".md") {
-    text[:text.length() - 3].to_owned()
+/// The Concept ID of the file at `path`, or `None` when the file name is only
+/// `.md`, which leaves an empty name.
+pub fn ConceptId::of_path(path : BundlePath) -> ConceptId? {
+  let name = path.name()
+  let stem = if name.has_suffix(".md") {
+    name[:name.length() - 3].to_owned()
   } else {
-    text
+    name
   }
-  { text, }
+  guard stem.length() > 0 else { return None }
+  let segments = path.segments.iter().collect()
+  segments[segments.length() - 1] = stem
+  Some({ text: segments.join("/"), })
 }
 
 ///|

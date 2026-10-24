@@ -12,14 +12,32 @@ pub(all) enum LinkKind {
 } derive(Eq, Debug)
 
 ///|
-/// One body link.
-pub(all) struct Link {
+/// Where a link comes from.
+pub(all) enum LinkOrigin {
+  /// A link in a document body, with its file line, counted from 1.
+  Body(line~ : Int32)
+  /// A link that a profile adds.
+  FromProfile
+} derive(Eq, Debug)
+
+///|
+/// One link. Its kind always follows from its destination, so only this
+/// package and `Link::Link` make links.
+pub struct Link {
   text : String
   destination : String
-  /// The file line, counted from 1. A link that a profile adds has line 0.
-  line : Int32
+  origin : LinkOrigin
   kind : LinkKind
 } derive(Eq, Debug)
+
+///|
+/// The file line of a body link.
+pub fn Link::line_number(self : Link) -> Int32? {
+  match self.origin {
+    Body(line~) => Some(line)
+    FromProfile => None
+  }
+}
 
 ///|
 fn has_scheme(dest : String) -> Bool {
@@ -64,13 +82,13 @@ pub fn classify_destination(dest : String) -> LinkKind {
 }
 
 ///|
-/// A link with a destination that this library computed, such as a profile link.
-pub fn Link::Link(
-  text : String,
-  destination : String,
-  line~ : Int32 = 0,
-) -> Link {
-  { text, destination, line, kind: classify_destination(destination), }
+/// A link that a profile adds, or a body link at `line`.
+pub fn Link::Link(text : String, destination : String, line? : Int32) -> Link {
+  let origin = match line {
+    Some(l) => Body(line=l)
+    None => FromProfile
+  }
+  { text, destination, origin, kind: classify_destination(destination), }
 }
 
 ///|
@@ -166,7 +184,9 @@ pub fn Document::links(self : Document) -> Array[Link] {
                     links.push({
                       text: plain_text(node.v.text),
                       destination: dest,
-                      line: self.file_line(line_of_loc(view.location())),
+                      origin: Body(
+                        line=self.file_line(line_of_loc(view.location())),
+                      ),
                       kind: classify_destination(dest),
                     })
                   None => ()
@@ -184,7 +204,9 @@ pub fn Document::links(self : Document) -> Array[Link] {
                 links.push({
                   text: node.v.link.v,
                   destination: dest,
-                  line: self.file_line(line_of_loc(view.location())),
+                  origin: Body(
+                    line=self.file_line(line_of_loc(view.location())),
+                  ),
                   kind: classify_destination(dest),
                 })
               }
@@ -318,7 +340,7 @@ fn resolve_path(
     )
   }
   // The path climbs above the bundle root: resolve it from the store root.
-  let root = bundle.root().iter().collect()
+  let root = bundle.root().segments().iter().collect()
   let joined = root.copy()
   for p in base {
     joined.push(p)
@@ -365,9 +387,17 @@ pub impl LinkResolver for DocumentSetResolver with fn exists(self, path) {
 }
 
 ///|
-/// A resolver that knows a fixed list of extra paths.
-pub(all) struct PathListResolver {
-  paths : Array[StorePath]
+/// A resolver that knows a fixed list of extra paths. It keeps its own copy of
+/// the list.
+struct PathListResolver {
+  paths : ReadOnlyArray[StorePath]
+}
+
+///|
+pub fn PathListResolver::PathListResolver(
+  paths : ArrayView[StorePath],
+) -> PathListResolver {
+  { paths: ReadOnlyArray::from_array(paths.to_owned()), }
 }
 
 ///|
@@ -448,3 +478,9 @@ pub fn link_escapes(
     }
   }
 }
+
+///|
+pub extend LinkOrigin with Eq::{not_equal, equal}
+
+///|
+pub extend LinkOrigin with @debug.Debug::{to_repr}
