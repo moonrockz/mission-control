@@ -115,6 +115,58 @@ lines and columns. Frontmatter and a leading BOM contribute to offsets. Columns
 count UTF-16 code units, including the BOM on the first line. For MDC documents
 parsed with `locs=false`, Markdown spans are absent and paths remain available.
 
+## Dialects and lexicons
+
+Without a dialect, every function parses strict EARS: `the <system> shall
+<response>`. A `Dialect` adds vocabulary to the same grammar. Each method has a
+default, so a dialect gives only what it adds:
+
+| Method | Adds | Example |
+| --- | --- | --- |
+| `modals` | modal verbs besides `shall`; `not` after one negates it | `must` |
+| `determiners` | words that start a subject besides `the` | `each`, `an` |
+| `pronouns` | words that stand for a system | `it` |
+| `system_nouns` | phrases that are a whole subject | `Mission Control` |
+| `lead_ins` | phrases before the clauses | `otherwise`, `for each` |
+| `headings` | Markdown headings that start a requirement block | level 3, `Requirement:` |
+
+`parse(source, dialects=[...])`, `parse_text`, `parse_block`, `parse_markdown`
+and `from_mdc` take a list of dialects and use the union of their vocabularies.
+Keywords match without letter case. A `Requirement` records its `lead_in()`, its
+`subject()` (`Determined`, `Noun` or `Pronoun`), its `opener()` and its
+`modal()` (verb and negation). `system()` gives the system, or for a pronoun the
+system that block parsing resolved it to. `to_string()` renders the requirement
+so that parsing it again with the same dialects gives an equal requirement.
+
+`parse_block(text, dialects=[...])` splits a requirement text into sentences: a
+sentence ends at `.`, `?` or `!` that white space or the end follows, outside
+backticks. A pronoun subject refers to the system of the nearest earlier
+sentence; without one, the requirement stays and an `UnresolvedPronoun`
+diagnostic names it. With heading rules, `parse_markdown` gives one
+`RequirementBlock` for each matching heading (`blocks()`): its name, its heading
+range, and the requirements of the paragraphs up to the next heading.
+
+A `Lexicon` is a dialect as data. Build one in code with `Lexicon(systems=[...])`,
+or parse a lexicon file with `Lexicon::from_yaml(text)`:
+
+```yaml
+name: mission-control
+modals: [must]
+determiners: [each]
+pronouns: [it]
+systems: [Mission Control]
+lead_ins: [otherwise, for each]
+headings:
+  - level: 3
+    prefix: "Requirement:"
+```
+
+Words (`Word`) have no white space, comma or full stop; phrases (`Phrase`) are
+words with single spaces. An unknown key, a value of the wrong kind and an
+invalid entry raise `LexiconError` with the line. `openspec_dialect()` gives the
+OpenSpec dialect: `shall` and `must`, the usual determiners, `it` and `they`, the
+lead-in `otherwise`, and the `### Requirement:` heading.
+
 ## Tests
 
 Focused regressions live beside the parser. Public behaviour has Gherkin scenarios

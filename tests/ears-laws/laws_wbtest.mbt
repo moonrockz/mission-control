@@ -93,7 +93,7 @@ test "law: parsing generated syntax preserves each independent clause" {
         s.expect(requirement.feature()).to_equal(feature)
         s.expect(requirement.preconditions()).to_equal(input.preconditions())
         s.expect(actual).to_equal(trigger)
-        s.expect(requirement.system()).to_equal(input.system())
+        s.expect(requirement.system()).to_equal(Some(input.system()))
         s
         .expect(requirement.response())
         .to_equal("report v1.2, status and temperature.")
@@ -169,5 +169,132 @@ test "law: text and Markdown extraction agree and spans recover the original sen
     max_size=12,
     max_shrinks=200,
     seed=2103,
+  )
+}
+
+///|
+/// A sentence in a dialect: the clauses of a strict case, with a lead-in, a
+/// subject opener or system noun, and a modal verb that the dialect adds.
+priv struct DialectCase {
+  base : RequirementCase
+  lead : UInt32
+  opener : UInt32
+  modal : Bool
+  negated : Bool
+} derive(Debug)
+
+///|
+impl @quickcheck.Arbitrary for DialectCase with fn arbitrary(size, state) {
+  let (base, lead, opener, modal, negated) : (
+    RequirementCase,
+    UInt32,
+    UInt32,
+    Bool,
+    Bool,
+  ) = @quickcheck.Arbitrary::arbitrary(size, state)
+  { base, lead, opener, modal, negated, }
+}
+
+///|
+impl @shrink.Shrink for DialectCase with fn shrink(self) {
+  @shrink.Shrink::shrink(
+    (self.base, self.lead, self.opener, self.modal, self.negated),
+  ).map(parts => {
+    let (base, lead, opener, modal, negated) = parts
+    { base, lead, opener, modal, negated, }
+  })
+}
+
+///|
+fn DialectCase::source(self : DialectCase) -> String {
+  let clauses = []
+  match self.lead % 3 {
+    1 => clauses.push("Otherwise")
+    2 => clauses.push("For each document")
+    _ => ()
+  }
+  if self.base.feature {
+    clauses.push("WHERE logging is fitted")
+  }
+  for state in self.base.preconditions() {
+    clauses.push("WHILE " + state)
+  }
+  match self.base.trigger % 3 {
+    1 => clauses.push("WHEN polled")
+    2 => clauses.push("IF disconnected")
+    _ => ()
+  }
+  let subject = match self.opener % 4 {
+    0 => "THE " + self.base.system()
+    1 => "EACH " + self.base.system()
+    2 => "IT"
+    _ => "Mission Control"
+  }
+  let then = if self.base.trigger % 3 == 2 { "THEN " } else { "" }
+  let modal = (if self.modal { "MUST" } else { "SHALL" }) +
+    (if self.negated { " NOT" } else { "" })
+  clauses.push(
+    then + subject + " " + modal + " report v1.2, status and temperature.",
+  )
+  clauses.join(", ")
+}
+
+///|
+fn law_lexicon() -> @ears.Lexicon raise {
+  @ears.Lexicon(
+    modals=[@ears.Word("must")],
+    determiners=[@ears.Word("each")],
+    pronouns=[@ears.Word("it")],
+    systems=[@ears.Phrase("Mission Control")],
+    lead_ins=[@ears.Phrase("otherwise"), @ears.Phrase("for each")],
+  )
+}
+
+///|
+test "law: an empty dialect gives the strict results" {
+  let empty : Array[&@ears.Dialect] = [@ears.Lexicon()]
+  let outcome = (text : String, dialects : Array[&@ears.Dialect]) => {
+    try @ears.parse(text, dialects~) catch {
+      e => Err(@debug.to_string(e))
+    } noraise {
+      r => Ok(r)
+    }
+  }
+  @expect.for_all(
+    (input : DialectCase) => {
+      let strict = input.base.source()
+      let dialect = input.source()
+      @expect.expect_all(s => {
+        s.expect(outcome(strict, empty)).to_equal(outcome(strict, []))
+        s.expect(outcome(dialect, empty)).to_equal(outcome(dialect, []))
+      })
+    },
+    count=200,
+    max_size=12,
+    max_shrinks=200,
+    seed=2104,
+  )
+}
+
+///|
+test "law: dialect sentences render and parse to an equal requirement" {
+  let dialects : Array[&@ears.Dialect] = [law_lexicon()]
+  @expect.for_all(
+    (input : DialectCase) => {
+      let requirement = @ears.parse(input.source(), dialects~)
+      let canonical = requirement.to_string()
+      @expect.expect_all(s => {
+        s.expect(@ears.parse(canonical, dialects~)).to_equal(requirement)
+        s
+        .expect(@ears.parse(canonical, dialects~).to_string())
+        .to_equal(canonical)
+        s.expect(requirement.modal().negated).to_equal(input.negated)
+        s.expect(requirement.lead_in() is None).to_equal(input.lead % 3 == 0)
+      })
+    },
+    count=200,
+    max_size=12,
+    max_shrinks=200,
+    seed=2105,
   )
 }

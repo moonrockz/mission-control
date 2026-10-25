@@ -18,7 +18,7 @@ test "all basic patterns and complex clauses expose their structure" {
     let requirement = @ears.Requirement::Requirement(source)
     @expect.expect_all(s => {
       s.expect(requirement.pattern(), label=source).to_equal(pattern)
-      s.expect(requirement.system()).to_equal("sensor")
+      s.expect(requirement.system()).to_equal(Some("sensor"))
       s.expect(@ears.parse(requirement.to_string())).to_equal(requirement)
     })
   }
@@ -83,7 +83,7 @@ test "THEN inside unwanted conditions does not end a clause" {
         s
         .expect(requirement.trigger() is Some(Unwanted(c)) && c == condition)
         .to_be_true()
-        s.expect(requirement.system()).to_equal("scanner")
+        s.expect(requirement.system()).to_equal(Some("scanner"))
         s.expect(@ears.parse(requirement.to_string())).to_equal(requirement)
       })
     }
@@ -134,6 +134,7 @@ fn error_text(error : @ears.ParseError) -> String {
     MissingSeparator(_) => "MissingSeparator"
     MissingThen(_) => "MissingThen"
     InvalidClauseOrder(_) => "InvalidClauseOrder"
+    UnresolvedPronoun(pronoun~, ..) => "UnresolvedPronoun(\{pronoun})"
   }
   match error.position() {
     Some(at) => "\{name}@\{at}"

@@ -37,15 +37,15 @@ fn starts_word_at(text : String, at : Int32, word : String) -> Bool {
 }
 
 ///|
-/// A word that starts a clause: a clause keyword, `then` or `the`.
+/// A word that starts a clause: a clause keyword, `then`, or a subject.
 priv enum ClauseWord {
   Clause(Keyword)
   Then
-  The
+  SubjectWord
 } derive(Eq)
 
 ///|
-fn clause_word(text : String) -> ClauseWord? {
+fn clause_word(text : String, vocabulary : Vocabulary) -> ClauseWord? {
   for keyword in keywords {
     if starts_word(text, keyword.word()) {
       return Some(Clause(keyword))
@@ -53,16 +53,22 @@ fn clause_word(text : String) -> ClauseWord? {
   }
   if starts_word(text, "then") {
     Some(Then)
-  } else if starts_word(text, "the") {
-    Some(The)
+  } else if vocabulary.starts_subject(text) {
+    Some(SubjectWord)
   } else {
     None
   }
 }
 
 ///|
-fn starts_then_system(text : String, at : Int32) -> Bool {
-  starts_word_at(text, at, "then") && starts_word_at(text, at + 5, "the")
+fn starts_then_system(
+  text : String,
+  at : Int32,
+  vocabulary : Vocabulary,
+) -> Bool {
+  starts_word_at(text, at, "then") &&
+  text.length() > at + 5 &&
+  vocabulary.starts_subject(text[at + 5:].to_owned())
 }
 
 ///|
@@ -71,14 +77,15 @@ fn starts_then_system(text : String, at : Int32) -> Bool {
 fn take_clause(
   text : String,
   unwanted : Bool,
+  vocabulary : Vocabulary,
   at~ : SentencePosition,
 ) -> (String, String) raise ParseError {
   let mut saw_incomplete_then = false
   for i in 0..<text.length() {
     if text.code_unit_at(i) == 44 {
       let rest = text[i + 1:].trim_start().to_owned()
-      if clause_word(rest) is Some(word) {
-        if unwanted && word == Then && !starts_then_system(rest, 0) {
+      if clause_word(rest, vocabulary) is Some(word) {
+        if unwanted && word == Then && !starts_then_system(rest, 0, vocabulary) {
           saw_incomplete_then = true
           continue
         }
@@ -87,7 +94,7 @@ fn take_clause(
     }
     if unwanted && text.code_unit_at(i) == 32 {
       if starts_word_at(text, i + 1, "then") {
-        if starts_then_system(text, i + 1) {
+        if starts_then_system(text, i + 1, vocabulary) {
           return (text[:i].trim_end().to_owned(), text[i + 1:].to_owned())
         }
         saw_incomplete_then = true
@@ -104,12 +111,66 @@ fn take_clause(
 }
 
 ///|
-/// Parse one sentence. Keywords are case-insensitive; clauses use comma
-/// separators. IF requires THEN, with an optional comma before THEN.
-/// Order: optional WHERE, zero or more WHILE, optional WHEN or IF, THE ... SHALL.
-pub fn Requirement::Requirement(
+/// The length of the lead-in phrase that starts `text`, followed by a space,
+/// a comma or the end.
+fn lead_in_at_start(text : String, vocabulary : Vocabulary) -> Int32? {
+  for phrase in vocabulary.lead_ins {
+    let n = phrase.length()
+    if text.length() >= n &&
+      text[:n].to_owned().to_lower() == phrase &&
+      (
+        text.length() == n ||
+        text.code_unit_at(n) == 32 ||
+        text.code_unit_at(n) == 44
+      ) {
+      return Some(n)
+    }
+  }
+  None
+}
+
+///|
+/// The lead-in phrase at the start of `text`, when a dialect gives one: up to
+/// the first comma that a clause keyword or a subject follows, or else up to
+/// the first word that starts a subject. Gives the lead-in and the rest.
+fn take_lead_in(text : String, vocabulary : Vocabulary) -> (String?, String) {
+  guard lead_in_at_start(text, vocabulary) is Some(length) else {
+    return (None, text)
+  }
+  for i in length..<text.length() {
+    if text.code_unit_at(i) == 44 {
+      let rest = text[i + 1:].trim_start().to_owned()
+      if clause_word(rest, vocabulary) is Some(_) {
+        return (Some(text[:i].trim_end().to_owned()), rest)
+      }
+    }
+  }
+  for i in length..<text.length() {
+    if text.code_unit_at(i) == 32 {
+      let rest = text[i + 1:].to_owned()
+      if clause_word(rest, vocabulary) is Some(_) {
+        return (Some(text[:i].trim_end().to_owned()), rest)
+      }
+    }
+  }
+  (None, text)
+}
+
+///|
+/// A parsed sentence and the position of its subject.
+priv struct Parsed {
+  requirement : Requirement
+  subject_at : SentencePosition
+}
+
+///|
+/// Parses one sentence with a vocabulary. See `Requirement::Requirement` for
+/// the strict grammar; the vocabulary adds lead-ins, subject openers, system
+/// nouns and modal verbs.
+fn parse_sentence(
   source : String,
-) -> Requirement raise ParseError {
+  vocabulary : Vocabulary,
+) -> Parsed raise ParseError {
   let text = normalize(source)
   guard !text.is_empty() else { raise EmptyRequirement }
   // Each remaining text is a suffix of `text`, so its start is a position.
@@ -117,15 +178,16 @@ pub fn Requirement::Requirement(
     let p : SentencePosition = { offset: text.length() - rest.length(), }
     p
   }
-  let mut rest = text
+  let (lead_in, after_lead_in) = take_lead_in(text, vocabulary)
+  let mut rest = after_lead_in
   let mut feature = None
   let states = []
   let mut trigger = None
-  while !starts_word(rest, "the") {
+  while !vocabulary.starts_subject(rest) {
     let at = position_of(rest)
-    let keyword = match clause_word(rest) {
+    let keyword = match clause_word(rest, vocabulary) {
       Some(Clause(keyword)) => keyword
-      Some(Then | The) => raise InvalidClauseOrder(at~)
+      Some(Then | SubjectWord) => raise InvalidClauseOrder(at~)
       None => raise ExpectedSystem(at~)
     }
     let in_order = match keyword {
@@ -134,7 +196,7 @@ pub fn Requirement::Requirement(
     }
     guard in_order else { raise InvalidClauseOrder(at~) }
     let payload = rest[keyword.word().length():].trim_start().to_owned()
-    let (clause, next) = take_clause(payload, keyword == If, at~)
+    let (clause, next) = take_clause(payload, keyword == If, vocabulary, at~)
     guard !clause.is_empty() else { raise EmptyClause(keyword~, at~) }
     match keyword {
       Where => feature = Some(clause)
@@ -145,7 +207,7 @@ pub fn Requirement::Requirement(
     rest = if keyword == If {
       guard starts_word(next, "then") else { raise MissingThen(at~) }
       let after_then = next[4:].trim_start().to_owned()
-      guard starts_word(after_then, "the") else {
+      guard vocabulary.starts_subject(after_then) else {
         raise ExpectedSystem(at=position_of(after_then))
       }
       after_then
@@ -153,33 +215,90 @@ pub fn Requirement::Requirement(
       next
     }
   }
-  let body = rest[3:].trim_start().to_owned()
-  let mut shall_at = None
-  for i = 0; i < body.length(); i = i + 1 {
-    if (i == 0 || body.code_unit_at(i - 1) == 32) &&
-      starts_word_at(body, i, "shall") {
-      shall_at = Some(i)
-      break
+  let subject_at = position_of(rest)
+  // The subject, and the text from its modal verb on.
+  let (subject, from_modal) : (Subject, String) = match
+    vocabulary.subject_at_start(rest) {
+    Some(StartsNoun(n)) => {
+      let after = rest[n:].trim_start().to_owned()
+      guard vocabulary.modal_at(after, 0) is Some(_) else {
+        raise MissingShall(at=position_of(after))
+      }
+      (Noun(rest[:n].to_owned()), after)
     }
+    Some(StartsPronoun(n)) => {
+      let after = rest[n:].trim_start().to_owned()
+      guard vocabulary.modal_at(after, 0) is Some(_) else {
+        raise MissingShall(at=position_of(after))
+      }
+      (Pronoun(opener={ text: rest[:n].to_owned(), }, resolved=None), after)
+    }
+    Some(StartsDeterminer(n)) => {
+      let body = rest[n:].trim_start().to_owned()
+      let mut modal_at = None
+      for i = 0; i < body.length(); i = i + 1 {
+        if (i == 0 || body.code_unit_at(i - 1) == 32) &&
+          vocabulary.modal_at(body, i) is Some(_) {
+          modal_at = Some(i)
+          break
+        }
+      }
+      guard modal_at is Some(at) else {
+        raise MissingShall(at=position_of(body))
+      }
+      let system = body[:at].trim_end().to_owned()
+      guard !system.is_empty() else {
+        raise ExpectedSystem(at=position_of(body))
+      }
+      (
+        Determined(opener={ text: rest[:n].to_owned(), }, system~),
+        body[at:].to_owned(),
+      )
+    }
+    None => raise ExpectedSystem(at=subject_at)
   }
-  guard shall_at is Some(at) else { raise MissingShall(at=position_of(body)) }
-  let system = body[:at].trim_end().to_owned()
-  guard !system.is_empty() else { raise ExpectedSystem(at=position_of(body)) }
-  let after_shall = body[at + 5:].to_owned()
-  let response = after_shall.trim_start().to_owned()
+  let verb_length = vocabulary.modal_at(from_modal, 0).unwrap_or(0)
+  let verb : Word = { text: from_modal[:verb_length].to_owned(), }
+  let negated = starts_word_at(from_modal, verb_length + 1, "not")
+  let after_modal = if negated {
+    from_modal[verb_length + 4:].to_owned()
+  } else {
+    from_modal[verb_length:].to_owned()
+  }
+  let response = after_modal.trim_start().to_owned()
   guard !response.is_empty() && response != "." else {
-    raise MissingResponse(at=position_of(after_shall))
+    raise MissingResponse(at=position_of(after_modal))
   }
   {
-    feature,
-    preconditions: ReadOnlyArray::from_array(states[:]),
-    trigger,
-    system,
-    response,
+    requirement: {
+      lead_in,
+      feature,
+      preconditions: ReadOnlyArray::from_array(states[:]),
+      trigger,
+      subject,
+      modal: { verb, negated, },
+      response,
+    },
+    subject_at,
   }
 }
 
 ///|
-pub fn parse(source : String) -> Requirement raise ParseError {
-  Requirement::Requirement(source)
+/// Parse one sentence in strict EARS. Keywords are case-insensitive; clauses
+/// use comma separators. IF requires THEN, with an optional comma before THEN.
+/// Order: optional WHERE, zero or more WHILE, optional WHEN or IF, THE ... SHALL.
+pub fn Requirement::Requirement(
+  source : String,
+) -> Requirement raise ParseError {
+  parse_sentence(source, Vocabulary::strict()).requirement
+}
+
+///|
+/// Parse one sentence with the vocabulary of `dialects`. Without a dialect,
+/// it is the strict grammar of `Requirement::Requirement`.
+pub fn parse(
+  source : String,
+  dialects~ : ArrayView[&Dialect] = [],
+) -> Requirement raise ParseError {
+  parse_sentence(source, Vocabulary::of(dialects)).requirement
 }

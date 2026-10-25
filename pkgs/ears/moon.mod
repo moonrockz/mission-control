@@ -4,6 +4,7 @@ version = "0.0.2"
 
 import {
   "moonrockz/mdc@0.0.2",
+  "moonbit-community/yaml@0.0.7",
   "moonrockz/expect@0.6.1",
 }
 

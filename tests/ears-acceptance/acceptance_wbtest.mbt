@@ -89,7 +89,7 @@ impl @moonspec.World for EarsWorld with fn configure(self, setup) {
       fail("no first requirement")
     }
     @expect.expect_all(s => {
-      s.expect(item.requirement().system()).to_equal(system)
+      s.expect(item.requirement().system()).to_equal(Some(system))
       s.expect(item.requirement().response()).to_equal(response)
     })
   })
