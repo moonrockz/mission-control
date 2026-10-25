@@ -1,10 +1,10 @@
 name = "moonrockz/okf"
 
-version = "0.0.2"
+version = "0.1.0"
 
 import {
-  "moonrockz/mdc@0.0.2",
-  "moonrockz/ears@0.0.2",
+  "moonrockz/mdc@0.1.0",
+  "moonrockz/ears@0.1.0",
   "moonbit-community/cmark@0.4.12",
   "moonbit-community/yaml@0.0.7",
   "moonbitlang/async@0.22.5",

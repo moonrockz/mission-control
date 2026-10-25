@@ -1,9 +1,9 @@
 name = "moonrockz/ears"
 
-version = "0.0.2"
+version = "0.1.0"
 
 import {
-  "moonrockz/mdc@0.0.2",
+  "moonrockz/mdc@0.1.0",
   "moonbit-community/yaml@0.0.7",
   "moonrockz/expect@0.6.1",
 }

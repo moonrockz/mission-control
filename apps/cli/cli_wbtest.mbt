@@ -1,6 +1,6 @@
 ///|
 test "version prints the contract version" {
-  inspect(@contracts.version(), content="0.0.2")
+  inspect(@contracts.version(), content="0.1.0")
   guard run(["version"]) is Text(text) else { panic() }
   assert_eq(text, "mission-control " + @contracts.version().to_string())
 }

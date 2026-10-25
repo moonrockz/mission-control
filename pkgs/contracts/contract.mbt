@@ -116,7 +116,7 @@ pub impl Show for Version with fn output(self, logger) {
 ///|
 /// The version text of this module. `scripts/versions.mbtx` sets it to the
 /// workspace version.
-let current_version : String = "0.0.2"
+let current_version : String = "0.1.0"
 
 ///|
 /// The version of this module. It matches the workspace version.
