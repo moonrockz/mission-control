@@ -142,7 +142,7 @@ fn index_text(
     let items = entries.iter().filter(e => e.0 == t).collect()
     items.sort_by((a, b) => @okf.lexical_compare(a.2, b.2))
     for e in items {
-      out.push(@edit.index_entry_line(e.1, e.2, description?=e.3))
+      out.push(@edit.IndexEntryLine(e.1, e.2, description?=e.3).to_string())
     }
     out.push("")
   }
@@ -196,6 +196,18 @@ fn export_path(doc : @okf.Document) -> @okf.BundlePath? raise ConvertError {
 }
 
 ///|
+/// The `requirement` value of a Requirement or Scenario concept. A concept
+/// without one has none; a value that is not a valid name raises `BadName`.
+fn export_requirement(
+  doc : @okf.Document,
+) -> RequirementName? raise ConvertError {
+  match doc.metadata().text("requirement") {
+    Some(text) => Some(RequirementName(text) catch { e => raise BadName(e) })
+    None => None
+  }
+}
+
+///|
 /// Plans the export of the native OKF bundle at `source_root` of `set` into an
 /// `openspec/` tree at `target_root`. Each OpenSpec concept becomes its file
 /// without frontmatter; Requirement and Scenario concepts merge into their
@@ -217,15 +229,14 @@ pub fn export_openspec(
       let extra = []
       for r in requirements {
         guard capability_of(r) == cap else { continue }
-        guard requirement_of(r, "requirement") is Some(name) else { continue }
+        guard export_requirement(r) is Some(name) else { continue }
         extra.push(
           "### Requirement: \{name}\n" +
           r.body().trim_end(chars="\n").to_owned() +
           "\n",
         )
         for s in scenarios {
-          if capability_of(s) == cap &&
-            requirement_of(s, "requirement") == Some(name) {
+          if capability_of(s) == cap && export_requirement(s) == Some(name) {
             let sname = s
               .metadata()
               .text("scenario")

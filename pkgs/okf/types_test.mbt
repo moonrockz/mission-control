@@ -134,16 +134,17 @@ test "log dates are real calendar dates" {
 
 ///|
 test "OKF versions are known or unknown with their text" {
-  assert_eq(@okf.OkfVersion::parse("0.2"), V02)
-  assert_eq(@okf.OkfVersion::parse("0.1"), V01)
-  assert_eq(@okf.OkfVersion::parse("0.3"), Unknown("0.3"))
+  assert_true(@okf.OkfVersion::parse("0.2") is V02)
+  assert_true(@okf.OkfVersion::parse("0.1") is V01)
+  assert_true(@okf.OkfVersion::parse("0.3") is Unknown("0.3"))
+  assert_eq(@okf.OkfVersion::parse("0.3").to_string(), "0.3")
   assert_false(@okf.OkfVersion::parse("0.3").is_known())
   let b = @okf.load_bundle(
     @okf.DocumentSet::of_texts([
       ("index.md", "---\nokf_version: \"0.3\"\n---\n"),
     ]),
   )
-  assert_eq(b.okf_version(), Some(Unknown("0.3")))
+  assert_true(b.okf_version() is Some(Unknown("0.3")))
 }
 
 ///|

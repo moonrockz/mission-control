@@ -111,7 +111,7 @@ store.
 
 ```moonbit
 @edit.set_key(text, @okf.FieldKey("status"), "deprecated")
-@edit.add_index_entry(index_text, @edit.SectionName("Metric"), @edit.index_entry_line("Revenue", "/metrics/revenue.md"))
+@edit.add_index_entry(index_text, @edit.SectionName("Metric"), @edit.IndexEntryLine("Revenue", "/metrics/revenue.md"))
 @edit.add_log_entry(log_text, @okf.LogDate("2026-10-23"), "Added revenue.", label="Creation")
 let plan = @edit.plan_add_concept(
   bundle, "/metrics/revenue.md", @okf.ConceptType("Metric"), "Revenue",
@@ -177,7 +177,9 @@ that OpenSpec runs only at archive time (a `MODIFIED` or `REMOVED` requirement
 that matches nothing, and a delta for a capability that does not exist). Two
 more checks report content that the view leaves out: a rename with only a
 `FROM:` or a `TO:` line, and a capability, change or requirement value that is
-not a valid name. `@openspec.view(bundle)` gives requirements, scenarios,
+not a valid name, a requirement heading without a name, or a `state` that is
+not `active` or `archived`. Export refuses a name that is not valid.
+`@openspec.view(bundle)` gives requirements, scenarios,
 deltas and tasks with typed names (`CapabilityPath`, `ChangeName`,
 `RequirementName`, `TaskNumber`), types (`OpenSpecType`) and states
 (`ChangeState`). Native bundles can also use `Requirement` and `Scenario`

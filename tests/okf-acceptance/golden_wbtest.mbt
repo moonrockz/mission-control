@@ -141,7 +141,7 @@ test "the OKF sample bundles report no conformance error" {
     assert_eq(
       report
       .findings()
-      .map(f => f.rule.to_string() + " " + f.subject.path_text())
+      .map(f => f.rule.to_string() + " " + f.subject.path_text().unwrap_or(""))
       .iter()
       .collect(),
       [],

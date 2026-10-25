@@ -86,6 +86,70 @@ pub impl Show for StoreRoot with fn output(self, logger) {
 }
 
 ///|
+/// The host path of `segments` under the root.
+pub fn StoreRoot::join(
+  self : StoreRoot,
+  segments : ArrayView[String],
+) -> String {
+  if segments.is_empty() {
+    self.text
+  } else if self.text.has_suffix("/") {
+    self.text + segments.iter().collect().join("/")
+  } else {
+    self.text + "/" + segments.iter().collect().join("/")
+  }
+}
+
+///|
+/// `message` with each host path under the root made relative to it, so that
+/// it names no host path: `<root>/a.md` becomes `a.md`, and the root alone
+/// becomes `.`. The root text counts only where a path starts (at the start
+/// of the message, or after a space, a quote or `(`) and where it ends (at
+/// `/`, at the end of the message, or before a space, a quote, `)`, `,` or
+/// `:`). Other text that contains the root text does not change.
+pub fn StoreRoot::relative_message(
+  self : StoreRoot,
+  message : String,
+) -> String {
+  let base = if self.text.has_suffix("/") {
+    self.text[:self.text.length() - 1].to_owned()
+  } else {
+    self.text
+  }
+  let starts = " \t\n'\"`("
+  let ends = " \t\n'\"`),:"
+  let out = StringBuilder()
+  let n = message.length()
+  // The start of the text that is not yet copied.
+  let mut copied = 0
+  let mut i = 0
+  while i < n {
+    // Compare code units, so that no slice splits a surrogate pair.
+    let at_start = i == 0 ||
+      starts.iter().any(c => c.to_int() == message[i - 1].to_int())
+    if at_start && message[i:].has_prefix(base + "/") {
+      out.write_view(message[copied:i])
+      i += base.length() + 1
+      copied = i
+      continue
+    }
+    if at_start && base.length() > 0 && message[i:].has_prefix(base) {
+      let j = i + base.length()
+      if j == n || ends.iter().any(c => c.to_int() == message[j].to_int()) {
+        out.write_view(message[copied:i])
+        out.write_string(".")
+        i = j
+        copied = i
+        continue
+      }
+    }
+    i += 1
+  }
+  out.write_view(message[copied:n])
+  out.to_string()
+}
+
+///|
 /// Reads and writes documents. Paths are relative to the root of the store and
 /// never escape it. Implementations must list entries in a stable order.
 pub(open) trait DocumentStore {

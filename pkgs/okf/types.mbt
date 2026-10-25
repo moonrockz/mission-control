@@ -467,8 +467,9 @@ pub impl Compare for LogDate with fn compare(self, other) {
 }
 
 ///|
-/// The OKF version that a bundle declares in its root index.
-pub(all) enum OkfVersion {
+/// The OKF version that a bundle declares in its root index. Only
+/// `OkfVersion::parse` makes values, so `Unknown` never holds a known version.
+pub enum OkfVersion {
   V01
   V02
   /// A version that this library does not know, with its text.

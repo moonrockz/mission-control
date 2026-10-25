@@ -222,11 +222,32 @@ fn check_invalid_names(ctx : @okf.ValidationContext) -> Array[@okf.Issue] {
         None => "the \{t} concept has no `\{key}`"
       }
       out.push(
+        @okf.Issue::at(bundle, doc, message, line?=doc.metadata().line_of(key)),
+      )
+    }
+    match doc.metadata().text("state") {
+      Some(value) if ChangeState::parse(value) is None =>
+        out.push(
+          @okf.Issue::at(
+            bundle,
+            doc,
+            "the `state` value `\{value}` is not `active` or `archived`",
+            line?=doc.metadata().line_of("state"),
+          ),
+        )
+      _ => ()
+    }
+  }
+  for pair in spec_docs(ctx) {
+    guard model_of(pair.1) is Some(model) else { continue }
+    for line in model.unnamed_requirements {
+      out.push(
         @okf.Issue::at(
-          bundle,
-          doc,
-          message,
-          line=doc.metadata().line_of(key).unwrap_or(1),
+          pair.0,
+          pair.1,
+          "a requirement heading has no name",
+          line~,
+          hint="Write `### Requirement: <name>`.",
         ),
       )
     }

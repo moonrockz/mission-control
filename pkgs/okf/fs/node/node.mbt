@@ -127,7 +127,7 @@ async fn call(
   op : String,
   path : String,
   at~ : @provider.StoreLocation = DirectoryAt(@okf.StoreDir::root()),
-  root~ : String = "",
+  root? : @provider.StoreRoot,
   text~ : String = "",
   bytes~ : Bytes = b"",
 ) -> NodeResult raise @provider.StoreError {
@@ -136,7 +136,8 @@ async fn call(
       at, "the Node.js file system API is not available; it needs Node.js 20.16 or later",
     )
   }
-  let result = node_call(root, op, path, text, bytes).wait() catch {
+  let root_text = root.map(r => r.to_string()).unwrap_or("")
+  let result = node_call(root_text, op, path, text, bytes).wait() catch {
     e => raise Failed(at, without_root(e.to_string(), root))
   }
   if result.ok() {
@@ -151,11 +152,10 @@ async fn call(
 
 ///|
 /// A message with the root removed, so that it names no host path.
-fn without_root(message : String, root : String) -> String {
-  if root.length() == 0 {
-    message
-  } else {
-    message.replace_all(old=root + "/", new="").replace_all(old=root, new=".")
+fn without_root(message : String, root : @provider.StoreRoot?) -> String {
+  match root {
+    Some(r) => r.relative_message(message)
+    None => message
   }
 }
 
@@ -178,11 +178,7 @@ pub fn NodeStore::root(self : NodeStore) -> @provider.StoreRoot {
 
 ///|
 fn NodeStore::full(self : NodeStore, segments : ArrayView[String]) -> String {
-  if segments.is_empty() {
-    self.root.to_string()
-  } else {
-    self.root.to_string() + "/" + segments.iter().collect().join("/")
-  }
+  self.root.join(segments)
 }
 
 ///|
@@ -198,7 +194,7 @@ async fn NodeStore::on_file(
     op,
     self.full(path.segments().iter().collect()),
     at=FileAt(path),
-    root=self.root.to_string(),
+    root=self.root,
     text~,
     bytes~,
   )
@@ -210,7 +206,7 @@ pub impl @provider.DocumentStore for NodeStore with fn list(self, dir) {
     "list",
     self.full(dir.segments().iter().collect()),
     at=DirectoryAt(dir),
-    root=self.root.to_string(),
+    root=self.root,
   ).text()
   let out = []
   if encoded.length() > 0 {

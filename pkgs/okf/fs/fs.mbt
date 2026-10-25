@@ -20,11 +20,7 @@ pub fn FsStore::root(self : FsStore) -> @provider.StoreRoot {
 
 ///|
 fn FsStore::full(self : FsStore, segments : ArrayView[String]) -> String {
-  if segments.is_empty() {
-    self.root.to_string()
-  } else {
-    self.root.to_string() + "/" + segments.iter().collect().join("/")
-  }
+  self.root.join(segments)
 }
 
 ///|
@@ -45,12 +41,7 @@ fn FsStore::failed(
   at : @provider.StoreLocation,
   error : Error,
 ) -> @provider.StoreError {
-  let root = self.root.to_string()
-  let message = error
-    .to_string()
-    .replace_all(old=root + "/", new="")
-    .replace_all(old=root, new=".")
-  Failed(at, message)
+  Failed(at, self.root.relative_message(error.to_string()))
 }
 
 ///|

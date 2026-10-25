@@ -226,7 +226,11 @@ test "findings carry their fields and keep a stable order" {
   let rows = first
     .findings()
     .map(f => {
-      (f.severity.to_string(), f.rule.to_string(), f.subject.path_text())
+      (
+        f.severity.to_string(),
+        f.rule.to_string(),
+        f.subject.path_text().unwrap_or(""),
+      )
     })
     .iter()
     .collect()
@@ -423,4 +427,123 @@ test "validation reports invalid profiles and unknown config rule names" {
       error=UnknownRegister(register="decision")
     ),
   )
+}
+
+///|
+priv struct BadVocabulary {}
+
+///|
+impl @okf.Profile for BadVocabulary with fn name(_) {
+  "bad-vocabulary"
+}
+
+///|
+impl @okf.Profile for BadVocabulary with fn vocabulary(_) {
+  [@okf.KeyDefinition(@okf.FieldKey("Not A Key"))]
+}
+
+///|
+impl @okf.Profile for BadVocabulary with fn registers(_) {
+  [@okf.Register(@okf.RegisterName("Not A Name"), @okf.ConceptType("Other"))]
+}
+
+///|
+priv struct DecisionProfile {}
+
+///|
+impl @okf.Profile for DecisionProfile with fn name(_) {
+  "decisions"
+}
+
+///|
+impl @okf.Profile for DecisionProfile with fn registers(_) {
+  [@okf.Register(@okf.RegisterName("decision"), @okf.ConceptType("Decision"))]
+}
+
+///|
+impl @okf.Profile for DecisionProfile with fn reference_fields(_) {
+  [
+    {
+      key: @okf.FieldKey("decision"),
+      kind: RecordRef(register=@okf.RegisterName("decision")),
+    },
+  ]
+}
+
+///|
+test "every failing profile method gives profile-invalid, and other profiles keep their registers" {
+  let k = @okf.discover(
+    set_of([
+      ("index.md", "---\nokf_version: \"0.2\"\n---\n"),
+      ("decisions/0001-use-yaml.md", "---\ntype: Decision\n---\n"),
+      ("notes/a.md", "---\ntype: Note\ndecision: \"0001\"\n---\n"),
+    ]),
+  )
+  let clock = @okf.FixedClock(@okf.Instant::of_millis(0L))
+  let profiles : Array[&@okf.Profile] = [
+    BadVocabulary::{ },
+    DecisionProfile::{ },
+  ]
+  let report = @okf.validate(k, [], clock, profiles~)
+  assert_eq(
+    report.findings().map(f => (f.rule.to_string(), f.subject)).iter().collect(),
+    [("profile-invalid", ProfileSubject("bad-vocabulary"))],
+  )
+  let b = k.bundles()[0]
+  guard b.document(@okf.BundlePath("/notes/a.md")) is Some(doc) else {
+    fail("no note")
+  }
+  let refs = @okf.typed_references(k, b, doc, profiles~)
+  assert_eq(refs.length(), 1)
+  assert_eq(refs[0].key, @okf.FieldKey("decision"))
+  assert_true(refs[0].target is ToRecord(..))
+}
+
+///|
+test "the config turns off and changes the severity of built-in rules" {
+  let k = @okf.discover(
+    set_of([("index.md", "---\nokf_version: \"0.2\"\n---\n")]),
+  )
+  let clock = @okf.FixedClock(@okf.Instant::of_millis(0L))
+  let quiet = @okf.ValidationConfig(disabled=[
+    @okf.RuleName("validation-config-unknown-rule"),
+    @okf.RuleName("link-broke"),
+  ])
+  assert_eq(@okf.validate(k, [], clock, config=quiet).findings().length(), 0)
+  let lowered = @okf.ValidationConfig(overrides=[
+    (@okf.RuleName("profile-invalid"), Info),
+  ])
+  let report = @okf.validate(k, [], clock, config=lowered, profiles=[
+    BrokenProfile::{ },
+  ])
+  assert_eq(
+    report
+    .findings()
+    .map(f => (f.severity.to_string(), f.rule.to_string()))
+    .iter()
+    .collect(),
+    [("info", "profile-invalid")],
+  )
+  assert_eq(report.findings()[0].subject.path_text(), None)
+}
+
+///|
+test "lines keep their line ending, and a last line can have none" {
+  let lines = @okf.split_lines("a\r\nb\rc\nd")
+  assert_eq(lines.map(l => l.ending), [Some(CrLf), Some(Cr), Some(Lf), None])
+  assert_eq(lines.map(l => l.ending_text()), ["\r\n", "\r", "\n", ""])
+}
+
+///|
+test "generated index sections keep concept type spellings apart" {
+  let b = @okf.load_bundle(
+    set_of([
+      ("index.md", "---\nokf_version: \"0.2\"\n---\n"),
+      ("a.md", "---\ntype: Decision\ntitle: A\n---\n"),
+      ("b.md", "---\ntype: decision\ntitle: B\n---\n"),
+    ]),
+  )
+  let text = @okf.generate_index(b)
+  assert_true(text.contains("# Decision\n\n* [A](a.md)"))
+  assert_true(text.contains("# decision\n\n* [B](b.md)"))
 }

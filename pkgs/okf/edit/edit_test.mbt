@@ -60,7 +60,7 @@ test "index entries go after the last entry or into a new section" {
   let r = @edit.add_index_entry(
     index,
     @edit.SectionName("Tables"),
-    @edit.index_entry_line(
+    @edit.IndexEntryLine(
       "Customers",
       "/tables/customers.md",
       description="One row per customer",
@@ -73,7 +73,7 @@ test "index entries go after the last entry or into a new section" {
   let r2 = @edit.add_index_entry(
     index,
     @edit.SectionName("Metrics"),
-    "* [Revenue](/metrics/revenue.md)",
+    @edit.IndexEntryLine("Revenue", "/metrics/revenue.md"),
   )
   assert_eq(
     r2.text,
@@ -399,23 +399,29 @@ test "log entries and index entries must be one line" {
     edit_error(() => @edit.add_log_entry("# Log\n", date, "x", label="A\nB")),
     Some(LineBreak(field="label", text="A\nB")),
   )
-  let refused = try @edit.index_entry_line("Bad\n# Section", "/a.md") catch {
+  let refused = try @edit.IndexEntryLine("Bad\n# Section", "/a.md") catch {
     LineBreak(field~, ..) => field
     _ => ""
   } noraise {
     _ => ""
   }
   assert_eq(refused, "title")
-  assert_eq(
-    edit_error(() => {
-      @edit.add_index_entry(
-        "# A\n",
-        @edit.SectionName("A"),
-        "* [x](/x.md)\n# B",
-      )
-    }),
-    Some(LineBreak(field="entry", text="* [x](/x.md)\n# B")),
-  )
+  let refused = try @edit.IndexEntryLine("x", "/x.md\n# B") catch {
+    LineBreak(field~, ..) => field
+    _ => ""
+  } noraise {
+    _ => ""
+  }
+  assert_eq(refused, "destination")
+  let refused = try
+    @edit.IndexEntryLine("x", "/x.md", description="a\rb")
+  catch {
+    LineBreak(field~, ..) => field
+    _ => ""
+  } noraise {
+    _ => ""
+  }
+  assert_eq(refused, "description")
 }
 
 ///|

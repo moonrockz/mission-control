@@ -514,3 +514,126 @@ test "export refuses names that a Windows file system cannot hold" {
     assert_true(refused, msg=value)
   }
 }
+
+///|
+test "requirement headings keep backticks, and a heading without a name is no requirement" {
+  let model = @openspec.parse_spec(@openspec.CapabilityPath("a"), [
+    (1, "## Requirements"),
+    (2, "### Requirement: Parse `okf_version`"),
+    (3, "It SHALL parse."),
+    (4, "### Requirement:"),
+    (5, "Orphan text."),
+    (6, "#### Scenario: Orphan"),
+    (7, "- **WHEN** a"),
+    (8, "- **THEN** b"),
+  ])
+  assert_eq(
+    model.requirements
+    .iter()
+    .map(r => (r.name.to_string(), r.text, r.scenarios.length(), r.line))
+    .collect(),
+    [("Parse `okf_version`", "It SHALL parse.", 0, 2)],
+  )
+  assert_eq(model.unnamed_requirements.iter().collect(), [4])
+  let set = tree()
+    .with_entry({
+      path: @okf.StorePath("openspec/changes/blank/proposal.md"),
+      content: Text("## Why\n\nA blank heading.\n"),
+    })
+    .with_entry({
+      path: @okf.StorePath("openspec/changes/blank/specs/okf/documents/spec.md"),
+      content: Text(
+        "## ADDED Requirements\n\n### Requirement:\nIt SHALL work.\n\n#### Scenario: Y\n- **WHEN** a\n- **THEN** b\n",
+      ),
+    })
+  assert_eq(findings(set), ["openspec-invalid-name"])
+}
+
+///|
+test "a Scenario concept attaches to a requirement name with backticks" {
+  let set = @okf.DocumentSet::of_texts([
+    ("kb/index.md", "---\nokf_version: \"0.2\"\n---\n"),
+    (
+      "kb/specs/a.md", "---\ntype: Specification\ncapability: a\n---\n## Requirements\n\n### Requirement: Parse `x`\nIt SHALL parse.\n",
+    ),
+    (
+      "kb/s1.md", "---\ntype: Scenario\ncapability: a\nrequirement: Parse `x`\nscenario: Simple\n---\n- **WHEN** used\n- **THEN** it parses\n",
+    ),
+  ])
+  let native = @okf.load_bundle(set, root=@okf.StoreDir("kb"))
+  let req = @openspec.view(native).specs[0].requirements[0]
+  assert_eq(req.name.to_string(), "Parse `x`")
+  assert_eq(req.scenarios.iter().map(s => (s.name, s.line)).collect(), [
+    ("Simple", 5),
+  ])
+}
+
+///|
+test "an invalid change state and a missing name are reported" {
+  let set = @okf.DocumentSet::of_texts([
+    ("kb/index.md", "---\nokf_version: \"0.2\"\n---\n"),
+    ("kb/c.md", "---\ntype: Change\nchange: c\nstate: done\n---\n## Why\n"),
+    ("kb/s.md", "---\ntype: Specification\n---\n# s\n"),
+  ])
+  let b = @okf.load_bundle(set, root=@okf.StoreDir("kb"), profiles=profiles())
+  let report = @okf.validate(
+    @okf.Knowledge([b]),
+    [],
+    @okf.FixedClock(@okf.Instant::of_millis(0L)),
+    profiles=profiles(),
+  )
+  assert_eq(
+    report
+    .findings()
+    .map(f => (f.rule.to_string(), f.line, f.message))
+    .iter()
+    .collect(),
+    [
+      (
+        "openspec-invalid-name",
+        Some(4),
+        "the `state` value `done` is not `active` or `archived`",
+      ),
+      (
+        "openspec-invalid-name",
+        None,
+        "the Specification concept has no `capability`",
+      ),
+    ],
+  )
+}
+
+///|
+test "export refuses an invalid requirement name instead of dropping it" {
+  let set = @okf.DocumentSet::of_texts([
+    ("kb/index.md", "---\nokf_version: \"0.2\"\n---\n"),
+    ("kb/a.md", "---\ntype: Specification\ncapability: a\n---\n# a\n"),
+    (
+      "kb/r.md", "---\ntype: Requirement\ncapability: a\nrequirement: \"  \"\n---\nIt SHALL work.\n",
+    ),
+  ])
+  let refused = try
+    @openspec.export_openspec(set, @okf.StoreDir("kb"), @okf.StoreDir("out"))
+  catch {
+    @openspec.BadName(InvalidName(key~, ..)) => key == "requirement"
+    _ => false
+  } noraise {
+    _ => false
+  }
+  assert_true(refused)
+}
+
+///|
+test "task numbers are normalized, and tasks before a heading have no group heading" {
+  let a = @openspec.TaskNumber("01.2")
+  let b = @openspec.TaskNumber("1.2")
+  assert_eq(a, b)
+  assert_eq(a.compare(b), 0)
+  assert_eq(a.to_string(), "1.2")
+  let groups = @openspec.parse_tasks([
+    (1, "- [ ] 1.1 First"),
+    (2, "## 2. Later"),
+    (3, "- [ ] 2.1 Second"),
+  ])
+  assert_eq(groups.map(g => g.heading), [None, Some("2. Later")])
+}

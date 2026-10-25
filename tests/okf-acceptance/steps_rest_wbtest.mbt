@@ -250,7 +250,7 @@ fn configure_validation(world : OkfWorld, setup : @moonspec.Setup) -> Unit {
             Info => "info"
           },
           f.rule.to_string(),
-          f.subject.path_text(),
+          f.subject.path_text().unwrap_or(""),
         ]
       })
       .iter()
@@ -273,7 +273,7 @@ fn configure_validation(world : OkfWorld, setup : @moonspec.Setup) -> Unit {
         }) ==
         parts[0] &&
         f.rule.to_string() == parts[1] &&
-        f.subject.path_text() == parts[2]
+        f.subject.path_text() == Some(parts[2])
       })
     @expect.expect(found).to_equal(true)
   })

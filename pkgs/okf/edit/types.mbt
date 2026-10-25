@@ -73,6 +73,45 @@ pub impl Show for SectionName with fn output(self, logger) {
 }
 
 ///|
+/// The line of an index entry: `* [title](destination) - description`. The
+/// title, the destination and the description are each one line, so the
+/// entry is one line.
+struct IndexEntryLine {
+  text : String
+} derive(Eq, Hash, Debug)
+
+///|
+/// Builds an index entry line. Raises `LineBreak` when a part has a line
+/// break. A blank description gives no ` - description` part.
+pub fn IndexEntryLine::IndexEntryLine(
+  title : String,
+  destination : String,
+  description? : String,
+) -> IndexEntryLine raise EditError {
+  check_one_line("title", title)
+  check_one_line("destination", destination)
+  match description {
+    Some(d) => check_one_line("description", d)
+    None => ()
+  }
+  let text = match description {
+    Some(d) if d.length() > 0 => "* [\{title}](\{destination}) - \{d}"
+    _ => "* [\{title}](\{destination})"
+  }
+  { text, }
+}
+
+///|
+pub fn IndexEntryLine::to_string(self : IndexEntryLine) -> String {
+  self.text
+}
+
+///|
+pub impl Show for IndexEntryLine with fn output(self, logger) {
+  logger.write_string(self.text)
+}
+
+///|
 /// Why a new concept path is refused.
 pub(all) enum PathRefusal {
   /// The file name is `index.md` or `log.md`.
@@ -89,7 +128,7 @@ pub(all) enum PathRefusal {
 /// Why a register transition is refused.
 pub(all) enum TransitionRefusal {
   /// The register refuses the transition.
-  Refused(@okf.TransitionCheck)
+  Refused(@okf.TransitionDenial)
   /// The register has no state key, so it has no transitions.
   NoStateKey(register~ : @okf.RegisterName)
   /// An extra key is the state key, which would replace the checked state.
@@ -144,3 +183,15 @@ pub extend TransitionRefusal with @debug.Debug::{to_repr}
 
 ///|
 pub extend PlanError with @debug.Debug::{to_repr}
+
+///|
+pub extend IndexEntryLine with Eq::{not_equal, equal}
+
+///|
+pub extend IndexEntryLine with Hash::{hash, hash_combine}
+
+///|
+pub extend IndexEntryLine with @debug.Debug::{to_repr}
+
+///|
+pub extend IndexEntryLine with Show::{output}

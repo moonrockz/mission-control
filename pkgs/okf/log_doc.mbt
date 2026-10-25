@@ -8,8 +8,9 @@ pub(all) struct LogEntry {
 } derive(Eq, Debug)
 
 ///|
-/// The heading of a `log.md` section.
-pub(all) enum LogHeading {
+/// The heading of a `log.md` section. Only the log parser makes values, so
+/// `Undated` never holds a date.
+pub enum LogHeading {
   /// A calendar date, `YYYY-MM-DD`.
   Dated(LogDate)
   /// Any other heading text.
@@ -150,7 +151,7 @@ pub fn find_region(text : String, name : String) -> Region? {
   let marker = marker_comment(name)
   for i, line in split_lines(text) {
     if line.text.trim(chars=" \t") == marker {
-      let end = line.start + line.text.length() + line.ending.length()
+      let end = line.start + line.text.length() + line.ending_text().length()
       return Some({
         marker: name,
         preamble: text[:end].to_owned(),

@@ -12,8 +12,9 @@ pub(all) enum LinkKind {
 } derive(Eq, Debug)
 
 ///|
-/// Where a link comes from.
-pub(all) enum LinkOrigin {
+/// Where a link comes from. Only this package makes body links, from lines
+/// that it reads, so a body line is always a real file line.
+pub enum LinkOrigin {
   /// A link in a document body, with its file line, counted from 1.
   Body(line~ : Int32)
   /// A link that a profile adds.
@@ -22,7 +23,7 @@ pub(all) enum LinkOrigin {
 
 ///|
 /// One link. Its kind always follows from its destination, so only this
-/// package and `Link::Link` make links.
+/// package and `Link::Link` make links. `Link::Link` makes profile links.
 pub struct Link {
   text : String
   destination : String
@@ -82,13 +83,25 @@ pub fn classify_destination(dest : String) -> LinkKind {
 }
 
 ///|
-/// A link that a profile adds, or a body link at `line`.
-pub fn Link::Link(text : String, destination : String, line? : Int32) -> Link {
-  let origin = match line {
-    Some(l) => Body(line=l)
-    None => FromProfile
+/// A link that a profile adds.
+pub fn Link::Link(text : String, destination : String) -> Link {
+  {
+    text,
+    destination,
+    origin: FromProfile,
+    kind: classify_destination(destination),
   }
-  { text, destination, origin, kind: classify_destination(destination), }
+}
+
+///|
+/// A body link at the file line `line`, which this package read.
+fn body_link(text : String, destination : String, line : Int32) -> Link {
+  {
+    text,
+    destination,
+    origin: Body(line~),
+    kind: classify_destination(destination),
+  }
 }
 
 ///|

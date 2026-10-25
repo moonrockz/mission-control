@@ -420,14 +420,14 @@ test "intent transitions: allowed, refused for an obligation, not allowed" {
   let released = @okf.StateName("Released")
   assert_eq(
     register.check_transition(backlog, @okf.StateName("Refinement")),
-    Allowed,
+    Ok(()),
   )
-  guard register.check_transition(in_progress, released) is Refused(names) else {
+  guard register.check_transition(in_progress, released) is Err(Refused(names)) else {
     fail("not refused")
   }
   assert_eq(names.iter().collect(), ["capability"])
   assert_eq(
     register.check_transition(backlog, released),
-    NotAllowed(from=Some(@okf.StateName("Backlog")), to=released),
+    Err(NotAllowed(from=Some(@okf.StateName("Backlog")), to=released)),
   )
 }

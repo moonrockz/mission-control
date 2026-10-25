@@ -39,12 +39,13 @@ pub fn FindingSubject::bundle(self : FindingSubject) -> BundleLabel? {
 }
 
 ///|
-/// The path text of the subject: a bundle path, a store path, or `""`.
-pub fn FindingSubject::path_text(self : FindingSubject) -> String {
+/// The path text of the subject: a bundle path or a store path. A profile or
+/// the config has no path.
+pub fn FindingSubject::path_text(self : FindingSubject) -> String? {
   match self {
-    InBundle(_, path) => path.to_string()
-    Stray(path) => path.to_string()
-    ProfileSubject(_) | ConfigSubject => ""
+    InBundle(_, path) => Some(path.to_string())
+    Stray(path) => Some(path.to_string())
+    ProfileSubject(_) | ConfigSubject => None
   }
 }
 
@@ -297,6 +298,14 @@ fn builtin_rule(text : String) -> RuleName {
 }
 
 ///|
+/// The rules that `validate` itself runs, with their default severities. The
+/// validation config can disable them or change their severities.
+let builtin_rules : ReadOnlyArray[(String, Severity)] = [
+  ("profile-invalid", Error),
+  ("validation-config-unknown-rule", Warning),
+]
+
+///|
 /// Runs the rule sets over the knowledge and returns the sorted findings. A
 /// profile whose definitions break a rule gives a `profile-invalid` error, and
 /// a config that names a rule that no active rule set defines gives a
@@ -319,10 +328,18 @@ pub fn validate(
     profiles: ReadOnlyArray::from_array(profiles.to_owned()),
   }
   let findings : Array[Finding] = []
+  // The findings of the built-in rules, before the config applies.
+  let builtin : Array[(RuleName, FindingSubject, String)] = []
   let sets = rule_sets.to_owned()
   let profile_severity : Array[(RuleName, Severity)] = []
   for profile in profiles {
     try {
+      // Every method that can raise, so that each invalid profile is reported.
+      profile.vocabulary() |> ignore
+      profile.bundle_keys() |> ignore
+      profile.registers() |> ignore
+      profile.reference_fields() |> ignore
+      profile.templates() |> ignore
       for set in profile.rule_sets() {
         sets.push(set)
       }
@@ -333,17 +350,19 @@ pub fn validate(
       }
     } catch {
       e =>
-        findings.push({
-          severity: Error,
-          rule: builtin_rule("profile-invalid"),
-          subject: ProfileSubject(profile.name()),
-          line: None,
-          message: "the profile \{profile.name()} has an invalid definition: \{@debug.to_string(e)}",
-          hint: None,
-        })
+        builtin.push(
+          (
+            builtin_rule("profile-invalid"),
+            ProfileSubject(profile.name()),
+            "the profile \{profile.name()} has an invalid definition: \{@debug.to_string(e)}",
+          ),
+        )
     }
   }
-  let known : Array[RuleName] = []
+  let known : Array[RuleName] = builtin_rules
+    .iter()
+    .map(p => builtin_rule(p.0))
+    .collect()
   for set in sets {
     for rule in set.rules {
       known.push(rule.name)
@@ -375,15 +394,28 @@ pub fn validate(
   }
   for name in named {
     if !known.contains(name) {
-      findings.push({
-        severity: Warning,
-        rule: builtin_rule("validation-config-unknown-rule"),
-        subject: ConfigSubject,
-        line: None,
-        message: "the validation config names `\{name}`, which no active rule set defines",
-        hint: None,
-      })
+      builtin.push(
+        (
+          builtin_rule("validation-config-unknown-rule"),
+          ConfigSubject,
+          "the validation config names `\{name}`, which no active rule set defines",
+        ),
+      )
     }
+  }
+  for item in builtin {
+    let (rule, subject, message) = item
+    guard !config.disabled.contains(rule) else { continue }
+    let severity = match config.override_of(rule) {
+      Some(s) => s
+      None =>
+        builtin_rules
+        .iter()
+        .find_first(p => p.0 == rule.text)
+        .map(p => p.1)
+        .unwrap_or(Error)
+    }
+    findings.push({ severity, rule, subject, line: None, message, hint: None, })
   }
   Report::of_findings(findings)
 }

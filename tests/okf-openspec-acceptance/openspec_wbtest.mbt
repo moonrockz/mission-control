@@ -78,7 +78,7 @@ test "the OpenSpec checks report nothing for this repository's tree" {
   assert_eq(
     report
     .findings()
-    .map(f => f.rule.to_string() + " " + f.subject.path_text())
+    .map(f => f.rule.to_string() + " " + f.subject.path_text().unwrap_or(""))
     .iter()
     .collect(),
     [],

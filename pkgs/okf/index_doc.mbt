@@ -257,7 +257,7 @@ pub fn Bundle::index_entries_for(
   let out = []
   for index in self.indexes() {
     for entry in index.index_model().entries() {
-      let link = Link(entry.text, entry.destination, line=entry.line)
+      let link = body_link(entry.text, entry.destination, entry.line)
       match resolve_link(self, index, link) {
         StoreTarget(path~, escapes=false, ..) =>
           if self.bundle_path_of(path) == Some(target) {
@@ -276,7 +276,7 @@ pub fn Bundle::unindexed_concepts(self : Bundle) -> Array[Document] {
   let covered : Map[BundlePath, Bool] = Map([])
   for index in self.indexes() {
     for entry in index.index_model().entries() {
-      let link = Link(entry.text, entry.destination, line=entry.line)
+      let link = body_link(entry.text, entry.destination, entry.line)
       match resolve_link(self, index, link) {
         StoreTarget(path~, escapes=false, ..) =>
           match self.bundle_path_of(path) {
@@ -306,7 +306,7 @@ pub fn Bundle::description_drift(self : Bundle) -> Array[Drift] {
   let out = []
   for index in self.indexes() {
     for entry in index.index_model().entries() {
-      let link = Link(entry.text, entry.destination, line=entry.line)
+      let link = body_link(entry.text, entry.destination, entry.line)
       match resolve_link(self, index, link) {
         StoreTarget(path~, escapes=false, ..) =>
           match self.bundle_path_of(path) {
@@ -348,7 +348,12 @@ pub fn generate_index(
   let dir = dir.segments()
   let groups : Array[(IndexGroup, Array[(String, String, String?)])] = []
   let add = (group : IndexGroup, entry : (String, String, String?)) => {
-    match groups.search_by(g => g.0 == group) {
+    // Concept types group by their exact text, so `Decision` and `decision`
+    // stay separate sections.
+    let same = (g : IndexGroup) => {
+      g.heading() == group.heading() && g.rank() == group.rank()
+    }
+    match groups.search_by(g => same(g.0)) {
       Some(i) => groups[i].1.push(entry)
       None => groups.push((group, [entry]))
     }

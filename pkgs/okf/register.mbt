@@ -499,9 +499,8 @@ pub fn Register::duplicates(
 }
 
 ///|
-/// The result of a transition request.
-pub(all) enum TransitionCheck {
-  Allowed
+/// Why a register refuses a transition.
+pub(all) enum TransitionDenial {
   /// The target state is not a state of the register.
   UnknownState(StateName)
   /// No transition leads from the current state to the target state.
@@ -511,14 +510,15 @@ pub(all) enum TransitionCheck {
 } derive(Eq, Debug)
 
 ///|
-/// Checks whether `record` can move to state `to`.
+/// Checks whether `record` can move to state `to`: `Ok` when it can, else the
+/// reason why not.
 pub fn Register::check_transition(
   self : Register,
   record : Record,
   to : StateName,
-) -> TransitionCheck {
+) -> Result[Unit, TransitionDenial] {
   if !self.states.is_empty() && !self.states.contains(to) {
-    return UnknownState(to)
+    return Err(UnknownState(to))
   }
   let candidates = self.transitions
     .iter()
@@ -534,7 +534,7 @@ pub fn Register::check_transition(
     })
     .collect()
   match candidates {
-    [] => NotAllowed(from=record.state, to~)
+    [] => Err(NotAllowed(from=record.state, to~))
     _ => {
       let mut best : Array[String]? = None
       for t in candidates {
@@ -544,14 +544,14 @@ pub fn Register::check_transition(
           .map(o => o.name)
           .collect()
         if unmet.is_empty() {
-          return Allowed
+          return Ok(())
         }
         match best {
           Some(b) if b.length() <= unmet.length() => ()
           _ => best = Some(unmet)
         }
       }
-      Refused(ReadOnlyArray::from_array(best.unwrap_or([])))
+      Err(Refused(ReadOnlyArray::from_array(best.unwrap_or([]))))
     }
   }
 }
@@ -748,10 +748,10 @@ pub extend IdRule with Eq::{not_equal, equal}
 pub extend IdRule with @debug.Debug::{to_repr}
 
 ///|
-pub extend TransitionCheck with Eq::{not_equal, equal}
+pub extend TransitionDenial with Eq::{not_equal, equal}
 
 ///|
-pub extend TransitionCheck with @debug.Debug::{to_repr}
+pub extend TransitionDenial with @debug.Debug::{to_repr}
 
 ///|
 pub extend ReferenceKind with Eq::{not_equal, equal}

@@ -132,7 +132,8 @@ pub impl Show for RequirementName with fn output(self, logger) {
 
 ///|
 /// A task number such as `1.2`: dot-separated positive integers. Task numbers
-/// order by their numbers, so `1.2` comes before `1.10`.
+/// order by their numbers, so `1.2` comes before `1.10`. The text is
+/// normalized, so `01.2` and `1.2` are the same number.
 struct TaskNumber {
   parts : ReadOnlyArray[Int32]
   text : String
@@ -154,6 +155,7 @@ pub fn TaskNumber::TaskNumber(text : String) -> TaskNumber raise NameError {
     guard n > 0 else { raise InvalidName(key="task", value=text) }
     parts.push(n)
   }
+  let text = parts.map(n => n.to_string()).join(".")
   { parts: ReadOnlyArray::from_array(parts), text, }
 }
 

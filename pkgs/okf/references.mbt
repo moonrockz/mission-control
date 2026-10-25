@@ -14,10 +14,10 @@ pub(all) enum RefTarget {
 } derive(Eq, Debug)
 
 ///|
-/// One typed reference of a document. The key is the frontmatter key as
-/// written, such as `sources`.
+/// One typed reference of a document. The key is the frontmatter key, such as
+/// `sources`.
 pub struct TypedReference {
-  key : String
+  key : FieldKey
   value : String
   line : Int32?
   target : RefTarget
@@ -137,6 +137,10 @@ fn doc_ref_target(
 }
 
 ///|
+/// The `sources` key, which is a valid field key.
+let sources_key : FieldKey = { text: "sources", }
+
+///|
 /// The typed references of a document: each `sources[].resource`, and each
 /// value of the reference fields of `profiles`. A profile whose definitions
 /// break a rule adds no references; `validate` reports it.
@@ -151,13 +155,13 @@ pub fn typed_references(
   let out = []
   for source in meta.sources() {
     out.push({
-      key: "sources",
+      key: sources_key,
       value: source.resource,
       line: meta.line_of("sources"),
       target: path_target(knowledge, bundle, doc, source.resource, resolver),
     })
   }
-  let registers = registers_of(profiles) catch { _ => [] }
+  let registers = registers_of(profiles)
   for profile in profiles {
     let fields = profile.reference_fields() catch { _ => [] }
     for field in fields {
@@ -176,7 +180,7 @@ pub fn typed_references(
                 }
             }
         }
-        out.push({ key, value, line: meta.line_of(key), target, })
+        out.push({ key: field.key, value, line: meta.line_of(key), target, })
       }
     }
   }

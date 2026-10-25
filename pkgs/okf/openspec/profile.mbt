@@ -292,9 +292,11 @@ pub fn view(bundle : @okf.Bundle) -> OpenSpecView {
     for r in requirement_docs {
       guard capability_of(r) == Some(cap) else { continue }
       guard requirement_of(r, "requirement") is Some(name) else { continue }
+      // The requirement line is the line of its `requirement` key.
+      guard r.metadata().line_of("requirement") is Some(line) else { continue }
       let parsed = parse_spec(
         cap,
-        [(0, "### Requirement: " + name.to_string())] + r.prose_lines(),
+        [(line, "### Requirement: " + name.to_string())] + r.prose_lines(),
       )
       for req in parsed.requirements {
         requirements.push(req)
@@ -303,10 +305,21 @@ pub fn view(bundle : @okf.Bundle) -> OpenSpecView {
     for s in scenario_docs {
       guard capability_of(s) == Some(cap) else { continue }
       guard requirement_of(s, "requirement") is Some(req_name) else { continue }
-      let name = s.metadata().text("scenario").unwrap_or(s.display_title())
+      let meta = s.metadata()
+      let name = meta.text("scenario").unwrap_or(s.display_title())
+      // The scenario line is the line of its `scenario` key, else of its
+      // `requirement` key.
+      let line = match meta.line_of("scenario") {
+        Some(l) => Some(l)
+        None => meta.line_of("requirement")
+      }
+      guard line is Some(line) else { continue }
       let parsed = parse_spec(
         cap,
-        [(0, "### Requirement: x"), (0, "#### Scenario: " + name)] +
+        [
+          (line, "### Requirement: " + req_name.to_string()),
+          (line, "#### Scenario: " + name),
+        ] +
         s.prose_lines(),
       )
       match requirements.search_by(r => r.name == req_name) {

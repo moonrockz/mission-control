@@ -250,7 +250,7 @@ pub fn plan_add_concept(
       match bundle.document(index_path) {
         Some(index) => {
           let r = editing(() => {
-            let entry = index_entry_line(
+            let entry = IndexEntryLine(
               title,
               entry_destination(p),
               description~,
@@ -332,7 +332,7 @@ pub fn plan_add_missing_entries(
             let before = texts.get(path).unwrap_or(index.text())
             originals[path] = originals.get(path).unwrap_or(index.text())
             texts[path] = editing(() => {
-                let entry = index_entry_line(
+                let entry = IndexEntryLine(
                   concept.display_title(),
                   entry_destination(concept.path()),
                   description?=concept.metadata().description(),
@@ -392,8 +392,8 @@ pub fn plan_transition(
     None => ()
   }
   match register.check_transition(record.with_document(preview), to) {
-    Allowed => ()
-    other => raise TransitionRefused(Refused(other))
+    Ok(_) => ()
+    Err(denial) => raise TransitionRefused(Refused(denial))
   }
   EditPlan([Update(path=doc.store_path(), before=doc.text(), after~)])
 }

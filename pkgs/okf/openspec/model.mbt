@@ -66,6 +66,9 @@ pub struct SpecModel {
   requirements : ReadOnlyArray[Requirement]
   /// The delta sections of a change spec.
   deltas : ReadOnlyArray[DeltaSection]
+  /// The file lines of `### Requirement:` headings without a name. The view
+  /// gives no requirement for them, and validation reports them.
+  unnamed_requirements : ReadOnlyArray[Int32]
 } derive(Eq, Debug)
 
 ///|
@@ -79,9 +82,10 @@ pub struct Task {
 } derive(Eq, Debug)
 
 ///|
-/// One `## N. Group` of a `tasks.md`.
+/// One `## N. Group` of a `tasks.md`. Tasks before the first `##` heading
+/// form a group without a heading.
 pub struct TaskGroup {
-  heading : String
+  heading : String?
   tasks : ReadOnlyArray[Task]
 } derive(Eq, Debug)
 
@@ -154,6 +158,19 @@ fn delta_op(text : String) -> DeltaOp? {
 }
 
 ///|
+/// The name of a `Requirement: name` heading text. Backticks are part of the
+/// name.
+fn heading_requirement(text : String) -> RequirementName? {
+  try RequirementName(text["Requirement:".length():].to_owned()) catch {
+    _ => None
+  } noraise {
+    n => Some(n)
+  }
+}
+
+///|
+/// The requirement name of a `FROM:` or `TO:` line, which can wrap the
+/// heading in backticks.
 fn requirement_name(text : String) -> RequirementName? {
   let t = text.trim(chars=" \t`").to_owned()
   let name = match after_prefix(t, "### Requirement:") {
@@ -214,12 +231,14 @@ fn DeltaBuilder::build(self : DeltaBuilder) -> DeltaSection {
 
 ///|
 /// Parses an OpenSpec spec body (main or delta) from (file line, text) pairs.
-/// A requirement heading without a name is not a requirement.
+/// A requirement heading without a name is not a requirement: its text and
+/// scenarios belong to no requirement, and the model keeps its line.
 pub fn parse_spec(
   capability : CapabilityPath,
   lines : ArrayView[(Int32, String)],
 ) -> SpecModel {
   let requirements : Array[Requirement] = []
+  let unnamed : Array[Int32] = []
   let deltas : Array[DeltaBuilder] = []
   let mut purpose : String? = None
   let mut in_purpose = false
@@ -289,10 +308,13 @@ pub fn parse_spec(
           }
         }
       }
-      Some((3, text)) if text.has_prefix("Requirement:") &&
-        requirement_name(text) is Some(name) => {
+      Some((3, text)) if text.has_prefix("Requirement:") => {
         flush_req()
-        current_req = Some({ name, text: [], scenarios: [], line: number, })
+        match heading_requirement(text) {
+          Some(name) =>
+            current_req = Some({ name, text: [], scenarios: [], line: number, })
+          None => unnamed.push(number)
+        }
       }
       Some((4, text)) if text.has_prefix("Scenario:") => {
         flush_scenario()
@@ -370,17 +392,18 @@ pub fn parse_spec(
     purpose,
     requirements: frozen(requirements),
     deltas: frozen(deltas.map(d => d.build())),
+    unnamed_requirements: frozen(unnamed),
   }
 }
 
 ///|
 /// Parses a `tasks.md` body from (file line, text) pairs.
 pub fn parse_tasks(lines : ArrayView[(Int32, String)]) -> Array[TaskGroup] {
-  let groups : Array[(String, Array[Task])] = []
+  let groups : Array[(String?, Array[Task])] = []
   for pair in lines {
     let (number, line) = pair
     match heading(line) {
-      Some((2, text)) => groups.push((text, []))
+      Some((2, text)) => groups.push((Some(text), []))
       _ => {
         let t = line.trim_start(chars=" \t").to_owned()
         guard t.length() > 6 &&
@@ -403,7 +426,7 @@ pub fn parse_tasks(lines : ArrayView[(Int32, String)]) -> Array[TaskGroup] {
         let task : Task = { number: num, text, done, line: number, }
         match groups.last() {
           Some(g) => g.1.push(task)
-          None => groups.push(("", [task]))
+          None => groups.push((None, [task]))
         }
       }
     }

@@ -74,18 +74,31 @@ pub fn yaml_scalar(value : String) -> String {
 ///|
 /// The parts of a text around its frontmatter block.
 priv struct Located {
-  lines : Array[@okf.Line]
+  lines : Array[TextLine]
   /// The index of the opening `---` line, or -1 without a block.
   open : Int32
   /// The index of the closing line.
   close : Int32
-  ending : String
+  ending : @okf.LineEnding
+}
+
+///|
+/// A line that an edit keeps or writes.
+priv struct TextLine {
+  text : String
+  /// A last line can have no line ending.
+  ending : @okf.LineEnding?
+}
+
+///|
+fn text_lines(text : String) -> Array[TextLine] {
+  @okf.split_lines(text).map(l => { text: l.text, ending: l.ending, })
 }
 
 ///|
 fn locate(text : String) -> Located raise EditError {
-  let lines = @okf.split_lines(text)
-  let ending = @okf.detect_line_ending(text).text()
+  let lines = text_lines(text)
+  let ending = @okf.detect_line_ending(text)
   let header = @okf.split_header(text)
   match header.shape {
     NoBlock => { lines, open: -1, close: -1, ending, }
@@ -99,18 +112,21 @@ fn locate(text : String) -> Located raise EditError {
 }
 
 ///|
-fn join_lines(lines : Array[@okf.Line]) -> String {
+fn join_lines(lines : Array[TextLine]) -> String {
   let out = StringBuilder()
   for l in lines {
     out.write_string(l.text)
-    out.write_string(l.ending)
+    match l.ending {
+      Some(e) => out.write_string(e.text())
+      None => ()
+    }
   }
   out.to_string()
 }
 
 ///|
-fn line(text : String, ending : String) -> @okf.Line {
-  { text, start: 0, ending, }
+fn line(text : String, ending : @okf.LineEnding?) -> TextLine {
+  { text, ending, }
 }
 
 ///|
@@ -142,7 +158,7 @@ pub fn set_raw_keys(
           let bom = current.length() > 0 && current[0] == 0xFEFF
           let rest = if bom { current[1:].to_owned() } else { current }
           let prefix = if bom { "\u{FEFF}" } else { "" }
-          let e = loc.ending
+          let e = loc.ending.text()
           current = "\{prefix}---\{e}\{key}: \{v}\{e}---\{e}\{rest}"
         }
       }
@@ -179,7 +195,7 @@ pub fn set_raw_keys(
         // The line before the insertion point may lack an ending when the
         // block was empty; a delimiter line always has one.
         let out = lines[:at].to_owned()
-        out.push(line("\{key}: \{v}", loc.ending))
+        out.push(line("\{key}: \{v}", Some(loc.ending)))
         for l in lines[at:] {
           out.push(l)
         }
@@ -221,37 +237,18 @@ pub fn remove_key(
 }
 
 ///|
-/// The line of an index entry: `* [title](destination) - description`.
-pub fn index_entry_line(
-  title : String,
-  destination : String,
-  description? : String,
-) -> String raise EditError {
-  check_one_line("title", title)
-  check_one_line("destination", destination)
-  match description {
-    Some(d) => check_one_line("description", d)
-    None => ()
-  }
-  match description {
-    Some(d) if d.length() > 0 => "* [\{title}](\{destination}) - \{d}"
-    _ => "* [\{title}](\{destination})"
-  }
-}
-
-///|
 /// Adds an entry line to the index section with this heading, after its last
 /// entry. Without the section, a `# heading` section is added at the end.
 pub fn add_index_entry(
   text : String,
   section : SectionName,
-  entry : String,
+  entry : IndexEntryLine,
 ) -> EditResult raise EditError {
-  check_one_line("entry", entry)
+  let entry = entry.to_string()
   let section = section.to_string()
   let loc = locate(text)
   let lines = loc.lines.copy()
-  let e = loc.ending
+  let e = loc.ending.text()
   let body_start = if loc.open < 0 { 0 } else { loc.close + 1 }
   // Find the section heading and the end of the section.
   let mut heading_at = -1
@@ -301,10 +298,10 @@ pub fn add_index_entry(
     heading_at + 1
   }
   let out = lines[:at].to_owned()
-  if at > 0 && out[at - 1].ending == "" {
-    out[at - 1] = { ..out[at - 1], ending: e, }
+  if at > 0 && out[at - 1].ending is None {
+    out[at - 1] = { ..out[at - 1], ending: Some(loc.ending), }
   }
-  out.push(line(entry, e))
+  out.push(line(entry, Some(loc.ending)))
   for l in lines[at:] {
     out.push(l)
   }
@@ -341,7 +338,7 @@ pub fn refresh_index_entry(
   destination : String,
   description : String,
 ) -> EditResult raise EditError {
-  let lines = @okf.split_lines(text)
+  let lines = text_lines(text)
   let out = lines.copy()
   let mut found = false
   for i, l in lines {
@@ -351,7 +348,7 @@ pub fn refresh_index_entry(
         let trimmed = l.text.trim_start(chars=" \t").to_owned()
         let indent = l.text[:l.text.length() - trimmed.length()].to_owned()
         let marker = trimmed[0:1].to_owned()
-        let tail = index_entry_line(entry.text, entry.destination, description~)[1:].to_owned()
+        let tail = IndexEntryLine(entry.text, entry.destination, description~).to_string()[1:].to_owned()
         out[i] = { ..l, text: indent + marker + tail, }
       }
       _ => ()
@@ -379,7 +376,7 @@ pub fn add_log_entry(
   }
   let loc = locate(text)
   let lines = loc.lines.copy()
-  let e = loc.ending
+  let e = loc.ending.text()
   let entry = match label {
     Some(l) => "* **\{l}**: \{message}"
     None => "* \{message}"
@@ -422,16 +419,21 @@ pub fn add_log_entry(
       i += 1
     }
     let out = lines[:at].to_owned()
-    if at > 0 && out[at - 1].ending == "" {
-      out[at - 1] = { ..out[at - 1], ending: e, }
+    if at > 0 && out[at - 1].ending is None {
+      out[at - 1] = { ..out[at - 1], ending: Some(loc.ending), }
     }
-    out.push(line(entry, e))
+    out.push(line(entry, Some(loc.ending)))
     for l in lines[at:] {
       out.push(l)
     }
     return result_of(text, join_lines(out))
   }
-  let block = [line("## \{date}", e), line("", e), line(entry, e), line("", e)]
+  let block = [
+    line("## \{date}", Some(loc.ending)),
+    line("", Some(loc.ending)),
+    line(entry, Some(loc.ending)),
+    line("", Some(loc.ending)),
+  ]
   if insert_section_at >= 0 {
     let out = lines[:insert_section_at].to_owned()
     for l in block {

@@ -224,13 +224,13 @@ pub fn effective_options(
 }
 
 ///|
-/// Every register of `profiles`.
-pub fn registers_of(
-  profiles : ArrayView[&Profile],
-) -> Array[Register] raise ValueError {
+/// Every register of `profiles`. A profile whose registers raise adds none;
+/// `validate` reports it, and the registers of the other profiles stay.
+pub fn registers_of(profiles : ArrayView[&Profile]) -> Array[Register] {
   let out = []
   for profile in profiles {
-    for r in profile.registers() {
+    let registers = profile.registers() catch { _ => [] }
+    for r in registers {
       out.push(r)
     }
   }
