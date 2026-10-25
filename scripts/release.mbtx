@@ -299,15 +299,32 @@ let release_assets : Array[String] = [
 ]
 
 ///|
+/// The state of the GitHub release of a version.
+enum ReleaseState {
+  /// The release does not exist.
+  Missing
+  /// The release is a draft, or it lacks expected assets.
+  Incomplete
+  /// The release is published and holds every expected asset.
+  Complete
+} derive(Eq, Debug)
+
+///|
 /// A release is done only when it exists, is not a draft, and holds every expected asset. A release
 /// that lacks assets is not done: the repair run (`gh workflow run release.yml --ref vX.Y.Z`) must
 /// reach `release:github`, which uploads them.
-fn release_complete(
-  exists : Bool,
-  draft : Bool,
-  assets : Array[String],
-) -> Bool {
-  exists && !draft && missing_names(release_assets, assets).is_empty()
+fn ReleaseState::of(
+  exists~ : Bool,
+  draft~ : Bool,
+  assets~ : Array[String],
+) -> ReleaseState {
+  if !exists {
+    Missing
+  } else if draft || !missing_names(release_assets, assets).is_empty() {
+    Incomplete
+  } else {
+    Complete
+  }
 }
 
 ///|
@@ -471,12 +488,17 @@ fn ChangelogState::of_section(section : String?) -> ChangelogState {
 }
 
 ///|
+/// Whether the commit of a Release run is on main.
+enum MainState {
+  OnMain
+  OffMain
+} derive(Eq, Debug)
+
+///|
 /// The facts that a Release run reads from git, GitHub and CHANGELOG.md.
 struct ReleaseFacts {
-  /// The commit is on main.
-  on_main : Bool
-  /// The GitHub release of the version exists with every asset.
-  released : Bool
+  main : MainState
+  release : ReleaseState
   changelog : ChangelogState
 }
 
@@ -484,7 +506,7 @@ struct ReleaseFacts {
 /// Decide whether a Release run releases. A pull request run and a run with `dry_run` only check:
 /// they never release, whatever the tags and the changelog say. Any other run must be on main. A tag
 /// push must name the version in moon.mod. The version is released when its GitHub release does not
-/// exist: a tag that a failed run left behind does not block a re-run. A release needs its section in
+/// exist with every asset: a tag that a failed run left behind does not block a re-run. A release needs its section in
 /// CHANGELOG.md, with the highlights written.
 fn plan(
   trigger : RunTrigger,
@@ -497,10 +519,8 @@ fn plan(
     Tag(tag) if tag != version => return Err(TagMismatch(tag~, version~))
     _ => ()
   }
-  if !facts.on_main {
-    return Err(NotOnMain(git_ref.name()))
-  }
-  if facts.released {
+  guard facts.main is OnMain else { return Err(NotOnMain(git_ref.name())) }
+  if facts.release is Complete {
     return Ok(Skip("v\{version} is already released"))
   }
   match facts.changelog {
@@ -657,10 +677,10 @@ fn ancestor_answer(
   exit_code : Int,
   output : String,
   ref_name : String,
-) -> Result[Bool, String] {
+) -> Result[MainState, String] {
   match exit_code {
-    0 => Ok(true)
-    1 => Ok(false)
+    0 => Ok(OnMain)
+    1 => Ok(OffMain)
     _ =>
       Err(
         "cannot tell whether \{ref_name} is on main: `git merge-base --is-ancestor HEAD origin/main` exited with \{exit_code}: \{output.trim()}",
@@ -1244,8 +1264,8 @@ async fn run_plan() -> Unit {
   )
   // A run that only checks needs no facts from the remote.
   let checks_only = !(trigger is Push)
-  let mut on_main = false
-  let mut released = false
+  let mut main = OffMain
+  let mut release = Missing
   if !checks_only {
     let (fetch_code, fetch_out) = output_of("git", [
       "fetch", "--quiet", "origin", "main",
@@ -1258,17 +1278,17 @@ async fn run_plan() -> Unit {
     let (code, out) = output_of("git", [
       "merge-base", "--is-ancestor", "HEAD", "origin/main",
     ])
-    on_main = match ancestor_answer(code, out, ref_name) {
+    main = match ancestor_answer(code, out, ref_name) {
       Ok(answer) => answer
       Err(message) => {
         fail_with(message)
-        false
+        OffMain
       }
     }
     let (exists, assets, draft) = inspect_release("v\{version}")
-    released = release_complete(exists, draft, assets)
+    release = ReleaseState::of(exists~, draft~, assets~)
   }
-  match plan(trigger, git_ref, version, { on_main, released, changelog }) {
+  match plan(trigger, git_ref, version, { main, release, changelog }) {
     Err(error) => fail_with(error.message())
     Ok(p) => {
       match p {
@@ -1619,9 +1639,9 @@ struct ReleaseWorld {
   mut event : String
   mut ref_type : String
   mut ref_name : String
-  mut on_main : Bool
+  mut main : MainState
   mut dry_run : Bool
-  mut released : Bool
+  mut release : ReleaseState
   mut has_section : Bool
   mut local_assets : Array[String]
   mut remote_assets : Array[String]
@@ -1641,9 +1661,9 @@ fn ReleaseWorld::new(dist_source : String) -> ReleaseWorld {
     event: "",
     ref_type: "",
     ref_name: "",
-    on_main: true,
+    main: OnMain,
     dry_run: false,
-    released: false,
+    release: Missing,
     has_section: true,
     local_assets: [],
     remote_assets: [],
@@ -1893,22 +1913,22 @@ impl @moonspec.World for ReleaseWorld with fn configure(self, setup) {
     @expect.expect(actual).to_equal(expected)
   })
   setup.given1("the commit is on main: {string}", fn(answer : String) {
-    self.on_main = yes(answer)
+    self.main = if yes(answer) { OnMain } else { OffMain }
   })
   setup.given1("the dry run input is: {string}", fn(answer : String) {
     self.dry_run = yes(answer)
   })
   setup.given1("the GitHub release exists: {string}", fn(answer : String) {
-    self.released = yes(answer)
+    self.release = if yes(answer) { Complete } else { Missing }
   })
   setup.given2("the GitHub release exists with draft {string} and the assets {string}", fn(
     draft : String,
     assets : String,
   ) {
-    self.released = release_complete(true, yes(draft), words(assets))
+    self.release = ReleaseState::of(exists=true, draft=yes(draft), assets=words(assets))
   })
   setup.given0("the GitHub release has every expected asset", fn() {
-    self.released = release_complete(true, false, release_assets)
+    self.release = ReleaseState::of(exists=true, draft=false, assets=release_assets)
   })
   setup.then0("the expected assets are the names that dist.mbtx writes", fn() raise {
     let source = self.dist_source
@@ -1941,8 +1961,8 @@ impl @moonspec.World for ReleaseWorld with fn configure(self, setup) {
     }
     let version = version_of(version)
     let facts : ReleaseFacts = {
-      on_main: self.on_main,
-      released: self.released,
+      main: self.main,
+      release: self.release,
       changelog,
     }
     let r = try {
@@ -2024,8 +2044,8 @@ impl @moonspec.World for ReleaseWorld with fn configure(self, setup) {
     expected : String,
   ) raise {
     let actual = match ancestor_answer(code, output, "v0.0.1") {
-      Ok(true) => "on main"
-      Ok(false) => "not on main"
+      Ok(OnMain) => "on main"
+      Ok(OffMain) => "not on main"
       Err(message) => "error: \{message}"
     }
     @expect.expect(actual).to_equal(expected)

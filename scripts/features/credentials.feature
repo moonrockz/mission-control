@@ -48,3 +48,7 @@ Feature: mooncakes.io credentials
     Given HOME is "/home/ci"
     When I choose the credentials directory
     Then the directory is "/home/ci/.moon"
+
+  Scenario: Neither MOON_HOME nor HOME is set
+    When I choose the credentials directory
+    Then choosing the directory fails with "neither MOON_HOME nor HOME is set; cannot locate the moon directory"

@@ -134,12 +134,29 @@ fn is_version_like(text : String) -> Bool {
 }
 
 ///|
-/// The version of the root `moon.mod`, or the message that says why it has none.
-fn root_version(moon_mod : String) -> Result[Version, String] {
+/// Why the root `moon.mod` has no version.
+enum RootVersionError {
+  /// The file has no version line.
+  NoVersionLine
+  /// The version line holds a text that is not of the form X.Y.Z.
+  NotAVersion(String)
+} derive(Eq, Debug)
+
+///|
+fn RootVersionError::message(self : RootVersionError) -> String {
+  match self {
+    NoVersionLine => "The root moon.mod has no version line."
+    NotAVersion(text) => "The root moon.mod version \{text} is not a version of the form X.Y.Z."
+  }
+}
+
+///|
+/// The version of the root `moon.mod`, or why it has none.
+fn root_version(moon_mod : String) -> Result[Version, RootVersionError] {
   match mod_version(moon_mod) {
     Some(text) if Version::parse(text) is Some(v) => Ok(v)
-    Some(v) => Err("The root moon.mod version \{v} is not a version of the form X.Y.Z.")
-    None => Err("The root moon.mod has no version line.")
+    Some(text) => Err(NotAVersion(text))
+    None => Err(NoVersionLine)
   }
 }
 
@@ -371,8 +388,8 @@ async fn check(expected : Version?) -> Unit {
     None =>
       match root_version(files[0].1) {
         Ok(v) => "\{v}"
-        Err(message) => {
-          fail_with(message)
+        Err(error) => {
+          fail_with(error.message())
           ""
         }
       }
@@ -516,7 +533,7 @@ impl @moonspec.World for VersionsWorld with fn configure(self, setup) {
   setup.then1("the root version check gives {string}", fn(expected : String) raise {
     let actual = match root_version(self.text) {
       Ok(v) => "\{v}"
-      Err(message) => message
+      Err(error) => error.message()
     }
     @expect.expect(actual).to_equal(expected)
   })
