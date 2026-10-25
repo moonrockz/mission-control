@@ -161,6 +161,13 @@ Feature: One version across the workspace
       """
     Then the root version check gives "The root moon.mod version 0.0.2-rc is not a version of the form X.Y.Z."
 
+  Scenario: The root moon.mod must have a version line
+    Given the text:
+      """
+      name = "moonrockz/x"
+      """
+    Then the root version check gives "The root moon.mod has no version line."
+
   Scenario: A malformed sibling import version is a mismatch
     Given a file "a/moon.mod" with the text:
       """

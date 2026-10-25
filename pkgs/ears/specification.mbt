@@ -1,39 +1,12 @@
 ///|
-/// A half-open UTF-16 range in the original input, with a one-based start
-/// line and column. Markdown ranges cover the paragraph, including markup.
-struct SourceSpan {
-  start : Int32
-  end : Int32
-  line : Int32
-  column : Int32
-} derive(Eq, Debug)
-
-///|
-pub fn SourceSpan::start(self : SourceSpan) -> Int32 {
-  self.start
-}
-
-///|
-pub fn SourceSpan::end(self : SourceSpan) -> Int32 {
-  self.end
-}
-
-///|
-pub fn SourceSpan::line(self : SourceSpan) -> Int32 {
-  self.line
-}
-
-///|
-pub fn SourceSpan::column(self : SourceSpan) -> Int32 {
-  self.column
-}
-
-///|
-/// Markdown paths resolve against the retained MDC document. Locations are
-/// absent if that document was parsed with `locs=false`.
+/// Where a requirement or a diagnostic came from. A text range covers the
+/// sentence or the line without surrounding white space; a Markdown range
+/// covers the paragraph, including markup. Markdown paths resolve against the
+/// retained MDC document. Ranges are absent if that document was parsed with
+/// `locs=false`.
 pub enum Origin {
-  Text(SourceSpan)
-  Markdown(path~ : @mdc.NodePath, span~ : SourceSpan?)
+  Text(@mdc.SourceRange)
+  Markdown(path~ : @mdc.NodePath, span~ : @mdc.SourceRange?)
 } derive(Eq, Debug)
 
 ///|
@@ -195,15 +168,9 @@ pub fn parse_text(
       last -= 1
     }
     if first < last {
-      let span = SourceSpan::{
-        start: first,
-        end: last,
-        line,
-        column: first - line_start + 1,
-      }
       collect_candidate(
         source[first:last].to_owned(),
-        Text(span),
+        Text(range_from(source, first, last, line~, line_start~)),
         requirements,
         diagnostics,
         vocabulary,
@@ -397,19 +364,55 @@ fn Sentences::add(
 }
 
 ///|
-/// The text span of `start..<end` in `text`, with its line and column.
-fn span_in(text : String, start : Int32, end : Int32) -> SourceSpan {
+/// The source range of `start..<end` in `text`, from the line of `start` and
+/// the offset where that line starts. `start..<end` is not empty.
+fn range_from(
+  text : String,
+  start : Int32,
+  end : Int32,
+  line~ : Int32,
+  line_start~ : Int32,
+) -> @mdc.SourceRange {
+  let mut end_line = line
+  let mut end_line_start = line_start
+  let last = end - 1
+  for i in start..<last {
+    if is_line_break(text, i) {
+      end_line += 1
+      end_line_start = i + 1
+    }
+  }
+  @mdc.SourceRange(
+    start=@mdc.TextPosition(line~, column=start - line_start + 1),
+    end=@mdc.TextPosition(line=end_line, column=last - end_line_start + 1),
+    start_offset=start,
+    end_offset=end,
+  ) catch {
+    _ => abort("a text range is not a source range")
+  }
+}
+
+///|
+/// Whether the code unit at `i` ends a line: a line feed, or a carriage return
+/// that no line feed follows.
+fn is_line_break(text : String, i : Int32) -> Bool {
+  let c = text.code_unit_at(i)
+  c == 10 ||
+  (c == 13 && !(i + 1 < text.length() && text.code_unit_at(i + 1) == 10))
+}
+
+///|
+/// The source range of `start..<end` in `text`.
+fn range_in(text : String, start : Int32, end : Int32) -> @mdc.SourceRange {
   let mut line = 1
   let mut line_start = 0
   for i in 0..<start {
-    let c = text.code_unit_at(i)
-    if c == 10 ||
-      (c == 13 && !(i + 1 < start && text.code_unit_at(i + 1) == 10)) {
+    if is_line_break(text, i) {
       line += 1
       line_start = i + 1
     }
   }
-  { start, end, line, column: start - line_start + 1, }
+  range_from(text, start, end, line~, line_start~)
 }
 
 ///|
@@ -423,7 +426,7 @@ pub fn parse_block(
   let vocabulary = Vocabulary::of(dialects)
   let sentences = Sentences::new()
   sentences.add(text, vocabulary, (start, end) => {
-    Text(span_in(text, start, end))
+    Text(range_in(text, start, end))
   })
   {
     requirements: ReadOnlyArray::from_array(sentences.requirements),
@@ -432,12 +435,6 @@ pub fn parse_block(
     document: None,
   }
 }
-
-///|
-pub extend SourceSpan with Eq::{equal, not_equal}
-
-///|
-pub extend SourceSpan with @debug.Debug::{to_repr}
 
 ///|
 pub extend Origin with Eq::{equal, not_equal}

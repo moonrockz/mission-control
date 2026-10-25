@@ -219,7 +219,10 @@ test "a block splits into sentences and resolves pronouns" {
   let second = spec.requirements()[1]
   assert_eq(second.requirement().resolved_system(), Some("store"))
   guard second.origin() is Text(span) else { fail("not a text origin") }
-  assert_eq((span.start(), span.line(), span.column()), (28, 1, 29))
+  assert_eq(
+    (span.start_offset(), span.start().line(), span.start().column()),
+    (28, 1, 29),
+  )
   let code = @ears.parse_block("The parser SHALL read `a.md` files.", dialects~)
   assert_eq(code.requirements().length(), 1)
   let alone = @ears.parse_block(
@@ -235,7 +238,7 @@ test "a block splits into sentences and resolves pronouns" {
   )
   assert_eq((bad.requirements().length(), bad.diagnostics().length()), (1, 1))
   guard bad.diagnostics()[0].origin() is Text(span) else { fail("no span") }
-  assert_eq(span.start(), 28)
+  assert_eq(span.start_offset(), 28)
 }
 
 ///|
@@ -445,4 +448,63 @@ test "a multi-backtick code span keeps its full stops" {
     dialects~,
   )
   assert_eq((spec.requirements().length(), spec.diagnostics().length()), (2, 0))
+}
+
+///|
+test "lexicon errors give the line of the item in flow lists, quoted keys and after block scalars" {
+  assert_eq(
+    lexicon_error(() => {
+      @ears.Lexicon::from_yaml("modals: [must,\n  \"a b\"]\n") |> ignore
+    }),
+    Some(InvalidEntry(key="modals", line=2, error=InvalidWord("a b"))),
+  )
+  assert_eq(
+    lexicon_error(() => {
+      @ears.Lexicon::from_yaml(
+        "name: x\n\"pronouns\":\n  - it\n  - two words\n",
+      )
+      |> ignore
+    }),
+    Some(InvalidEntry(key="pronouns", line=4, error=InvalidWord("two words"))),
+  )
+  assert_eq(
+    lexicon_error(() => {
+      @ears.Lexicon::from_yaml(
+        "name: |\n  - not an entry\nmodals:\n  - must\n  - two words\n",
+      )
+      |> ignore
+    }),
+    Some(InvalidEntry(key="modals", line=5, error=InvalidWord("two words"))),
+  )
+  assert_eq(
+    lexicon_error(() => {
+      @ears.Lexicon::from_yaml(
+        "headings:\n  - level: 3\n    prefix: \"Requirement:\"\n  - level: 7\n    prefix: X\n",
+      )
+      |> ignore
+    }),
+    Some(InvalidEntry(key="headings", line=4, error=InvalidHeadingLevel(7))),
+  )
+}
+
+///|
+test "a lexicon file with an alias value keeps the lines of the later keys" {
+  assert_eq(
+    lexicon_error(() => {
+      @ears.Lexicon::from_yaml(
+        "name: &n x\nlead_ins: *n\nmodals:\n  - two words\n",
+      )
+      |> ignore
+    }),
+    Some(InvalidEntry(key="modals", line=4, error=InvalidWord("two words"))),
+  )
+  assert_eq(
+    lexicon_error(() => {
+      @ears.Lexicon::from_yaml(
+        "name: &n x\nsystems: [*n]\nmodals:\n  - must\n  - two words\n",
+      )
+      |> ignore
+    }),
+    Some(InvalidEntry(key="modals", line=5, error=InvalidWord("two words"))),
+  )
 }

@@ -117,7 +117,7 @@ impl @moonspec.World for EarsWorld with fn configure(self, setup) {
     }
     guard spec.document() is Some(doc) else { fail("no document") }
     @expect.expect_all(s => {
-      s.expect(span.line()).to_equal(expected)
+      s.expect(span.start().line()).to_equal(expected)
       s.expect(doc.root().at(path) is Some(Block(_))).to_be_true()
     })
   })

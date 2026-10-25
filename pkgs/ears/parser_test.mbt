@@ -107,10 +107,10 @@ test "Markdown columns include a first-line BOM only on the first line" {
       fail("missing span")
     }
     @expect.expect_all(s => {
-      s.expect(span.line()).to_equal(line)
-      s.expect(span.column()).to_equal(column)
+      s.expect(span.start().line()).to_equal(line)
+      s.expect(span.start().column()).to_equal(column)
       s
-      .expect(source[span.start():span.end()].to_owned())
+      .expect(source[span.start_offset():span.end_offset()].to_owned())
       .to_equal("The gauge shall reset.")
     })
   }
@@ -215,16 +215,16 @@ test "plain text preserves valid siblings and exact line spans" {
   guard first.origin() is Text(span) else { fail("not a text origin") }
   @expect.expect_all(s => {
     s
-    .expect(source[span.start():span.end()].to_owned())
+    .expect(source[span.start_offset():span.end_offset()].to_owned())
     .to_equal(first.requirement().to_string())
-    s.expect(span.start()).to_equal(3)
-    s.expect(span.line()).to_equal(1)
-    s.expect(span.column()).to_equal(4)
+    s.expect(span.start_offset()).to_equal(3)
+    s.expect(span.start().line()).to_equal(1)
+    s.expect(span.start().column()).to_equal(4)
   })
   guard spec.diagnostics()[0].origin() is Text(span) else {
     fail("not a text origin")
   }
-  @expect.expect(span.line()).to_equal(4)
+  @expect.expect(span.start().line()).to_equal(4)
 }
 
 ///|
@@ -246,10 +246,10 @@ test "Markdown extraction retains metadata, positions and paths" {
     fail("no Markdown origin")
   }
   @expect.expect_all(s => {
-    s.expect(span.line()).to_equal(6)
-    s.expect(span.column()).to_equal(3)
+    s.expect(span.start().line()).to_equal(6)
+    s.expect(span.start().column()).to_equal(3)
     s
-    .expect(source[span.start():span.end()].to_owned())
+    .expect(source[span.start_offset():span.end_offset()].to_owned())
     .to_equal("When **polled**, the sensor shall\r\n  return `READY`.")
     s.expect(doc.root().at(path) is Some(Block(_))).to_be_true()
   })
@@ -327,4 +327,36 @@ test "invalid frontmatter propagates MDC errors" {
   }
   ignore(rejected)
   fail("invalid frontmatter was accepted")
+}
+
+///|
+test "text origins are source ranges with the position of the last character" {
+  let text = "The sensor shall reply.\n  The sensor shall\n  stop."
+  let spec = @ears.parse_block(text)
+  guard spec.requirements()[1].origin() is Text(range) else {
+    fail("not a text origin")
+  }
+  assert_eq(
+    (
+      range.start().line(),
+      range.start().column(),
+      range.end().line(),
+      range.end().column(),
+    ),
+    (2, 3, 3, 7),
+  )
+  assert_eq(
+    text[range.start_offset():range.end_offset()].to_owned(),
+    "The sensor shall\n  stop.",
+  )
+  let lines = @ears.parse_text(
+    "The sensor shall reply.\r\nThe pump shall stop.\r\n",
+  )
+  guard lines.requirements()[1].origin() is Text(range) else {
+    fail("not a text origin")
+  }
+  assert_eq(
+    (range.start().line(), range.end().line(), range.end().column()),
+    (2, 2, 20),
+  )
 }

@@ -65,7 +65,15 @@ filter_unconventional = true
 split_commits = false
 # Squash merges end the title with "(#NN)"; the PR link comes from the GitHub
 # remote data instead.
-commit_preprocessors = [{ pattern = '(?m)[ ]*\(#[0-9]+\)$', replace = "" }]
+#
+# A wrapped body line that starts with `Type::name` or `owner/module:` looks
+# like a new footer to the commit parser, so it would end a `BREAKING CHANGE:`
+# footer in the middle of a sentence. Join such lines to the line before them.
+commit_preprocessors = [
+  { pattern = '(?m)[ ]*\(#[0-9]+\)$', replace = "" },
+  { pattern = '\n([A-Za-z_][A-Za-z0-9_]*::)', replace = " $1" },
+  { pattern = '\n([A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+:)', replace = " $1" },
+]
 protect_breaking_commits = true
 commit_parsers = [
   { message = "^chore\\(release\\)", skip = true },

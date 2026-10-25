@@ -52,16 +52,12 @@ fn is_candidate(text : String, vocabulary : Vocabulary) -> Bool {
 }
 
 ///|
-/// The source span of a block view, when the document has locations.
-fn view_span(document : @mdc.Document, view : @mdc.BlockView) -> SourceSpan? {
-  document
-  .source_range(view.location())
-  .map(range => SourceSpan::{
-    start: range.start_offset(),
-    end: range.end_offset(),
-    line: range.start().line(),
-    column: range.start().column(),
-  })
+/// The source range of a block view, when the document has locations.
+fn view_span(
+  document : @mdc.Document,
+  view : @mdc.BlockView,
+) -> @mdc.SourceRange? {
+  document.source_range(view.location())
 }
 
 ///|

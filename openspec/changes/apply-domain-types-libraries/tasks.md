@@ -38,6 +38,16 @@ Beads: none yet.
 - [ ] 5.2 Write the release note highlights for the breaking mdc and ears changes in the next release pull request; verify they name each changed case
 - [x] 5.3 Review the change with the `code-reviewer` checklist; verify that it reports no Domain types finding in the changed packages
 
+## 6. Follow-ups
+
+Beads: none yet.
+
+- [x] 6.1 Replace `SourceSpan` with `@mdc.SourceRange` in `Origin` (design D7); verify a test for the end position of a sentence over two lines, `tests/ears-acceptance` and `tests/ears-laws`
+- [x] 6.2 Read lexicon lines from the marked YAML events (design D7); verify tests for a flow list, a quoted key, a block scalar and a heading item
+- [x] 6.3 Add `MainState` and `ReleaseState` to `ReleaseFacts`, and typed errors to `versions.mbtx` and `credentials.mbtx` (design D7); verify `mise run test:scripts`, with scenarios for no version line and for no moon directory
+- [x] 6.4 Join wrapped breaking change footers in `cliff.toml` (design D7); verify that `git cliff --unreleased --bump` shows the whole notes of #16 and #18
+- [x] 6.5 Run `mise run check`, `mise run test:scripts` and `openspec validate --all --strict`; verify all pass
+
 ## Workflow follow-up
 
 - Archive the change after the pull request merges.

@@ -105,15 +105,16 @@ prose beginning with a conditional keyword can also produce a diagnostic.
 Each occurrence contains a validated requirement and its `Origin`. Each
 diagnostic contains its candidate text, typed error and origin.
 
-`Origin::Text` carries a `SourceSpan` excluding indentation and newline characters.
-`Origin::Markdown` carries a path that resolves through
-`spec.document().unwrap().root().at(path)`, and an optional span covering the
-original paragraph, including inline markup and line wrapping.
+`Origin::Text` carries an `@mdc.SourceRange` that excludes indentation and
+newline characters. `Origin::Markdown` carries a path that resolves through
+`spec.document().unwrap().root().at(path)`, and an optional `@mdc.SourceRange`
+covering the original paragraph, including inline markup and line wrapping.
 
-Spans use half-open UTF-16 offsets in the original input and one-based start
-lines and columns. Frontmatter and a leading BOM contribute to offsets. Columns
-count UTF-16 code units, including the BOM on the first line. For MDC documents
-parsed with `locs=false`, Markdown spans are absent and paths remain available.
+A range gives the positions of its first and last characters, as one-based
+lines and columns, and half-open UTF-16 offsets in the original input.
+Frontmatter and a leading BOM contribute to offsets. Columns count UTF-16 code
+units, including the BOM on the first line. For MDC documents parsed with
+`locs=false`, Markdown ranges are absent and paths remain available.
 
 ## Dialects and lexicons
 
