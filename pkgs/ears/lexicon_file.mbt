@@ -5,59 +5,116 @@ let lexicon_keys : Array[String] = [
 ]
 
 ///|
-/// The file line of the top-level `key:` line, or 1.
-fn key_line(text : String, key : String) -> Int32 {
-  for i, line in text.split("\n").collect() {
-    if line.has_prefix(key + ":") ||
-      line.has_prefix("\"" + key + "\":") ||
-      line.has_prefix("'" + key + "':") {
-      return i + 1
-    }
-  }
-  1
+/// The file lines of a top-level key: the line of the key, and the line of
+/// each item when its value is a list.
+priv struct KeyLines {
+  key : Int32
+  items : Array[Int32]
 }
 
 ///|
-/// The file lines of the block list entries (`- ...`) under the top-level
-/// `key:` line.
-fn entry_lines(text : String, key : String) -> Array[Int32] {
-  let lines = text.split("\n").collect()
-  let out = []
-  let first = key_line(text, key)
-  for i in first..<lines.length() {
-    let line = lines[i]
-    let t = line.trim_start(chars=" \t")
-    if t.length() == 0 || t.has_prefix("#") {
-      continue
-    }
-    if line.length() == t.length() {
-      // A line that is not indented ends the value.
-      if !t.has_prefix("-") {
-        break
+/// Collects the file lines of the top-level keys from the events of the YAML
+/// parser, so that flow lists, quoted keys and block scalars give the lines
+/// of their own items.
+priv struct LineReader {
+  lines : Map[String, KeyLines]
+  /// How many collections are open: 1 inside the top-level mapping.
+  mut depth : Int32
+  /// The top-level key whose value is read.
+  mut key : String?
+  /// The value of the key is a list.
+  mut in_list : Bool
+}
+
+///|
+impl @yaml.MarkedEventReceiver for LineReader with fn on_event(
+  self,
+  event,
+  mark,
+) {
+  let item = () => {
+    if self.depth == 2 && self.in_list {
+      if self.key is Some(key) && self.lines.get(key) is Some(lines) {
+        lines.items.push(mark.line)
       }
     }
-    if t.has_prefix("- ") || t == "-" {
-      out.push(i + 1)
-    }
   }
-  out
+  match event {
+    Scalar(value~, ..) if self.depth == 1 =>
+      match self.key {
+        None => {
+          self.lines.set(value, { key: mark.line, items: [], })
+          self.key = Some(value)
+        }
+        Some(_) => self.key = None
+      }
+    Alias(..) if self.depth == 1 => self.key = None
+    Scalar(..) | Alias(..) => item()
+    SequenceStart(..) | MappingStart(..) => {
+      item()
+      if self.depth == 1 {
+        self.in_list = event is SequenceStart(..)
+      }
+      self.depth += 1
+    }
+    SequenceEnd | MappingEnd => {
+      self.depth -= 1
+      if self.depth == 1 {
+        self.key = None
+      }
+    }
+    _ => ()
+  }
+}
+
+///|
+/// The file lines of the top-level keys of `text`. A key that the parser
+/// does not reach has no lines.
+fn key_lines(text : String) -> Map[String, KeyLines] {
+  let reader = { lines: {}, depth: 0, key: None, in_list: false, }
+  @yaml.Parser::new(text).load(reader, false) catch {
+    _ => ()
+  }
+  reader.lines
+}
+
+///|
+/// The file line of the top-level `key`, or 1.
+fn key_line(lines : Map[String, KeyLines], key : String) -> Int32 {
+  match lines.get(key) {
+    Some(found) => found.key
+    None => 1
+  }
+}
+
+///|
+/// The file line of each of the `count` items of the list of `key`. An item
+/// whose line is not known has the line of the key.
+fn item_lines(
+  lines : Map[String, KeyLines],
+  key : String,
+  count : Int32,
+) -> Array[Int32] {
+  match lines.get(key) {
+    Some(found) if found.items.length() == count => found.items
+    _ => Array::make(count, key_line(lines, key))
+  }
 }
 
 ///|
 /// The text entries of the list of `key`, each with its line.
 fn text_entries(
-  text : String,
+  lines : Map[String, KeyLines],
   key : String,
   value : @yaml.Yaml,
 ) -> Array[(String, Int32)] raise LexiconError {
-  let line = key_line(text, key)
   guard value is Array(items) else {
-    raise WrongType(key~, line~, expected=List)
+    raise WrongType(key~, line=key_line(lines, key), expected=List)
   }
-  let lines = entry_lines(text, key)
+  let at_lines = item_lines(lines, key, items.length())
   let out = []
   for i, item in items {
-    let at = if lines.length() == items.length() { lines[i] } else { line }
+    let at = at_lines[i]
     guard item is String(s) else {
       raise WrongType(key~, line=at, expected=Text)
     }
@@ -68,11 +125,11 @@ fn text_entries(
 
 ///|
 fn words_of(
-  text : String,
+  lines : Map[String, KeyLines],
   key : String,
   value : @yaml.Yaml,
 ) -> Array[Word] raise LexiconError {
-  text_entries(text, key, value).map(entry => {
+  text_entries(lines, key, value).map(entry => {
     Word(entry.0) catch {
       e => raise InvalidEntry(key~, line=entry.1, error=e)
     }
@@ -81,11 +138,11 @@ fn words_of(
 
 ///|
 fn phrases_of(
-  text : String,
+  lines : Map[String, KeyLines],
   key : String,
   value : @yaml.Yaml,
 ) -> Array[Phrase] raise LexiconError {
-  text_entries(text, key, value).map(entry => {
+  text_entries(lines, key, value).map(entry => {
     Phrase(entry.0) catch {
       e => raise InvalidEntry(key~, line=entry.1, error=e)
     }
@@ -94,18 +151,17 @@ fn phrases_of(
 
 ///|
 fn headings_of(
-  text : String,
+  lines : Map[String, KeyLines],
   value : @yaml.Yaml,
 ) -> Array[HeadingRule] raise LexiconError {
   let key = "headings"
-  let line = key_line(text, key)
   guard value is Array(items) else {
-    raise WrongType(key~, line~, expected=List)
+    raise WrongType(key~, line=key_line(lines, key), expected=List)
   }
-  let lines = entry_lines(text, key)
+  let at_lines = item_lines(lines, key, items.length())
   let out = []
   for i, item in items {
-    let at = if lines.length() == items.length() { lines[i] } else { line }
+    let at = at_lines[i]
     guard item is Map(fields) else {
       raise WrongType(key~, line=at, expected=Mapping)
     }
@@ -177,26 +233,27 @@ pub fn Lexicon::from_yaml(text : String) -> Lexicon raise LexiconError {
   guard frontmatter.value() is Map(fields) else {
     raise InvalidLexiconFile(line=1, message="a lexicon file is a YAML mapping")
   }
+  let lines = key_lines(text)
   for key, _ in fields {
     if !lexicon_keys.contains(key) {
-      raise UnknownKey(key~, line=key_line(text, key))
+      raise UnknownKey(key~, line=key_line(lines, key))
     }
   }
   let name = match fields.get("name") {
     None => "lexicon"
     Some(String(s)) => s
     Some(_) =>
-      raise WrongType(key="name", line=key_line(text, "name"), expected=Text)
+      raise WrongType(key="name", line=key_line(lines, "name"), expected=Text)
   }
   let words = (key : String) => {
     match fields.get(key) {
-      Some(value) => words_of(text, key, value)
+      Some(value) => words_of(lines, key, value)
       None => []
     }
   }
   let phrases = (key : String) => {
     match fields.get(key) {
-      Some(value) => phrases_of(text, key, value)
+      Some(value) => phrases_of(lines, key, value)
       None => []
     }
   }
@@ -208,7 +265,7 @@ pub fn Lexicon::from_yaml(text : String) -> Lexicon raise LexiconError {
     systems=phrases("systems"),
     lead_ins=phrases("lead_ins"),
     headings=match fields.get("headings") {
-      Some(value) => headings_of(text, value)
+      Some(value) => headings_of(lines, value)
       None => []
     },
   )

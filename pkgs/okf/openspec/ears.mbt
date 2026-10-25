@@ -131,7 +131,7 @@ fn check_not_ears(
   let report = (bundle : @okf.Bundle, doc : @okf.Document, r : Requirement) => {
     for d in r.sentence_diagnostics {
       let line = match d.origin() {
-        Text(span) => r.text_lines.get(span.line() - 1)
+        Text(span) => r.text_lines.get(span.start().line() - 1)
         Markdown(..) => r.text_lines.get(0)
       }
       out.push(

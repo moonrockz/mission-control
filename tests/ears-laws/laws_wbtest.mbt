@@ -157,10 +157,14 @@ test "law: text and Markdown extraction agree and spans recover the original sen
       }
       @expect.expect_all(s => {
         s.expect(item.requirement()).to_equal(expected)
-        s.expect(span.start()).to_equal(prefix.length())
-        s.expect(span.line()).to_equal(if with_header { 6 } else { 1 })
-        s.expect(span.column()).to_equal(if with_header { 3 } else { 4 })
-        s.expect(source[span.start():span.end()].to_owned()).to_equal(sentence)
+        s.expect(span.start_offset()).to_equal(prefix.length())
+        s.expect(span.start().line()).to_equal(if with_header { 6 } else { 1 })
+        s
+        .expect(span.start().column())
+        .to_equal(if with_header { 3 } else { 4 })
+        s
+        .expect(source[span.start_offset():span.end_offset()].to_owned())
+        .to_equal(sentence)
         s.expect(plain.requirements()[0].requirement()).to_equal(expected)
         s.expect(plain.requirements()[1].requirement()).to_equal(expected)
       })
