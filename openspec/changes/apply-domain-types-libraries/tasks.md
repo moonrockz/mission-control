@@ -28,7 +28,7 @@ Beads: none yet.
 
 - [x] 4.1 Parse `RunTrigger`, `GitRef` and `ReleaseFacts` in `scripts/release.mbtx` and pass them to `plan` (design D6); verify the release features, with a scenario for an unknown event
 - [x] 4.2 Add `Backend` and `DistTarget` to the build, test and distribution scripts; verify a scenario for a misspelled target
-- [x] 4.3 Add the `Failure` enum from one table in the publish and release scripts, typed script errors and `ExitCode`, and the script test that the failure tables agree; verify `mise run test:scripts`
+- [x] 4.3 Add the `Failure` enum from one table in the publish and release scripts, typed release input and plan errors and `ExitCode`, and the script tests that the copies of the failure table, `Version`, `Backend` and `ExitCode` agree; verify `mise run test:scripts`
 
 ## 5. Integration
 
@@ -36,7 +36,7 @@ Beads: none yet.
 
 - [x] 5.1 Run `mise run check`, `mise run test:scripts`, `mise run test:browser` and `openspec validate --all --strict`; verify all pass
 - [ ] 5.2 Write the release note highlights for the breaking mdc and ears changes in the next release pull request; verify they name each changed case
-- [ ] 5.3 Review the change with the `code-reviewer` checklist; verify that it reports no Domain types finding in the changed packages
+- [x] 5.3 Review the change with the `code-reviewer` checklist; verify that it reports no Domain types finding in the changed packages
 
 ## Workflow follow-up
 

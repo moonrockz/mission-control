@@ -119,3 +119,33 @@ test "a range on the first line after a byte order mark counts the mark" {
   assert_eq(r.start().to_string(), "1:2")
   assert_eq(source[r.start_offset():r.end_offset()], "Text")
 }
+
+///|
+test "ranges in a CRLF source, and locations that are not in the body" {
+  let source = "---\r\na: 1\r\n---\r\n# Goal\r\n\r\nText.\r\n"
+  let doc = @mdc.parse(source)
+  let ranges = doc.fold(
+    [],
+    @mdc.Folder::Folder((acc, node) => {
+      if node is Block(view) && view.kind() is (Heading(_) | Paragraph) {
+        acc.push(doc.source_range(view.location()))
+      }
+      Continue(acc)
+    }),
+  )
+  guard ranges is [Some(heading), Some(paragraph)] else { fail("no ranges") }
+  assert_eq(heading.start().to_string(), "4:1")
+  assert_eq(source[heading.start_offset():heading.end_offset()], "# Goal")
+  assert_eq(paragraph.start().to_string(), "6:1")
+  assert_eq(source[paragraph.start_offset():paragraph.end_offset()], "Text.")
+  // A location before the first line, or past the end of the body.
+  let loc = doc.to_cmark().block.meta().loc
+  assert_eq(
+    doc.source_range({ ..loc, first_line: @cmark_base.LinePos(0, 0), }),
+    None,
+  )
+  assert_eq(
+    doc.source_range({ ..loc, last_ccode: 10000, last_line: loc.last_line, }),
+    None,
+  )
+}

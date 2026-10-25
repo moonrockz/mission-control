@@ -37,7 +37,9 @@ fn ExitCode::exit(self : ExitCode) -> Unit {
 let usage : String = "Usage: mise run build [-- <target>... [--release]], where a target is wasm, wasm-gc, js or native"
 
 ///|
-/// A MoonBit backend that the build and the tests target.
+/// A MoonBit backend that the build and the tests target. `scripts/build.mbtx`
+/// and `scripts/test.mbtx` keep the same copy, and `scripts/test-scripts.mbtx`
+/// checks that the copies are equal.
 enum Backend {
   Wasm
   WasmGc
@@ -79,6 +81,7 @@ fn parse_backends(args : ArrayView[String]) -> Result[Array[Backend], String] {
   }
   Ok(if out.is_empty() { all_backends } else { out })
 }
+// End of the backends.
 
 ///|
 async fn main {

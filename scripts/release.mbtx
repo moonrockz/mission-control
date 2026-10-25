@@ -346,14 +346,21 @@ suberror InputError {
   UnknownEvent(String)
   /// A ref type other than `branch` or `tag`.
   UnknownRefType(String)
+  /// A `dry_run` input other than `true`, `false` or empty.
+  UnknownDryRun(String)
+  /// A tag that is not `v` and a version, such as `vfoo`.
+  NotAVersionTag(String)
 }
 
 ///|
 fn InputError::message(self : InputError) -> String {
   match self {
     UnknownEvent(event) =>
-      "the event \{event} is not pull_request, push or workflow_dispatch"
-    UnknownRefType(ref_type) => "the ref type \{ref_type} is not branch or tag"
+      "the event `\{event}` is not pull_request, push or workflow_dispatch"
+    UnknownRefType(ref_type) =>
+      "the ref type `\{ref_type}` is not branch or tag"
+    UnknownDryRun(text) => "the dry_run input `\{text}` is not true or false"
+    NotAVersionTag(name) => "the tag `\{name}` is not v and a version"
   }
 }
 
@@ -369,32 +376,42 @@ enum RunTrigger {
 } derive(Eq, Debug)
 
 ///|
-/// Reads the GitHub event and the `dry_run` input. `dry_run` is the text
-/// `true` when the input is set.
+/// Reads the GitHub event and the `dry_run` input: `true`, `false`, or empty
+/// when the run has no such input.
 fn RunTrigger::parse(
   event : String,
   dry_run : String,
 ) -> RunTrigger raise InputError {
+  let dry = match dry_run {
+    "true" => true
+    "false" | "" => false
+    _ => raise UnknownDryRun(dry_run)
+  }
   match event {
     "pull_request" => PullRequest
-    "push" | "workflow_dispatch" => if dry_run == "true" { DryRun } else { Push }
+    "push" | "workflow_dispatch" => if dry { DryRun } else { Push }
     _ => raise UnknownEvent(event)
   }
 }
 
 ///|
-/// The ref of a Release run: a branch or a tag, with its name.
+/// The ref of a Release run: a branch with its name, or a version tag such
+/// as `v0.0.2`.
 enum GitRef {
   Branch(String)
-  Tag(String)
+  Tag(Version)
 } derive(Eq, Debug)
 
 ///|
-/// Reads the GitHub ref type and ref name.
+/// Reads the GitHub ref type and ref name. A tag must be `v` and a version.
 fn GitRef::parse(ref_type : String, ref_name : String) -> GitRef raise InputError {
   match ref_type {
     "branch" => Branch(ref_name)
-    "tag" => Tag(ref_name)
+    "tag" =>
+      match ref_name.strip_prefix("v").bind(Version::parse) {
+        Some(version) => Tag(version)
+        None => raise NotAVersionTag(ref_name)
+      }
     _ => raise UnknownRefType(ref_type)
   }
 }
@@ -402,7 +419,34 @@ fn GitRef::parse(ref_type : String, ref_name : String) -> GitRef raise InputErro
 ///|
 fn GitRef::name(self : GitRef) -> String {
   match self {
-    Branch(name) | Tag(name) => name
+    Branch(name) => name
+    Tag(version) => "v\{version}"
+  }
+}
+
+///|
+/// Why a Release run cannot release.
+suberror PlanError {
+  /// The tag names another version than moon.mod.
+  TagMismatch(tag~ : Version, version~ : Version)
+  /// The commit is not on main.
+  NotOnMain(String)
+  /// CHANGELOG.md has no section for the version.
+  NoChangelogSection(Version)
+  /// The changelog section still has the highlights placeholder.
+  HighlightsPlaceholder(Version)
+}
+
+///|
+fn PlanError::message(self : PlanError) -> String {
+  match self {
+    TagMismatch(tag~, version~) =>
+      "tag v\{tag} does not match moon.mod version \{version} (v\{version})"
+    NotOnMain(name) => "\{name} is not on main"
+    NoChangelogSection(version) =>
+      "CHANGELOG.md has no section for \{version}; release with `mise run release:prepare`"
+    HighlightsPlaceholder(version) =>
+      "the CHANGELOG.md section for \{version} still has the highlights placeholder; write the highlights on release/v\{version}, then merge"
   }
 }
 
@@ -447,31 +491,21 @@ fn plan(
   git_ref : GitRef,
   version : Version,
   facts : ReleaseFacts,
-) -> Result[Plan, String] {
+) -> Result[Plan, PlanError] {
   guard trigger is Push else { return Ok(DryRun(version)) }
-  let tag = "v\{version}"
   match git_ref {
-    Tag(name) if name != tag =>
-      return Err(
-        "tag \{name} does not match moon.mod version \{version} (\{tag})",
-      )
+    Tag(tag) if tag != version => return Err(TagMismatch(tag~, version~))
     _ => ()
   }
   if !facts.on_main {
-    return Err("\{git_ref.name()} is not on main")
+    return Err(NotOnMain(git_ref.name()))
   }
   if facts.released {
-    return Ok(Skip("\{tag} is already released"))
+    return Ok(Skip("v\{version} is already released"))
   }
   match facts.changelog {
-    NoSection =>
-      Err(
-        "CHANGELOG.md has no section for \{version}; release with `mise run release:prepare`",
-      )
-    Placeholder =>
-      Err(
-        "the CHANGELOG.md section for \{version} still has the highlights placeholder; write the highlights on release/v\{version}, then merge",
-      )
+    NoSection => Err(NoChangelogSection(version))
+    Placeholder => Err(HighlightsPlaceholder(version))
     Ready => Ok(Release(version))
   }
 }
@@ -1235,7 +1269,7 @@ async fn run_plan() -> Unit {
     released = release_complete(exists, draft, assets)
   }
   match plan(trigger, git_ref, version, { on_main, released, changelog }) {
-    Err(message) => fail_with(message)
+    Err(error) => fail_with(error.message())
     Ok(p) => {
       match p {
         Release(v) => println("Release \{v}")
@@ -1845,6 +1879,19 @@ impl @moonspec.World for ReleaseWorld with fn configure(self, setup) {
       self.ref_name = ref_name
     },
   )
+  setup.then2("the dry run input {string} gives {string}", fn(
+    text : String,
+    expected : String,
+  ) raise {
+    let actual = try RunTrigger::parse("workflow_dispatch", text) catch {
+      e => "error: " + e.message()
+    } noraise {
+      PullRequest => "pull request"
+      DryRun => "dry run"
+      Push => "push"
+    }
+    @expect.expect(actual).to_equal(expected)
+  })
   setup.given1("the commit is on main: {string}", fn(answer : String) {
     self.on_main = yes(answer)
   })
@@ -1903,7 +1950,9 @@ impl @moonspec.World for ReleaseWorld with fn configure(self, setup) {
         self.event,
         if self.dry_run { "true" } else { "" },
       )
-      plan(trigger, GitRef::parse(self.ref_type, self.ref_name), version, facts)
+      plan(trigger, GitRef::parse(self.ref_type, self.ref_name), version, facts).map_err(
+        e => e.message(),
+      )
     } catch {
       e => Err(e.message())
     }

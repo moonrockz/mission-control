@@ -68,7 +68,8 @@ pub(all) suberror PositionError {
 
 ///|
 /// A place in the normalized sentence: the UTF-16 offset of a character,
-/// counted from 0.
+/// counted from 0, or the length of the sentence for its end, such as the
+/// place after a final `shall`.
 struct SentencePosition {
   offset : Int32
 } derive(Eq, Compare, Hash, Debug)

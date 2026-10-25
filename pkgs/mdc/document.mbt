@@ -35,7 +35,8 @@ pub fn Document::body_line(self : Document) -> Int32 {
 
 ///|
 /// The range in the original input of a cmark location in the body, or `None`
-/// for a location that cmark did not record.
+/// for a location that cmark did not record or that is not a location in this
+/// document's body.
 pub fn Document::source_range(
   self : Document,
   loc : @cmark_base.TextLoc,
@@ -49,23 +50,31 @@ pub fn Document::source_range(
     } else {
       0
     }
-    let p : TextPosition = {
-      line: self.body_line + line.0 - 1,
-      column: ccode - line.1 + 1 + shift,
-    }
-    p
+    TextPosition(
+      line=self.body_line + line.0 - 1,
+      column=ccode - line.1 + 1 + shift,
+    )
   }
-  let start = position(loc.first_line, loc.first_ccode)
   let start_offset = self.body_offset + loc.first_ccode
-  if loc.is_empty() {
-    return Some({ start, end: start, start_offset, end_offset: start_offset, })
+  let end_offset = if loc.is_empty() {
+    start_offset
+  } else {
+    self.body_offset + loc.last_ccode + 1
   }
-  Some({
-    start,
-    end: position(loc.last_line, loc.last_ccode),
-    start_offset,
-    end_offset: self.body_offset + loc.last_ccode + 1,
-  })
+  guard end_offset <= self.body_offset + self.body.length() else { return None }
+  try {
+    let start = position(loc.first_line, loc.first_ccode)
+    let end = if loc.is_empty() {
+      start
+    } else {
+      position(loc.last_line, loc.last_ccode)
+    }
+    SourceRange(start~, end~, start_offset~, end_offset~)
+  } catch {
+    _ => None
+  } noraise {
+    range => Some(range)
+  }
 }
 
 ///|

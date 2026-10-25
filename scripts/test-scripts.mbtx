@@ -110,3 +110,12 @@ async test "every script keeps the same copy of the exit codes" {
     assert_eq(shared_block(source, start, end), own, msg=file)
   }
 }
+
+///|
+async test "the build and the test scripts keep the same backends" {
+  let start = "/// A MoonBit backend that the build and the tests target."
+  let end = "// End of the backends."
+  let build = shared_block(@fs.read_file("build.mbtx").text(), start, end)
+  assert_true(build is Some(_))
+  assert_eq(shared_block(@fs.read_file("test.mbtx").text(), start, end), build)
+}

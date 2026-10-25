@@ -62,9 +62,19 @@ pub fn Run::exit_code(self : Run) -> ExitCode {
 ///|
 pub fn usage() -> String {
   let lines = ["Usage: mission-control <command>", "", "Commands:"]
+  // Names and descriptions line up, with at least four spaces between them.
+  let width = @contracts.commands
+    .iter()
+    .fold(init=7, (w, c) => {
+      if c.name().length() > w {
+        c.name().length()
+      } else {
+        w
+      }
+    })
   for command in @contracts.commands {
     let name = command.name()
-    let pad = " ".repeat(11 - name.length())
+    let pad = " ".repeat(width + 4 - name.length())
     lines.push("  \{name}\{pad}\{command.description()}")
   }
   lines.join("\n")
