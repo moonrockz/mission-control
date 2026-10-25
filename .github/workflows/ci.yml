@@ -171,7 +171,7 @@ jobs:
         run: mise run test:scripts
 
   test-browser:
-    name: Test browser (chromium)
+    name: Test browser (chromium, webkit, firefox)
     runs-on: ubuntu-latest
     needs: [lint]
     timeout-minutes: 20
@@ -184,14 +184,15 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      # The key follows the Playwright version that .config/mise/config.toml pins.
+      # The key follows the Playwright version that .config/mise/config.toml pins, and
+      # names the three engines, so a cache with Chromium only is not reused.
       - name: Cache Playwright browsers
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('.config/mise/config.toml') }}
+          key: playwright-3-engines-${{ runner.os }}-${{ hashFiles('.config/mise/config.toml') }}
 
-      - name: Run the OKF browser store checks in headless Chromium
+      - name: Run the OKF browser store checks in Chromium, WebKit and Firefox
         run: mise run test:browser -- --install
 
   # The only check that branch protection needs. Add every new job to `needs`.

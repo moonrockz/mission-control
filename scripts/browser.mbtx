@@ -1,10 +1,10 @@
 ///|
-/// Run the browser store checks in headless Chromium with Playwright.
+/// Run the browser store checks in headless Chromium, WebKit and Firefox with Playwright.
 ///
 /// Usage: `mise run test:browser [-- --install]`. It builds `tests/okf-browser`
 /// for js, copies the page to `_build/okf-browser/site`, and runs
-/// `tests/okf-browser/opfs.spec.cjs`. `--install` first installs Chromium and
-/// its system libraries with the Playwright CLI that mise pins.
+/// `tests/okf-browser/opfs.spec.cjs`. `--install` first installs the three
+/// browsers and their system libraries with the Playwright CLI that mise pins.
 import {
   "moonbitlang/async@0.22.5",
   "moonbitlang/async@0.22.5/fs",
@@ -85,8 +85,12 @@ async fn main {
     "OKF_BROWSER_DIR": @fs.realpath(site),
   }
   if install {
-    println("📦 Installing Chromium...")
-    run_or_exit("playwright", ["install", "--with-deps", "chromium"], env~)
+    println("📦 Installing Chromium, WebKit and Firefox...")
+    run_or_exit(
+      "playwright",
+      ["install", "--with-deps", "chromium", "webkit", "firefox"],
+      env~,
+    )
   }
   println("🧪 Running the browser checks...")
   run_or_exit("playwright", ["test", "-c", "tests/okf-browser/playwright.config.cjs"], env~)

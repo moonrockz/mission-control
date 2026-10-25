@@ -4,7 +4,9 @@ import {
   "moonbitlang/async",
   "moonrockz/okf",
   "moonrockz/okf/fs/browser",
+  "moonrockz/okf/idb",
   "moonrockz/okf/conformance",
+  "moonrockz/okf/provider",
 }
 
 supported_targets = "js"

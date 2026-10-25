@@ -122,7 +122,7 @@ description = "Run the native tests with zig as the C compiler (the host wrapper
 run = "moonx moonrockz/zig-cross@0.1.2 exec host -- moonx scripts/test.mbtx native"
 
 [tasks."test:browser"]
-description = "Run the OKF browser store checks in headless Chromium with Playwright (args: --install)"
+description = "Run the OKF browser store checks in headless Chromium, WebKit and Firefox with Playwright (args: --install)"
 run = "moonx scripts/browser.mbtx"
 
 [tasks."test:scripts"]
