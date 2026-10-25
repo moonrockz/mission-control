@@ -21,7 +21,7 @@ The OpenSpec profile SHALL read a project lexicon from the file `ears.yaml` at t
 - **THEN** validation reports a finding for `ears.yaml`, and requirements still parse with the OpenSpec dialect
 
 ### Requirement: EARS form check
-The OpenSpec profile SHALL report each requirement sentence of a main spec or of an active change that does not parse as EARS with the active dialects, with the rule `openspec-requirement-not-ears`, the sentence, its line and the parse error. WHEN a change is archived, the profile SHALL not check its sentences, because the change is history.
+The OpenSpec profile SHALL report each requirement sentence of a main spec, of an active change or of a native Requirement concept that does not parse as EARS with the active dialects, with the rule `openspec-requirement-not-ears`, the sentence, its line and the parse error. WHEN a change is archived, the profile SHALL not check its sentences, because the change is history.
 
 #### Scenario: Sentence not in EARS form
 - **WHEN** a requirement text has the sentence `Fast responses are important.`

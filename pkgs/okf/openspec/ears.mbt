@@ -120,12 +120,47 @@ fn parse_problem(error : @ears.ParseError) -> String {
 
 ///|
 /// The requirement sentences that do not parse as EARS, with the rule
-/// `openspec-requirement-not-ears`. Archived changes are not checked.
+/// `openspec-requirement-not-ears`: in spec documents and spec deltas, and in
+/// native Requirement concepts, each at its own path and line. Archived
+/// changes are not checked.
 fn check_not_ears(
   ctx : @okf.ValidationContext,
   dialects : ArrayView[&@ears.Dialect],
 ) -> Array[@okf.Issue] {
   let out = []
+  let report = (bundle : @okf.Bundle, doc : @okf.Document, r : Requirement) => {
+    for d in r.sentence_diagnostics {
+      let line = match d.origin() {
+        Text(span) => r.text_lines.get(span.line() - 1)
+        Markdown(..) => r.text_lines.get(0)
+      }
+      out.push(
+        @okf.Issue::at(
+          bundle,
+          doc,
+          "the sentence `\{d.text()}` of `\{r.name}` is not EARS: \{parse_problem(d.error())}",
+          line?,
+          hint="Write `<subject> SHALL <response>`, or add the word to openspec/ears.yaml.",
+        ),
+      )
+    }
+  }
+  // Native Requirement concepts: the text is the body of the concept.
+  for pair in ctx.knowledge.concepts() {
+    let (bundle, doc) = pair
+    guard type_of(doc) is Some(RequirementConcept) else { continue }
+    guard capability_of(doc) is Some(cap) else { continue }
+    guard requirement_of(doc, "requirement") is Some(name) else { continue }
+    guard doc.metadata().line_of("requirement") is Some(line) else { continue }
+    let model = parse_spec(
+      cap,
+      [(line, "### Requirement: " + name.to_string())] + doc.prose_lines(),
+      dialects~,
+    )
+    for r in model.requirements {
+      report(bundle, doc, r)
+    }
+  }
   for pair in spec_docs(ctx) {
     // An archived change is history, so its text is not checked.
     let archived = pair.1.metadata().text("state").bind(ChangeState::parse)
@@ -133,21 +168,7 @@ fn check_not_ears(
     guard !archived else { continue }
     guard model_of(pair.1, dialects) is Some(model) else { continue }
     for r in all_requirements(model) {
-      for d in r.sentence_diagnostics {
-        let line = match d.origin() {
-          Text(span) => r.text_lines.get(span.line() - 1)
-          Markdown(..) => r.text_lines.get(0)
-        }
-        out.push(
-          @okf.Issue::at(
-            pair.0,
-            pair.1,
-            "the sentence `\{d.text()}` of `\{r.name}` is not EARS: \{parse_problem(d.error())}",
-            line?,
-            hint="Write `<subject> SHALL <response>`, or add the word to openspec/ears.yaml.",
-          ),
-        )
-      }
+      report(pair.0, pair.1, r)
     }
   }
   out

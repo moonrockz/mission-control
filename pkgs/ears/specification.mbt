@@ -239,7 +239,9 @@ fn sentence_ranges(text : String) -> Array[(Int32, Int32)] {
   let raw = []
   let n = text.length()
   let mut start = 0
-  let mut in_code = false
+  // The length of the backtick run that opened the code span, or 0 outside
+  // code.
+  let mut code_run = 0
   let closing = (c : UInt16) => {
     c == 41 || c == 93 || c == 34 || c == 39 || c == 0x201D || c == 0x2019
   }
@@ -247,7 +249,7 @@ fn sentence_ranges(text : String) -> Array[(Int32, Int32)] {
   while i < n {
     let c = text.code_unit_at(i)
     if c == 10 || c == 13 {
-      in_code = false
+      code_run = 0
       // A blank line: a line break, optional white space, a line break.
       let mut j = i + 1
       if c == 13 && j < n && text.code_unit_at(j) == 10 {
@@ -264,21 +266,43 @@ fn sentence_ranges(text : String) -> Array[(Int32, Int32)] {
         continue
       }
     } else if c == 96 {
-      // A backtick opens code only when another one closes it on the same
-      // line; an unclosed backtick is text.
-      if in_code {
-        in_code = false
+      // A run of backticks opens a code span only when a run of the same
+      // length closes it on the same line, as in Markdown; an unclosed run is
+      // text. Inside code, only a run of the opening length closes it.
+      let mut run_end = i
+      while run_end < n && text.code_unit_at(run_end) == 96 {
+        run_end += 1
+      }
+      let run = run_end - i
+      if code_run > 0 {
+        if run == code_run {
+          code_run = 0
+        }
       } else {
-        let mut j = i + 1
+        let mut j = run_end
+        let mut closes = false
         while j < n &&
-              text.code_unit_at(j) != 96 &&
+              !closes &&
               text.code_unit_at(j) != 10 &&
               text.code_unit_at(j) != 13 {
-          j += 1
+          if text.code_unit_at(j) == 96 {
+            let mut k = j
+            while k < n && text.code_unit_at(k) == 96 {
+              k += 1
+            }
+            closes = k - j == run
+            j = k
+          } else {
+            j += 1
+          }
         }
-        in_code = j < n && text.code_unit_at(j) == 96
+        if closes {
+          code_run = run
+        }
       }
-    } else if !in_code && (c == 46 || c == 63 || c == 33) {
+      i = run_end
+      continue
+    } else if code_run == 0 && (c == 46 || c == 63 || c == 33) {
       let mut end = i + 1
       while end < n && closing(text.code_unit_at(end)) {
         end += 1

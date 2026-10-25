@@ -785,3 +785,31 @@ test "an invalid lexicon file under a root that no bundle has is still reported"
     }),
   )
 }
+
+///|
+test "native Requirement concepts are checked as EARS at their own path and line" {
+  let set = @okf.DocumentSet::of_texts([
+    ("kb/index.md", "---\nokf_version: \"0.2\"\n---\n"),
+    ("kb/specs/a.md", "---\ntype: Specification\ncapability: a\n---\n# a\n"),
+    (
+      "kb/reqs/r1.md", "---\ntype: Requirement\ncapability: a\nrequirement: Works\n---\nIt SHALL work.\nFast responses are important.\n",
+    ),
+  ])
+  let profiles : Array[&@okf.Profile] = [@openspec.OpenSpecProfile()]
+  let b = @okf.load_bundle(set, root=@okf.StoreDir("kb"), profiles~)
+  let findings = @okf.validate(
+    @okf.Knowledge([b]),
+    [],
+    @okf.FixedClock(@okf.Instant::of_millis(0L)),
+    profiles~,
+  ).findings()
+  let ears = findings
+    .iter()
+    .filter(f => f.rule.to_string() == "openspec-requirement-not-ears")
+    .map(f => (f.subject.path_text(), f.line))
+    .collect()
+  assert_eq(ears, [
+    (Some("/reqs/r1.md"), Some(6)),
+    (Some("/reqs/r1.md"), Some(7)),
+  ])
+}

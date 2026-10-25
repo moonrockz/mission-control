@@ -436,3 +436,13 @@ test "lexicon rules: white space, empty heading names and large heading levels" 
   )
   assert_eq(spec.blocks().length(), 0)
 }
+
+///|
+test "a multi-backtick code span keeps its full stops" {
+  let dialects : Array[&@ears.Dialect] = [@ears.openspec_dialect()]
+  let spec = @ears.parse_block(
+    "The parser SHALL accept ``a. b`` files. It SHALL read `` `x.` `` too.",
+    dialects~,
+  )
+  assert_eq((spec.requirements().length(), spec.diagnostics().length()), (2, 0))
+}
