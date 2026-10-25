@@ -35,13 +35,36 @@ let set = @okf.DocumentSet::of_texts([
 let knowledge = @okf.discover(set)            // every directory whose index.md has okf_version
 let bundle = knowledge.bundles()[0]
 let orders = bundle.concept(@okf.ConceptId("tables/orders")).unwrap()
-orders.metadata().concept_type()               // Some("BigQuery Table")
-orders.links()                                 // body links with file lines and kinds
+orders.concept_type()                          // Some(ConceptType "BigQuery Table")
+orders.links()                                 // body links with their origin and kind
 let graph = @okf.Graph::build(knowledge)       // outbound links, backlinks, orphans, broken links
-knowledge.filter([TypeIs("metric"), HasTag("finance")])
-knowledge.facet("type")
-@okf.search_knowledge(knowledge, @okf.SearchRequest("revenue", limit=10))
+knowledge.filter([TypeIs(@okf.ConceptType("metric")), HasTag("finance")])
+knowledge.facet(Type)                          // or Tags, Bundles, Field(@okf.FieldKey("owner"))
+@okf.search_knowledge(knowledge, @okf.SearchRequest("revenue", limit=@okf.SearchLimit(10)))
 ```
+
+### Domain types
+
+Values with rules are types with smart constructors, so a value that breaks a
+rule cannot exist. Parse raw text once, where it enters, and then pass the type.
+
+| Type | Rule |
+| --- | --- |
+| `BundleLabel` | Segments joined with `/`; no segment is empty or has `:` or white space |
+| `StoreDir`, `StorePath`, `BundlePath`, `EntryName` | No segment escapes the root; an entry name is one segment |
+| `ConceptType` | Not blank; equal without letter case |
+| `FieldKey` | A plain frontmatter key that edits can write |
+| `RuleName` | Lower-case kebab case |
+| `SearchLimit`, `HeadingLevel` | 1 to 1000; 1 to 6 |
+| `LogDate` | A real calendar date, `YYYY-MM-DD` |
+| `RegisterName`, `StateName`, `RecordId`, `IdWidth` | Not blank; an ID width is 1 to 9 |
+
+Each constructor raises a typed error (`ValueError` or `PathError`) that names
+the input. Values that are valid by construction have constructors that cannot
+fail, such as `StoreDir::root()`, `SearchLimit::default()` and
+`LogDate::of_instant(instant)`. Fixed sets are enums: `OkfVersion`, `Facet`,
+`ScanField`, `LinkOrigin`, `IndexHeading`, `LogHeading` and `FindingSubject`.
+Free text, such as titles, descriptions and messages, stays a `String`.
 
 Typed accessors cover every OKF v0.2 field: `sources`, `usage_window`,
 `generated`, `verified` (a single mapping reads as a list), `status`,
@@ -62,11 +85,18 @@ let report = @okf.validate(
   knowledge,
   [@okf.okf_v02_conformance(), @okf.advisory()],
   @okf.FixedClock::at("2026-10-23T00:00:00Z"),
-  config=@okf.ValidationConfig(overrides=[("link-broken", Error)], disabled=["duplicate-title"]),
+  config=@okf.ValidationConfig(
+    overrides=[(@okf.RuleName("link-broken"), Error)],
+    disabled=[@okf.RuleName("duplicate-title")],
+  ),
 )
-report.findings()      // sorted by severity, bundle, path and line
+report.findings()      // sorted by severity, subject, line and rule
 report.fails(strict=true)
 ```
+
+A config that names a rule that no active rule set defines gives a
+`validation-config-unknown-rule` warning, and a profile whose definitions break
+a rule gives a `profile-invalid` error.
 
 `okf_v02_conformance()` holds the OKF v0.2 section 11 rules. `advisory()` holds
 rules that OKF tolerates, such as missing titles, broken links, stale concepts,
@@ -80,12 +110,19 @@ quoting. Plans group edits until a caller applies them to a document set or a
 store.
 
 ```moonbit
-@edit.set_key(text, "status", "deprecated")
-@edit.add_index_entry(index_text, "Metric", @edit.index_entry_line("Revenue", "/metrics/revenue.md"))
-@edit.add_log_entry(log_text, "2026-10-23", "Added revenue.", label="Creation")
-let plan = @edit.plan_add_concept(bundle, "/metrics/revenue.md", "Metric", "Revenue", "Net revenue per day", "2026-10-23")
+@edit.set_key(text, @okf.FieldKey("status"), "deprecated")
+@edit.add_index_entry(index_text, @edit.SectionName("Metric"), @edit.IndexEntryLine("Revenue", "/metrics/revenue.md"))
+@edit.add_log_entry(log_text, @okf.LogDate("2026-10-23"), "Added revenue.", label="Creation")
+let plan = @edit.plan_add_concept(
+  bundle, "/metrics/revenue.md", @okf.ConceptType("Metric"), "Revenue",
+  "Net revenue per day", @okf.LogDate("2026-10-23"),
+)
 plan.render()          // a dry run
 ```
+
+Raw YAML values are `RawYaml`, built with `RawYaml(text)`, `RawYaml::scalar`
+or `RawYaml::list`. The planners raise one `PlanError` with a case for a
+refused path, a failed edit and a refused transition.
 
 ## Stores, indexes and search
 
@@ -96,12 +133,14 @@ store)` writes the changed documents.
 | Runtime | Store |
 | --- | --- |
 | Tests, wasm-gc, any target | `@memory.MemoryStore` (its `snapshot()` is synchronous) |
-| Native and wasm | `@fs.FsStore(root)` |
-| Node.js, Bun, Deno | `@node.NodeStore(root)` |
+| Native and wasm | `@fs.FsStore(@provider.StoreRoot(root))` |
+| Node.js, Bun, Deno | `@node.NodeStore(@provider.StoreRoot(root))` |
 | Browser | `@browser.BrowserStore(handle)`, with `@browser.origin_private_root()` or `@browser.pick_directory()` |
 
 MoonBit has one js target, so choose the Node.js or the browser store by the
-package you import. `@memory.MemoryIndex` implements `IndexProvider` and
+package you import. A `StoreError` names a location relative to the store root
+(`FileAt(StorePath)` or `DirectoryAt(StoreDir)`), never a host path, so every
+store gives the same error for the same failure. `@memory.MemoryIndex` implements `IndexProvider` and
 `SearchProvider` (BM25 over title, description, tags and body). A new provider,
 for example over SQLite or RocksDB, proves its contract with
 `@conformance.check_store`, `check_index` and `check_search`.
@@ -135,9 +174,16 @@ the types `Specification`, `Change` (the change's `proposal.md`), `Design`,
 the three that `openspec validate --strict` runs (a requirement without a
 scenario, without `SHALL` or `MUST`, or with a wrong scenario heading) and two
 that OpenSpec runs only at archive time (a `MODIFIED` or `REMOVED` requirement
-that matches nothing, and a delta for a capability that does not exist). `@openspec.view(bundle)` gives
-requirements, scenarios, deltas and tasks. Native bundles can also use
-`Requirement` and `Scenario` concepts.
+that matches nothing, and a delta for a capability that does not exist). Two
+more checks report content that the view leaves out: a rename with only a
+`FROM:` or a `TO:` line, and a capability, change or requirement value that is
+not a valid name, a requirement heading without a name, or a `state` that is
+not `active` or `archived`. Export refuses a name that is not valid.
+`@openspec.view(bundle)` gives requirements, scenarios,
+deltas and tasks with typed names (`CapabilityPath`, `ChangeName`,
+`RequirementName`, `TaskNumber`), types (`OpenSpecType`) and states
+(`ChangeState`). Native bundles can also use `Requirement` and `Scenario`
+concepts.
 
 `import_openspec` plans a native OKF bundle from a tree, and `export_openspec`
 plans the tree again; the round trip keeps every file.

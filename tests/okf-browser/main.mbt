@@ -15,6 +15,6 @@ async fn main {
 async fn run() -> String {
   let root = @browser.origin_private_root()
   let store = @browser.BrowserStore(root)
-  @conformance.check_store(store, prefix=["okf-conformance"])
+  @conformance.check_store(store, prefix=@okf.StoreDir("okf-conformance"))
   "ok"
 }

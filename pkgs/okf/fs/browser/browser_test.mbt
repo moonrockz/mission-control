@@ -8,12 +8,12 @@ async test "the browser store meets the store contract on a stand-in handle" {
 ///|
 async test "the browser store reports a permission error and writes nothing" {
   let store = @browser.BrowserStore(@browser.memory_directory_handle(false))
-  let denied = try store.write_text(@okf.StorePath("a.md"), "x") catch {
-    @provider.PermissionDenied(_) => true
-    _ => false
+  let path = @okf.StorePath("a.md")
+  let denied = try store.write_text(path, "x") catch {
+    e => Some(e)
   } noraise {
-    _ => false
+    _ => None
   }
-  assert_true(denied)
-  assert_eq(store.list([]).length(), 0)
+  assert_eq(denied, Some(@provider.PermissionDenied(FileAt(path))))
+  assert_eq(store.list(@okf.StoreDir::root()).length(), 0)
 }

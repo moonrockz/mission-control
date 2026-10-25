@@ -16,15 +16,17 @@ fn path(text : String) -> @okf.StorePath raise {
 /// under `prefix` (default: the root).
 pub async fn check_store(
   store : &@provider.DocumentStore,
-  prefix~ : ArrayView[String] = [],
+  prefix~ : @okf.StoreDir = @okf.StoreDir::root(),
 ) -> Unit {
-  let prefix = prefix.to_owned()
   let p = (rel : String) => {
-    if prefix.is_empty() {
+    if prefix.is_root() {
       rel
     } else {
-      prefix.join("/") + "/" + rel
+      prefix.to_string() + "/" + rel
     }
+  }
+  let names_of = (listing : Array[@provider.StoreEntry]) => {
+    listing.map(e => e.name.to_string())
   }
   // Writes create parent directories.
   store.write_text(path(p("b.md")), "# B\r\n\r\nCRLF and ünïcödé 🌙\r\n")
@@ -43,7 +45,7 @@ pub async fn check_store(
   )
   // Listings are sorted and stable.
   let listing = store.list(prefix)
-  let names = listing.map(e => e.name)
+  let names = names_of(listing)
   check(
     names == ["a.md", "b.md", "sub"],
     "root listing is sorted: " + names.join(","),
@@ -52,23 +54,35 @@ pub async fn check_store(
     listing[2].kind is Directory && listing[0].kind is File,
     "listing kinds",
   )
-  check(store.list(prefix).map(e => e.name) == names, "listing is stable")
-  let sub = prefix.copy()
-  sub.push("sub")
-  check(store.list(sub).map(e => e.name) == ["deep", "x.bin"], "sub listing")
-  // A missing file is NotFound.
-  let missing = try store.read_text(path(p("missing.md"))) catch {
-    @provider.NotFound(_) => true
-    _ => false
+  check(names_of(store.list(prefix)) == names, "listing is stable")
+  let sub = @okf.StoreDir(p("sub"))
+  check(names_of(store.list(sub)) == ["deep", "x.bin"], "sub listing")
+  // A missing file or directory is NotFound, at its store-relative location.
+  let missing_path = path(p("missing.md"))
+  let missing = try store.read_text(missing_path) catch {
+    e => Some(e)
   } noraise {
-    _ => false
+    _ => None
   }
-  check(missing, "reading a missing file raises NotFound")
+  check(
+    missing == Some(@provider.NotFound(FileAt(missing_path))),
+    "reading a missing file raises NotFound for the file: \{@debug.to_string(missing)}",
+  )
+  let missing_dir = @okf.StoreDir(p("nope"))
+  let missing = try store.list(missing_dir) catch {
+    e => Some(e)
+  } noraise {
+    _ => None
+  }
+  check(
+    missing == Some(@provider.NotFound(DirectoryAt(missing_dir))),
+    "listing a missing directory raises NotFound for the directory: \{@debug.to_string(missing)}",
+  )
   // Deleting removes a file; deleting a missing file is not an error.
   store.delete(path(p("a.md")))
   store.delete(path(p("a.md")))
   check(
-    store.list(prefix).map(e => e.name) == ["b.md", "sub"],
+    names_of(store.list(prefix)) == ["b.md", "sub"],
     "delete removes the file",
   )
   // Loading reads the Markdown files into a document set.
@@ -127,7 +141,7 @@ pub async fn check_index(index : &@provider.IndexProvider) -> Unit {
   let finance = index.documents([HasTag("finance")])
   check(finance.length() == 2, "documents filter by tag")
   let revenue_key : @okf.DocKey = {
-    bundle: "kb",
+    bundle: @okf.BundleLabel("kb"),
     path: @okf.BundlePath("/metrics/revenue.md"),
   }
   let graph = @okf.Graph::build(knowledge)
@@ -140,7 +154,7 @@ pub async fn check_index(index : &@provider.IndexProvider) -> Unit {
     "backlinks equal the link graph: \{actual.length()} vs \{expected.length()}",
   )
   let margin_key : @okf.DocKey = {
-    bundle: "kb",
+    bundle: @okf.BundleLabel("kb"),
     path: @okf.BundlePath("/metrics/margin.md"),
   }
   check(index.links_from(margin_key).length() == 1, "links_from")
@@ -149,7 +163,12 @@ pub async fn check_index(index : &@provider.IndexProvider) -> Unit {
     "headings",
   )
   check(index.sources(margin_key).length() == 1, "sources")
-  check(index.facet("type") == [("Metric", 2)], "facet")
+  check(index.facet(Type) == [("Metric", 2)], "facet")
+  check(
+    index.facet(Field(@okf.FieldKey("tags"))) == [("finance", 2), ("daily", 1)] ||
+    index.facet(Field(@okf.FieldKey("tags"))) == [("daily", 1), ("finance", 2)],
+    "facet of a key",
+  )
   let changed = sample_knowledge(revenue_text("Revenue in USD"))
   check(
     index.status(changed) is Stale(_),
@@ -166,7 +185,7 @@ pub async fn check_search(
 ) -> Unit {
   let knowledge = sample_knowledge(revenue_text("Revenue"))
   prepare(knowledge)
-  let request = @okf.SearchRequest("revenue", limit=5)
+  let request = @okf.SearchRequest("revenue", limit=@okf.SearchLimit(5))
   let first = search.search(request)
   let second = search.search(request)
   check(first == second, "the same request gives the same results")
@@ -177,7 +196,10 @@ pub async fn check_search(
   )
   check(first[0].score >= first[1].score, "results are ordered by score")
   check(
-    search.search(@okf.SearchRequest("revenue", limit=1)).length() == 1,
+    search
+    .search(@okf.SearchRequest("revenue", limit=@okf.SearchLimit(1)))
+    .length() ==
+    1,
     "the limit applies",
   )
   let filtered = search.search(

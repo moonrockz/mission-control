@@ -10,7 +10,7 @@ The edit functions SHALL take frontmatter keys, raw YAML values, section names a
 - **THEN** the constructor raises an error that names the line break
 
 ### Requirement: Typed planner errors
-The planners and conversions SHALL raise one typed error that covers path refusals, edit errors and transition refusals, so that a caller can match every case.
+The planners SHALL raise one typed plan error that covers path refusals, edit errors and transition refusals, and the OpenSpec conversions SHALL raise one typed conversion error that covers invalid names and edit errors, so that a caller can match every case.
 
 #### Scenario: Refused path in a plan
 - **WHEN** a caller plans a concept at `/tables/index.md`

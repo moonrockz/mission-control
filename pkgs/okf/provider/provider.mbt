@@ -8,29 +8,153 @@ pub(all) enum EntryKind {
 ///|
 /// One entry of a directory listing.
 pub(all) struct StoreEntry {
-  name : String
+  name : @okf.EntryName
   kind : EntryKind
 } derive(Eq, Debug)
 
 ///|
+/// Where a store error happened, relative to the store root. A store error
+/// never names a host path.
+pub(all) enum StoreLocation {
+  FileAt(@okf.StorePath)
+  DirectoryAt(@okf.StoreDir)
+} derive(Eq, Debug)
+
+///|
+pub fn StoreLocation::to_string(self : StoreLocation) -> String {
+  match self {
+    FileAt(path) => path.to_string()
+    DirectoryAt(dir) => if dir.is_root() { "." } else { dir.to_string() }
+  }
+}
+
+///|
+pub impl Show for StoreLocation with fn output(self, logger) {
+  logger.write_string(self.to_string())
+}
+
+///|
 /// Raised by a document store.
 pub(all) suberror StoreError {
-  /// The path does not exist.
-  NotFound(String)
-  /// The store does not allow the operation on the path.
-  PermissionDenied(String)
-  /// The path is not valid for the store, for example because it escapes the root.
+  /// The file or directory does not exist.
+  NotFound(StoreLocation)
+  /// The store does not allow the operation at the location.
+  PermissionDenied(StoreLocation)
+  /// A path text that is not valid for the store, for example because it
+  /// escapes the root.
   InvalidPath(String)
-  /// Any other failure, with the path and a message.
-  Failed(String, String)
+  /// Any other failure, with the location and a message.
+  Failed(StoreLocation, String)
 } derive(Eq, Debug)
+
+///|
+/// The root of a store, such as a host directory or a browser directory name.
+/// It is not blank.
+struct StoreRoot {
+  text : String
+} derive(Eq, Hash, Debug)
+
+///|
+/// Raised when a store root breaks its rule.
+pub(all) suberror RootError {
+  /// The root is empty or only white space.
+  BlankRoot(String)
+} derive(Eq, Debug)
+
+///|
+/// Checks a store root. A trailing `/` is removed, except from `/` itself.
+pub fn StoreRoot::StoreRoot(text : String) -> StoreRoot raise RootError {
+  if text.trim(chars=" \t").length() == 0 {
+    raise BlankRoot(text)
+  }
+  let text = if text.length() > 1 && text.has_suffix("/") {
+    text[:text.length() - 1].to_owned()
+  } else {
+    text
+  }
+  { text, }
+}
+
+///|
+pub fn StoreRoot::to_string(self : StoreRoot) -> String {
+  self.text
+}
+
+///|
+pub impl Show for StoreRoot with fn output(self, logger) {
+  logger.write_string(self.text)
+}
+
+///|
+/// The host path of `segments` under the root.
+pub fn StoreRoot::join(
+  self : StoreRoot,
+  segments : ArrayView[String],
+) -> String {
+  if segments.is_empty() {
+    self.text
+  } else if self.text.has_suffix("/") {
+    self.text + segments.iter().collect().join("/")
+  } else {
+    self.text + "/" + segments.iter().collect().join("/")
+  }
+}
+
+///|
+/// `message` with each host path under the root made relative to it, so that
+/// it names no host path: `<root>/a.md` becomes `a.md`, and the root alone
+/// becomes `.`. The root text counts only where a path starts (at the start
+/// of the message, or after a space, a quote or `(`) and where it ends (at
+/// `/`, at the end of the message, or before a space, a quote, `)`, `,` or
+/// `:`). Other text that contains the root text does not change.
+pub fn StoreRoot::relative_message(
+  self : StoreRoot,
+  message : String,
+) -> String {
+  let base = if self.text.has_suffix("/") {
+    self.text[:self.text.length() - 1].to_owned()
+  } else {
+    self.text
+  }
+  let starts = " \t\n'\"`("
+  let ends = " \t\n'\"`),:"
+  let out = StringBuilder()
+  let n = message.length()
+  // The start of the text that is not yet copied.
+  let mut copied = 0
+  let mut i = 0
+  while i < n {
+    // Compare code units, so that no slice splits a surrogate pair.
+    let at_start = i == 0 ||
+      starts.iter().any(c => c.to_int() == message[i - 1].to_int())
+    if at_start && message[i:].has_prefix(base + "/") {
+      out.write_view(message[copied:i])
+      i += base.length() + 1
+      copied = i
+      continue
+    }
+    if at_start && base.length() > 0 && message[i:].has_prefix(base) {
+      let j = i + base.length()
+      if j == n || ends.iter().any(c => c.to_int() == message[j].to_int()) {
+        out.write_view(message[copied:i])
+        out.write_string(".")
+        i = j
+        copied = i
+        continue
+      }
+    }
+    i += 1
+  }
+  out.write_view(message[copied:n])
+  out.to_string()
+}
 
 ///|
 /// Reads and writes documents. Paths are relative to the root of the store and
 /// never escape it. Implementations must list entries in a stable order.
 pub(open) trait DocumentStore {
-  /// The entries of a directory, given as segments (`[]` for the root).
-  async fn list(Self, ArrayView[String]) -> Array[StoreEntry] raise StoreError
+  /// The entries of a directory.
+  async fn list(Self, @okf.StoreDir) -> Array[StoreEntry] raise StoreError
   async fn read_text(Self, @okf.StorePath) -> String raise StoreError
   async fn read_bytes(Self, @okf.StorePath) -> Bytes raise StoreError
   /// Writes text, and creates missing parent directories.
@@ -57,19 +181,17 @@ pub fn safe_path(text : String) -> @okf.StorePath raise StoreError {
 /// as text and other files as bytes; `assets=false` leaves other files out.
 pub async fn load_set(
   store : &DocumentStore,
-  under~ : ArrayView[String] = [],
+  under~ : @okf.StoreDir = @okf.StoreDir::root(),
   assets~ : Bool = true,
 ) -> @okf.DocumentSet raise StoreError {
   let entries : Array[@okf.FileEntry] = []
-  async fn walk(dir : Array[String]) -> Unit raise StoreError {
+  async fn walk(dir : @okf.StoreDir) -> Unit raise StoreError {
     for entry in store.list(dir) {
-      let child = dir.copy()
-      child.push(entry.name)
       match entry.kind {
-        Directory => walk(child)
+        Directory => walk(dir.child(entry.name))
         File => {
-          let path = safe_path(child.join("/"))
-          if @okf.is_markdown_name(entry.name) {
+          let path = dir.file(entry.name)
+          if @okf.is_markdown_name(entry.name.to_string()) {
             entries.push({ path, content: Text(store.read_text(path)), })
           } else if assets {
             entries.push({ path, content: Bytes(store.read_bytes(path)), })
@@ -78,7 +200,7 @@ pub async fn load_set(
       }
     }
   }
-  walk(under.to_owned())
+  walk(under)
   @okf.DocumentSet(entries)
 }
 
@@ -86,7 +208,7 @@ pub async fn load_set(
 /// Discovers the bundles under `under` in a store.
 pub async fn load(
   store : &DocumentStore,
-  under~ : ArrayView[String] = [],
+  under~ : @okf.StoreDir = @okf.StoreDir::root(),
   options~ : @okf.Options = @okf.Options::default(),
   profiles~ : ArrayView[&@okf.Profile] = [],
 ) -> @okf.Knowledge raise StoreError {
@@ -98,7 +220,7 @@ pub async fn load(
 /// Loads the bundle at `root` in a store.
 pub async fn load_bundle(
   store : &DocumentStore,
-  root~ : ArrayView[String] = [],
+  root~ : @okf.StoreDir = @okf.StoreDir::root(),
   options~ : @okf.Options = @okf.Options::default(),
   profiles~ : ArrayView[&@okf.Profile] = [],
 ) -> @okf.Bundle raise StoreError {
@@ -137,18 +259,35 @@ pub(all) enum IndexStatus {
 } derive(Eq, Debug)
 
 ///|
-/// The metadata that an index records at build time.
-pub(all) struct IndexMetadata {
+/// The metadata that an index records at build time: a schema version of at
+/// least 1 and a document count of at least 0.
+pub struct IndexMetadata {
   schema_version : Int32
   built_at : @okf.Instant
   document_count : Int32
 } derive(Eq, Debug)
 
 ///|
+/// Checks index metadata. Raises `InvalidMetadata` for a schema version below
+/// 1 or a negative document count.
+pub fn IndexMetadata::IndexMetadata(
+  schema_version~ : Int32,
+  built_at~ : @okf.Instant,
+  document_count~ : Int32,
+) -> IndexMetadata raise IndexError {
+  if schema_version < 1 || document_count < 0 {
+    raise InvalidMetadata(schema_version~, document_count~)
+  }
+  { schema_version, built_at, document_count, }
+}
+
+///|
 /// Raised by index and search providers.
 pub(all) suberror IndexError {
   /// The index was never built.
   NotBuilt
+  /// Index metadata with a schema version below 1 or a negative document count.
+  InvalidMetadata(schema_version~ : Int32, document_count~ : Int32)
   /// Any other failure.
   IndexFailed(String)
 } derive(Eq, Debug)
@@ -165,8 +304,8 @@ pub(open) trait IndexProvider {
   async fn metadata(Self) -> IndexMetadata? raise IndexError
   /// The concepts that match every filter.
   async fn documents(Self, ArrayView[@okf.Filter]) -> Array[@okf.DocKey] raise IndexError
-  /// The values of a frontmatter key with their counts.
-  async fn facet(Self, String) -> Array[(String, Int32)] raise IndexError
+  /// The values of a facet with their counts.
+  async fn facet(Self, @okf.Facet) -> Array[(String, Int32)] raise IndexError
   /// The links from a document.
   async fn links_from(Self, @okf.DocKey) -> Array[@okf.Edge] raise IndexError
   /// The resolved links to a document.
@@ -228,3 +367,30 @@ pub extend IndexError with Eq::{not_equal, equal}
 
 ///|
 pub extend IndexError with @debug.Debug::{to_repr}
+
+///|
+pub extend StoreLocation with Eq::{not_equal, equal}
+
+///|
+pub extend StoreLocation with @debug.Debug::{to_repr}
+
+///|
+pub extend StoreLocation with Show::{output}
+
+///|
+pub extend StoreRoot with Eq::{not_equal, equal}
+
+///|
+pub extend StoreRoot with Hash::{hash, hash_combine}
+
+///|
+pub extend StoreRoot with @debug.Debug::{to_repr}
+
+///|
+pub extend RootError with Eq::{not_equal, equal}
+
+///|
+pub extend RootError with @debug.Debug::{to_repr}
+
+///|
+pub extend StoreRoot with Show::{output}

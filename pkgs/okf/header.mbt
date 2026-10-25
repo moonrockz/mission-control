@@ -30,15 +30,26 @@ pub fn detect_line_ending(text : String) -> LineEnding {
 }
 
 ///|
-/// One line of a text, with its start offset and its line ending.
-pub(all) struct Line {
+/// One line of a text, with its start offset and its line ending. Only
+/// `split_lines` makes lines.
+pub struct Line {
   /// The line text without its line ending.
   text : String
   /// The UTF-16 offset of the first character of the line.
   start : Int32
-  /// The line ending after the line, `""` for a last line without one.
-  ending : String
+  /// The line ending after the line. A last line can have none.
+  ending : LineEnding?
 } derive(Eq, Debug)
+
+///|
+/// The line ending text after the line: `"\n"`, `"\r\n"`, `"\r"`, or `""`
+/// for a last line without one.
+pub fn Line::ending_text(self : Line) -> String {
+  match self.ending {
+    Some(e) => e.text()
+    None => ""
+  }
+}
 
 ///|
 /// Splits `text` into lines. LF, CRLF and CR all end a line. A final line
@@ -51,22 +62,26 @@ pub fn split_lines(text : String) -> Array[Line] {
   while i < n {
     let c = text[i]
     if c == '\n' || c == '\r' {
-      let ending = if c == '\r' && i + 1 < n && text[i + 1] == '\n' {
-        "\r\n"
+      let ending : LineEnding = if c == '\r' && i + 1 < n && text[i + 1] == '\n' {
+        CrLf
       } else if c == '\r' {
-        "\r"
+        Cr
       } else {
-        "\n"
+        Lf
       }
-      lines.push({ text: text[start:i].to_owned(), start, ending, })
-      i += ending.length()
+      lines.push({
+        text: text[start:i].to_owned(),
+        start,
+        ending: Some(ending),
+      })
+      i += ending.text().length()
       start = i
     } else {
       i += 1
     }
   }
   if start < n {
-    lines.push({ text: text[start:n].to_owned(), start, ending: "", })
+    lines.push({ text: text[start:n].to_owned(), start, ending: None, })
   }
   lines
 }
@@ -127,7 +142,7 @@ pub fn split_header(text : String) -> Header {
       let raw = if i == 1 { "" } else { content[raw_start:raw_end].to_owned() }
       let body_start = lines[i].start +
         lines[i].text.length() +
-        lines[i].ending.length()
+        lines[i].ending_text().length()
       return {
         shape: Block(raw~),
         body: content[body_start:].to_owned(),

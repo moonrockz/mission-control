@@ -8,24 +8,51 @@ pub(all) struct LogEntry {
 } derive(Eq, Debug)
 
 ///|
-/// One dated `log.md` section.
-pub(all) struct LogSection {
-  /// The heading text, normally `YYYY-MM-DD`.
-  date : String
+/// The heading of a `log.md` section. Only the log parser makes values, so
+/// `Undated` never holds a date.
+pub enum LogHeading {
+  /// A calendar date, `YYYY-MM-DD`.
+  Dated(LogDate)
+  /// Any other heading text.
+  Undated(String)
+} derive(Eq, Debug)
+
+///|
+/// The heading as written.
+pub fn LogHeading::to_string(self : LogHeading) -> String {
+  match self {
+    Dated(date) => date.to_string()
+    Undated(text) => text
+  }
+}
+
+///|
+pub impl Show for LogHeading with fn output(self, logger) {
+  logger.write_string(self.to_string())
+}
+
+///|
+fn LogHeading::parse(text : String) -> LogHeading {
+  try LogDate(text) catch {
+    _ => Undated(text)
+  } noraise {
+    date => Dated(date)
+  }
+}
+
+///|
+/// One `log.md` section, from one `##` heading to the next.
+pub struct LogSection {
+  heading : LogHeading
   line : Int32
-  entries : Array[LogEntry]
+  entries : ReadOnlyArray[LogEntry]
 } derive(Eq, Debug)
 
 ///|
 /// The parsed body of a `log.md` (OKF v0.2, section 9).
-pub(all) struct LogModel {
-  sections : Array[LogSection]
+pub struct LogModel {
+  sections : ReadOnlyArray[LogSection]
 } derive(Eq, Debug)
-
-///|
-fn is_date_text(text : String) -> Bool {
-  Instant::parse_date(text) is Some(_)
-}
 
 ///|
 fn parse_log_entry(line : String, number : Int32) -> LogEntry? {
@@ -53,31 +80,41 @@ fn parse_log_entry(line : String, number : Int32) -> LogEntry? {
 ///|
 /// Parses the body of a log document. Each `##` heading starts a section.
 pub fn Document::log_model(self : Document) -> LogModel {
-  let sections : Array[LogSection] = []
+  let heads : Array[(LogHeading, Int32)] = []
+  let entries : Array[Array[LogEntry]] = []
   for pair in body_lines(self) {
     let (number, line) = pair
     match parse_heading_line(line) {
-      Some((2, text)) =>
-        sections.push({ date: text, line: number, entries: [], })
+      Some((level, text)) if level.to_int() == 2 => {
+        heads.push((LogHeading::parse(text), number))
+        entries.push([])
+      }
       Some(_) => ()
       None =>
-        match (sections.last(), parse_log_entry(line, number)) {
-          (Some(section), Some(entry)) => section.entries.push(entry)
+        match (entries.last(), parse_log_entry(line, number)) {
+          (Some(list), Some(entry)) => list.push(entry)
           _ => ()
         }
     }
   }
-  { sections, }
+  let sections = heads.mapi((i, head) => {
+    heading: head.0,
+    line: head.1,
+    entries: ReadOnlyArray::from_array(entries[i]),
+  })
+  { sections: ReadOnlyArray::from_array(sections), }
 }
 
 ///|
-/// The first pair of sections whose dates are not newest first, if any.
+/// The first pair of dated sections that are not newest first, if any. The
+/// order comes from the dates, not from the heading text.
 pub fn LogModel::order_problem(self : LogModel) -> (LogSection, LogSection)? {
   for i in 1..<self.sections.length() {
     let a = self.sections[i - 1]
     let b = self.sections[i]
-    if is_date_text(a.date) && is_date_text(b.date) && a.date < b.date {
-      return Some((a, b))
+    match (a.heading, b.heading) {
+      (Dated(da), Dated(db)) if da < db => return Some((a, b))
+      _ => ()
     }
   }
   None
@@ -86,7 +123,7 @@ pub fn LogModel::order_problem(self : LogModel) -> (LogSection, LogSection)? {
 ///|
 /// The sections whose heading is not a `YYYY-MM-DD` date.
 pub fn LogModel::undated_sections(self : LogModel) -> Array[LogSection] {
-  self.sections.iter().filter(s => !is_date_text(s.date)).collect()
+  self.sections.iter().filter(s => s.heading is Undated(_)).collect()
 }
 
 ///|
@@ -114,7 +151,7 @@ pub fn find_region(text : String, name : String) -> Region? {
   let marker = marker_comment(name)
   for i, line in split_lines(text) {
     if line.text.trim(chars=" \t") == marker {
-      let end = line.start + line.text.length() + line.ending.length()
+      let end = line.start + line.text.length() + line.ending_text().length()
       return Some({
         marker: name,
         preamble: text[:end].to_owned(),
@@ -149,3 +186,12 @@ pub extend Region with Eq::{not_equal, equal}
 
 ///|
 pub extend Region with @debug.Debug::{to_repr}
+
+///|
+pub extend LogHeading with Eq::{not_equal, equal}
+
+///|
+pub extend LogHeading with @debug.Debug::{to_repr}
+
+///|
+pub extend LogHeading with Show::{output}

@@ -1,18 +1,18 @@
 ///|
 /// A ranked search request.
-pub(all) struct SearchRequest {
+pub struct SearchRequest {
   query : String
-  filters : Array[Filter]
-  limit : Int32
+  filters : ReadOnlyArray[Filter]
+  limit : SearchLimit
 } derive(Eq, Debug)
 
 ///|
 pub fn SearchRequest::SearchRequest(
   query : String,
   filters~ : ArrayView[Filter] = [],
-  limit~ : Int32 = 20,
+  limit~ : SearchLimit = SearchLimit::default(),
 ) -> SearchRequest {
-  { query, filters: filters.to_owned(), limit, }
+  { query, filters: ReadOnlyArray::from_array(filters.to_owned()), limit, }
 }
 
 ///|
@@ -87,10 +87,10 @@ pub fn search_knowledge(
   request : SearchRequest,
 ) -> Array[SearchHit] {
   let terms = tokenize(request.query)
-  if terms.is_empty() || request.limit <= 0 {
+  if terms.is_empty() {
     return []
   }
-  let candidates = knowledge.filter(request.filters)
+  let candidates = knowledge.filter(request.filters.iter().collect())
   let docs = candidates.map(pair => (pair, fields_of(pair.1)))
   let n = docs.length().to_double()
   let k1 = 1.2
@@ -149,8 +149,9 @@ pub fn search_knowledge(
       x.key.compare(y.key)
     }
   })
-  if hits.length() > request.limit {
-    hits[:request.limit].to_owned()
+  let limit = request.limit.to_int()
+  if hits.length() > limit {
+    hits[:limit].to_owned()
   } else {
     hits
   }

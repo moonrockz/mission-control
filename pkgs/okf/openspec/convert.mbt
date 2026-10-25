@@ -1,4 +1,14 @@
 ///|
+/// Raised by the conversions between `openspec/` trees and native bundles.
+pub(all) suberror ConvertError {
+  /// A concept has a `capability`, `change` or `requirement` value that is not
+  /// a valid name, so no safe path can be built from it.
+  BadName(NameError)
+  /// An index or log edit cannot apply.
+  EditFailed(@edit.EditError)
+} derive(Eq, Debug)
+
+///|
 /// The keys that import writes, in order, from the derived metadata.
 let import_keys : Array[String] = [
   "type", "title", "description", "capability", "change", "state", "heading",
@@ -26,12 +36,28 @@ fn description_of(doc : @okf.Document) -> String? {
 }
 
 ///|
-fn store_path(root : ArrayView[String], rel : String) -> @okf.StorePath raise {
-  if root.is_empty() {
-    @okf.StorePath(rel)
-  } else {
-    @okf.StorePath(root.iter().collect().join("/") + "/" + rel)
+/// The asset copies of a bundle into `target_root`.
+fn asset_changes(
+  set : @okf.DocumentSet,
+  bundle : @okf.Bundle,
+  target_root : @okf.StoreDir,
+) -> Array[@edit.FileChange] {
+  let out = []
+  for asset in bundle.assets() {
+    match set.get(bundle.store_path_of(asset)) {
+      Some(entry) => {
+        let path = target_root.resolve(asset)
+        out.push(
+          match entry.content {
+            Bytes(bytes) => @edit.FileChange::CreateBinary(path~, bytes~)
+            Text(text) => @edit.FileChange::Create(path~, text~)
+          },
+        )
+      }
+      None => ()
+    }
   }
+  out
 }
 
 ///|
@@ -42,13 +68,10 @@ fn store_path(root : ArrayView[String], rel : String) -> @okf.StorePath raise {
 /// files, such as `.openspec.yaml`, are copied as assets.
 pub fn import_openspec(
   set : @okf.DocumentSet,
-  source_root : ArrayView[String],
-  target_root : ArrayView[String],
-  date : String,
-) -> @edit.EditPlan raise {
-  guard @okf.Instant::parse_date(date) is Some(_) else {
-    raise InvalidDate(date)
-  }
+  source_root : @okf.StoreDir,
+  target_root : @okf.StoreDir,
+  date : @okf.LogDate,
+) -> @edit.EditPlan raise ConvertError {
   let profile : &@okf.Profile = OpenSpecProfile::{ }
   let bundle = @okf.load_bundle(set, root=source_root, profiles=[profile])
   let changes = []
@@ -71,43 +94,30 @@ pub fn import_openspec(
     lines.push("---")
     let text = lines.join("\n") + "\n" + doc.text()
     changes.push(
-      @edit.FileChange::Create(
-        path=store_path(target_root, doc.path().to_string()[1:].to_owned()),
-        text~,
-      ),
+      @edit.FileChange::Create(path=target_root.resolve(doc.path()), text~),
     )
     entries.push(
       (
-        meta.concept_type().unwrap_or(""),
+        meta.concept_type().map(t => t.to_string()).unwrap_or(""),
         doc.display_title(),
         doc.path().to_string(),
         description_of(doc),
       ),
     )
   }
-  for asset in bundle.assets() {
-    match set.get(bundle.store_path_of(asset)) {
-      Some(entry) => {
-        let path = store_path(target_root, asset.to_string()[1:].to_owned())
-        changes.push(
-          match entry.content {
-            Bytes(bytes) => @edit.FileChange::CreateBinary(path~, bytes~)
-            Text(text) => @edit.FileChange::Create(path~, text~)
-          },
-        )
-      }
-      None => ()
-    }
+  for change in asset_changes(set, bundle, target_root) {
+    changes.push(change)
   }
+  let index = index_text(entries) catch { e => raise EditFailed(e) }
   changes.push(
     @edit.FileChange::Create(
-      path=store_path(target_root, "index.md"),
-      text=index_text(entries),
+      path=target_root.resolve(@okf.BundlePath::root_index()),
+      text=index,
     ),
   )
   changes.push(
     @edit.FileChange::Create(
-      path=store_path(target_root, "log.md"),
+      path=target_root.resolve(@okf.BundlePath::root_log()),
       text="# Log\n\n## \{date}\n\n* **Creation**: Imported from OpenSpec.\n",
     ),
   )
@@ -132,7 +142,7 @@ fn index_text(
     let items = entries.iter().filter(e => e.0 == t).collect()
     items.sort_by((a, b) => @okf.lexical_compare(a.2, b.2))
     for e in items {
-      out.push(@edit.index_entry_line(e.1, e.2, description?=e.3))
+      out.push(@edit.IndexEntryLine(e.1, e.2, description?=e.3).to_string())
     }
     out.push("")
   }
@@ -140,98 +150,60 @@ fn index_text(
 }
 
 ///|
-/// The path of an OpenSpec file for a native concept, from its metadata.
-fn export_path(meta : @okf.Metadata) -> String? raise ConvertError {
-  let t = meta.concept_type().unwrap_or("")
-  let capability = () => {
-    match meta.text("capability") {
-      Some(c) => Some(check_name("capability", c, segments=true))
-      None => None
-    }
+/// The bundle path of an OpenSpec file for a native concept, from its type
+/// and its names. A concept without a name that its type needs has no path;
+/// a name that is not valid raises `BadName`.
+fn export_path(doc : @okf.Document) -> @okf.BundlePath? raise ConvertError {
+  guard type_of(doc) is Some(t) else { return None }
+  let meta = doc.metadata()
+  let capability = match meta.text("capability") {
+    Some(c) => Some(CapabilityPath(c) catch { e => raise BadName(e) })
+    None => None
   }
-  let change_dir = () => {
-    match meta.text("change") {
-      Some(c) => {
-        let c = check_name("change", c, segments=false)
-        Some(
-          if meta.text("state") == Some("archived") {
-            "changes/archive/\{c}"
-          } else {
-            "changes/\{c}"
-          },
-        )
+  let change_dir = match meta.text("change") {
+    Some(c) => {
+      let c = ChangeName(c) catch { e => raise BadName(e) }
+      Some(
+        if meta.text("state").bind(ChangeState::parse) is Some(Archived) {
+          "changes/archive/\{c}"
+        } else {
+          "changes/\{c}"
+        },
+      )
+    }
+    None => None
+  }
+  let text = match t {
+    Specification => capability.map(c => "specs/\{c}/spec.md")
+    ChangeProposal => change_dir.map(d => d + "/proposal.md")
+    Design => change_dir.map(d => d + "/design.md")
+    TaskList => change_dir.map(d => d + "/tasks.md")
+    SpecDelta =>
+      match (change_dir, capability) {
+        (Some(d), Some(c)) => Some("\{d}/specs/\{c}/spec.md")
+        _ => None
       }
-      None => None
-    }
+    RequirementConcept | ScenarioConcept => None
   }
-  if t == specification_type {
-    capability().map(c => "specs/\{c}/spec.md")
-  } else if t == change_type {
-    change_dir().map(d => d + "/proposal.md")
-  } else if t == design_type {
-    change_dir().map(d => d + "/design.md")
-  } else if t == tasks_type {
-    change_dir().map(d => d + "/tasks.md")
-  } else if t == delta_type {
-    match (change_dir(), capability()) {
-      (Some(d), Some(c)) => Some("\{d}/specs/\{c}/spec.md")
+  // Safe names give paths that stay inside the bundle.
+  text.bind(t => {
+    try @okf.BundlePath(t) catch {
       _ => None
+    } noraise {
+      p => Some(p)
     }
-  } else {
-    None
-  }
+  })
 }
 
 ///|
-/// Raised when a conversion cannot use a value of a concept.
-pub(all) suberror ConvertError {
-  /// A `capability` or `change` value that is not a safe OpenSpec name: an
-  /// empty segment, `.`, `..`, a segment that starts or ends with `.` or ends
-  /// with a space, a Windows device name such as `CON`, a control character, or
-  /// one of `\ : * ? " < > |` (and `/` outside the separators between
-  /// capability segments).
-  InvalidName(key~ : String, value~ : String)
-  /// A log date that is not a real calendar date in the form `YYYY-MM-DD`.
-  InvalidDate(String)
-} derive(Eq, Debug)
-
-///|
-/// Checks that `value` is a safe OpenSpec name, so that a path built from it
-/// stays inside the target directory. `segments=true` allows `/` between
-/// segments, as capability paths have.
-fn check_name(
-  key : String,
-  value : String,
-  segments~ : Bool,
-) -> String raise ConvertError {
-  let parts = if segments {
-    value.split("/").map(p => p.to_owned()).collect()
-  } else {
-    [value]
-  }
-  for part in parts {
-    let ok = part.length() > 0 &&
-      part != "." &&
-      part != ".." &&
-      !part.has_prefix(".") &&
-      !part.has_suffix(".") &&
-      !part.has_suffix(" ") &&
-      !is_windows_device(part) &&
-      part.iter().all(c => c.to_int() >= 32 && !"\\/:*?\"<>|".contains_char(c))
-    if !ok {
-      raise InvalidName(key~, value~)
-    }
-  }
-  value
-}
-
-///|
-/// True when `value` is a safe capability path.
-fn is_safe_capability(value : String) -> Bool {
-  try check_name("capability", value, segments=true) catch {
-    _ => false
-  } noraise {
-    _ => true
+/// The `requirement` value of a Requirement or Scenario concept. A concept
+/// without one has none; a value that is not a valid name raises `BadName`.
+fn export_requirement(
+  doc : @okf.Document,
+) -> RequirementName? raise ConvertError {
+  match doc.metadata().text("requirement") {
+    Some(text) => Some(RequirementName(text) catch { e => raise BadName(e) })
+    None => None
   }
 }
 
@@ -242,31 +214,29 @@ fn is_safe_capability(value : String) -> Bool {
 /// capability spec, in order. Assets are copied; `index.md` and `log.md` are not.
 pub fn export_openspec(
   set : @okf.DocumentSet,
-  source_root : ArrayView[String],
-  target_root : ArrayView[String],
-) -> @edit.EditPlan raise {
+  source_root : @okf.StoreDir,
+  target_root : @okf.StoreDir,
+) -> @edit.EditPlan raise ConvertError {
   let bundle = @okf.load_bundle(set, root=source_root)
   let changes = []
-  let requirements = of_type(bundle, requirement_type)
-  let scenarios = of_type(bundle, scenario_type)
+  let requirements = of_type(bundle, RequirementConcept)
+  let scenarios = of_type(bundle, ScenarioConcept)
   for doc in bundle.concepts() {
-    let meta = doc.metadata()
-    guard export_path(meta) is Some(rel) else { continue }
+    guard export_path(doc) is Some(rel) else { continue }
     let mut text = doc.body()
-    if meta.concept_type() == Some(specification_type) {
-      let cap = meta.text("capability").unwrap_or("")
+    if type_of(doc) is Some(Specification) {
+      let cap = capability_of(doc)
       let extra = []
       for r in requirements {
-        guard r.metadata().text("capability") == Some(cap) else { continue }
-        let name = r.metadata().text("requirement").unwrap_or(r.display_title())
+        guard capability_of(r) == cap else { continue }
+        guard export_requirement(r) is Some(name) else { continue }
         extra.push(
           "### Requirement: \{name}\n" +
           r.body().trim_end(chars="\n").to_owned() +
           "\n",
         )
         for s in scenarios {
-          if s.metadata().text("capability") == Some(cap) &&
-            s.metadata().text("requirement") == Some(name) {
+          if capability_of(s) == cap && export_requirement(s) == Some(name) {
             let sname = s
               .metadata()
               .text("scenario")
@@ -288,23 +258,10 @@ pub fn export_openspec(
           extra.join("\n")
       }
     }
-    changes.push(
-      @edit.FileChange::Create(path=store_path(target_root, rel), text~),
-    )
+    changes.push(@edit.FileChange::Create(path=target_root.resolve(rel), text~))
   }
-  for asset in bundle.assets() {
-    match set.get(bundle.store_path_of(asset)) {
-      Some(entry) => {
-        let path = store_path(target_root, asset.to_string()[1:].to_owned())
-        changes.push(
-          match entry.content {
-            Bytes(bytes) => @edit.FileChange::CreateBinary(path~, bytes~)
-            Text(text) => @edit.FileChange::Create(path~, text~)
-          },
-        )
-      }
-      None => ()
-    }
+  for change in asset_changes(set, bundle, target_root) {
+    changes.push(change)
   }
   @edit.EditPlan(changes)
 }
@@ -314,21 +271,3 @@ pub extend ConvertError with Eq::{not_equal, equal}
 
 ///|
 pub extend ConvertError with @debug.Debug::{to_repr}
-
-///|
-/// True for a Windows device name, such as `CON` or `com1.txt`, which a Windows
-/// file system cannot use as a file name.
-fn is_windows_device(part : String) -> Bool {
-  let stem = match part.find(".") {
-    Some(i) => part[:i].to_owned()
-    None => part
-  }
-  let upper = stem.to_upper()
-  ["CON", "PRN", "AUX", "NUL"].contains(upper) ||
-  (
-    upper.length() == 4 &&
-    (upper.has_prefix("COM") || upper.has_prefix("LPT")) &&
-    upper[3] >= '1' &&
-    upper[3] <= '9'
-  )
-}

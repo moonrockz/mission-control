@@ -3,11 +3,15 @@
 ## ADDED Requirements
 
 ### Requirement: Typed identifiers
-The library SHALL represent bundle labels, store directories, concept types and frontmatter keys as types whose constructors check their rules once: a label has one or more non-empty segments without `/`, `:` or white space; a directory has no empty, `.` or `..` segment; a concept type is not blank; a key is a plain key. A constructor SHALL raise a typed error that names the input and the broken rule.
+The library SHALL represent bundle labels, store directories, concept types and frontmatter keys as types whose constructors check their rules once: a label has one or more non-empty segments without `/`, `:` or a line break; a directory has no empty, `.` or `..` segment; a concept type is not blank; a key is a plain key. A constructor SHALL raise a typed error that names the input and the broken rule.
 
 #### Scenario: Invalid label
 - **WHEN** a caller builds a bundle label from `morphir//ir`
 - **THEN** the constructor raises an error that names `morphir//ir` and the empty segment
+
+#### Scenario: Label from a directory name
+- **WHEN** discovery finds the bundles `my notes/` and `a:b/`
+- **THEN** their labels are `my notes` and `a-b`, and each label parses back to the same label
 
 #### Scenario: Concept types compare without case
 - **WHEN** a caller compares the concept types `Decision Record` and `decision record`

@@ -17,11 +17,12 @@ pub fn FixedClock::FixedClock(instant : Instant) -> FixedClock {
 }
 
 ///|
-/// A fixed clock from an ISO 8601 datetime. Raises when the text does not parse.
-pub fn FixedClock::at(text : String) -> FixedClock raise {
+/// A fixed clock from an ISO 8601 datetime or a `YYYY-MM-DD` date. Raises
+/// `InvalidInstant` when the text does not parse.
+pub fn FixedClock::at(text : String) -> FixedClock raise ValueError {
   match Instant::parse(text, date_only=true) {
     Some(instant) => { instant, }
-    None => fail("not an ISO 8601 instant: \{text}")
+    None => raise InvalidInstant(text)
   }
 }
 

@@ -5,18 +5,13 @@ fn spec_docs(
   ctx.knowledge
   .concepts()
   .iter()
-  .filter(p => {
-    match p.1.metadata().concept_type() {
-      Some(t) => t == specification_type || t == delta_type
-      None => false
-    }
-  })
+  .filter(p => type_of(p.1) is Some(Specification | SpecDelta))
   .collect()
 }
 
 ///|
 fn all_requirements(model : SpecModel) -> Array[Requirement] {
-  let out = model.requirements.copy()
+  let out = model.requirements.iter().collect()
   for d in model.deltas {
     if d.op is (Added | Modified) {
       for r in d.requirements {
@@ -28,15 +23,17 @@ fn all_requirements(model : SpecModel) -> Array[Requirement] {
 }
 
 ///|
-fn model_of(doc : @okf.Document) -> SpecModel {
-  parse_spec(doc.metadata().text("capability").unwrap_or(""), doc.prose_lines())
+/// The model of a spec document, when its capability is a valid name.
+fn model_of(doc : @okf.Document) -> SpecModel? {
+  capability_of(doc).map(cap => parse_spec(cap, doc.prose_lines()))
 }
 
 ///|
 fn check_no_scenario(ctx : @okf.ValidationContext) -> Array[@okf.Issue] {
   let out = []
   for pair in spec_docs(ctx) {
-    for r in all_requirements(model_of(pair.1)) {
+    guard model_of(pair.1) is Some(model) else { continue }
+    for r in all_requirements(model) {
       if r.scenarios.is_empty() {
         out.push(
           @okf.Issue::at(
@@ -56,7 +53,8 @@ fn check_no_scenario(ctx : @okf.ValidationContext) -> Array[@okf.Issue] {
 fn check_no_shall(ctx : @okf.ValidationContext) -> Array[@okf.Issue] {
   let out = []
   for pair in spec_docs(ctx) {
-    for r in all_requirements(model_of(pair.1)) {
+    guard model_of(pair.1) is Some(model) else { continue }
+    for r in all_requirements(model) {
       if !r.text.contains("SHALL") && !r.text.contains("MUST") {
         out.push(
           @okf.Issue::at(
@@ -100,12 +98,14 @@ fn check_scenario_headings(ctx : @okf.ValidationContext) -> Array[@okf.Issue] {
 
 ///|
 /// The main spec of each capability.
-fn main_specs(ctx : @okf.ValidationContext) -> Map[String, SpecModel] {
-  let out : Map[String, SpecModel] = Map([])
+fn main_specs(ctx : @okf.ValidationContext) -> Map[CapabilityPath, SpecModel] {
+  let out : Map[CapabilityPath, SpecModel] = Map([])
   for pair in spec_docs(ctx) {
-    if pair.1.metadata().concept_type() == Some(specification_type) {
-      let m = model_of(pair.1)
-      out[m.capability] = m
+    if type_of(pair.1) is Some(Specification) {
+      match model_of(pair.1) {
+        Some(m) => out[m.capability] = m
+        None => ()
+      }
     }
   }
   out
@@ -116,13 +116,13 @@ fn check_modified_unknown(ctx : @okf.ValidationContext) -> Array[@okf.Issue] {
   let mains = main_specs(ctx)
   let out = []
   for pair in spec_docs(ctx) {
-    guard pair.1.metadata().concept_type() == Some(delta_type) else { continue }
-    let m = model_of(pair.1)
+    guard type_of(pair.1) is Some(SpecDelta) else { continue }
+    guard model_of(pair.1) is Some(m) else { continue }
     guard mains.get(m.capability) is Some(main) else { continue }
     for d in m.deltas {
       if d.op is (Modified | Removed) {
         for r in d.requirements {
-          if !main.requirements.any(x => x.name == r.name) {
+          if !main.requirements.iter().any(x => x.name == r.name) {
             out.push(
               @okf.Issue::at(
                 pair.0,
@@ -144,9 +144,10 @@ fn check_unknown_capability(ctx : @okf.ValidationContext) -> Array[@okf.Issue] {
   let mains = main_specs(ctx)
   let out = []
   for pair in spec_docs(ctx) {
-    guard pair.1.metadata().concept_type() == Some(delta_type) else { continue }
-    let m = model_of(pair.1)
-    if !mains.contains(m.capability) && m.deltas.any(d => !(d.op is Added)) {
+    guard type_of(pair.1) is Some(SpecDelta) else { continue }
+    guard model_of(pair.1) is Some(m) else { continue }
+    if !mains.contains(m.capability) &&
+      m.deltas.iter().any(d => !(d.op is Added)) {
       out.push(
         @okf.Issue::at(
           pair.0,
@@ -160,18 +161,124 @@ fn check_unknown_capability(ctx : @okf.ValidationContext) -> Array[@okf.Issue] {
 }
 
 ///|
-/// The OpenSpec checks: the three that `openspec validate --strict` runs, and
-/// the two that OpenSpec runs only when it archives a change.
+fn check_incomplete_renames(ctx : @okf.ValidationContext) -> Array[@okf.Issue] {
+  let out = []
+  for pair in spec_docs(ctx) {
+    guard model_of(pair.1) is Some(m) else { continue }
+    for d in m.deltas {
+      for r in d.incomplete_renames {
+        let issue = match r {
+          MissingTo(from~, line~) =>
+            @okf.Issue::at(
+              pair.0,
+              pair.1,
+              "the rename of `\{from}` has no `TO:` line",
+              line~,
+              hint="Write `- TO: ### Requirement: <new name>` after the `FROM:` line.",
+            )
+          MissingFrom(to~, line~) =>
+            @okf.Issue::at(
+              pair.0,
+              pair.1,
+              "the rename to `\{to}` has no `FROM:` line",
+              line~,
+              hint="Write `- FROM: ### Requirement: <old name>` before the `TO:` line.",
+            )
+        }
+        out.push(issue)
+      }
+    }
+  }
+  out
+}
+
+///|
+/// The name keys that each OpenSpec type needs.
+fn name_keys(t : OpenSpecType) -> Array[String] {
+  match t {
+    Specification => ["capability"]
+    ChangeProposal | Design | TaskList => ["change"]
+    SpecDelta => ["change", "capability"]
+    RequirementConcept => ["capability", "requirement"]
+    ScenarioConcept => ["capability", "requirement"]
+  }
+}
+
+///|
+fn check_invalid_names(ctx : @okf.ValidationContext) -> Array[@okf.Issue] {
+  let out = []
+  for pair in ctx.knowledge.concepts() {
+    let (bundle, doc) = pair
+    guard type_of(doc) is Some(t) else { continue }
+    for key in name_keys(t) {
+      let valid = match key {
+        "capability" => capability_of(doc) is Some(_)
+        "change" => change_of(doc) is Some(_)
+        _ => requirement_of(doc, key) is Some(_)
+      }
+      guard !valid else { continue }
+      let message = match doc.metadata().text(key) {
+        Some(value) => "the `\{key}` value `\{value}` is not a valid name"
+        None => "the \{t} concept has no `\{key}`"
+      }
+      out.push(
+        @okf.Issue::at(bundle, doc, message, line?=doc.metadata().line_of(key)),
+      )
+    }
+    match doc.metadata().text("state") {
+      Some(value) if ChangeState::parse(value) is None =>
+        out.push(
+          @okf.Issue::at(
+            bundle,
+            doc,
+            "the `state` value `\{value}` is not `active` or `archived`",
+            line?=doc.metadata().line_of("state"),
+          ),
+        )
+      _ => ()
+    }
+  }
+  for pair in spec_docs(ctx) {
+    guard model_of(pair.1) is Some(model) else { continue }
+    for line in model.unnamed_requirements {
+      out.push(
+        @okf.Issue::at(
+          pair.0,
+          pair.1,
+          "a requirement heading has no name",
+          line~,
+          hint="Write `### Requirement: <name>`.",
+        ),
+      )
+    }
+  }
+  out
+}
+
+///|
+/// A rule with a name that this package writes in code.
+fn rule(
+  name : String,
+  check : (@okf.ValidationContext) -> Array[@okf.Issue],
+) -> @okf.Rule {
+  let name = @okf.RuleName(name) catch {
+    _ => abort("an OpenSpec rule name is not kebab case: \{name}")
+  }
+  @okf.Rule(name, Error, check)
+}
+
+///|
+/// The OpenSpec checks: the three that `openspec validate --strict` runs, the
+/// two that OpenSpec runs only when it archives a change, and two for content
+/// that the view leaves out: incomplete renames and invalid names.
 pub fn openspec_checks() -> @okf.RuleSet {
   @okf.RuleSet("openspec", [
-    @okf.Rule("openspec-requirement-no-scenario", Error, check_no_scenario),
-    @okf.Rule("openspec-requirement-no-shall", Error, check_no_shall),
-    @okf.Rule("openspec-scenario-heading", Error, check_scenario_headings),
-    @okf.Rule("openspec-modified-unknown", Error, check_modified_unknown),
-    @okf.Rule(
-      "openspec-delta-unknown-capability",
-      Error,
-      check_unknown_capability,
-    ),
+    rule("openspec-requirement-no-scenario", check_no_scenario),
+    rule("openspec-requirement-no-shall", check_no_shall),
+    rule("openspec-scenario-heading", check_scenario_headings),
+    rule("openspec-modified-unknown", check_modified_unknown),
+    rule("openspec-delta-unknown-capability", check_unknown_capability),
+    rule("openspec-rename-incomplete", check_incomplete_renames),
+    rule("openspec-invalid-name", check_invalid_names),
   ])
 }

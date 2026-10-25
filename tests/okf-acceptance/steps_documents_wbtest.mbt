@@ -31,7 +31,9 @@ fn configure_documents(world : OkfWorld, setup : @moonspec.Setup) -> Unit {
       [b, ..] => b
       [] => fail("no bundle")
     }
-    @expect.expect(b.okf_version()).to_equal(Some(version))
+    @expect.expect(b.okf_version().map(v => v.to_string())).to_equal(
+      Some(version),
+    )
   })
   setup.then2("the keys of {string} are {string}", (
     path : String,
@@ -110,7 +112,7 @@ fn configure_documents(world : OkfWorld, setup : @moonspec.Setup) -> Unit {
     let actual = world
       .loaded()
       .bundles()
-      .map(b => [b.label(), b.group().join("/")])
+      .map(b => [b.label().to_string(), b.group().join("/")])
       .iter()
       .collect()
     @expect.expect(actual).to_equal(table_rows(table, ["label", "group"]))

@@ -2,6 +2,7 @@ pkgtype(kind: "executable")
 
 import {
   "moonbitlang/async",
+  "moonrockz/okf",
   "moonrockz/okf/fs/browser",
   "moonrockz/okf/conformance",
 }

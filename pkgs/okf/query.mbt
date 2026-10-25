@@ -1,16 +1,16 @@
 ///|
 /// A filter on concepts. Text comparison ignores letter case.
 pub(all) enum Filter {
-  /// `type` equals the value.
-  TypeIs(String)
-  /// The effective status equals the value.
-  StatusIs(String)
-  /// `tags` contains the value.
+  /// `type` equals the concept type.
+  TypeIs(ConceptType)
+  /// The effective status equals the status.
+  StatusIs(Status)
+  /// `tags` contains the tag.
   HasTag(String)
-  /// The bundle label or name equals the value.
-  InBundle(String)
+  /// The bundle label equals the label; a bare label also matches the bundle name.
+  InBundle(BundleLabel)
   /// The frontmatter key has the value (as text, or as one item of a list).
-  FieldIs(String, String)
+  FieldIs(FieldKey, String)
 } derive(Eq, Debug)
 
 ///|
@@ -19,19 +19,17 @@ pub fn Filter::matches(self : Filter, bundle : Bundle, doc : Document) -> Bool {
   let meta = doc.metadata()
   let eq = (a : String, b : String) => a.to_lower() == b.to_lower()
   match self {
-    TypeIs(t) =>
-      match meta.concept_type() {
-        Some(v) => eq(v, t)
-        None => false
-      }
+    TypeIs(t) => meta.concept_type() == Some(t)
     StatusIs(s) =>
       match meta.effective_status(options=bundle.options()) {
-        Some(v) => eq(v.to_string(), s)
+        Some(v) => eq(v.to_string(), s.to_string())
         None => false
       }
     HasTag(tag) => meta.tags().any(v => eq(v, tag))
-    InBundle(label) => eq(bundle.label(), label) || eq(bundle.name(), label)
-    FieldIs(key, value) => meta.texts(key).any(v => eq(v, value))
+    InBundle(label) =>
+      eq(bundle.label().to_string(), label.to_string()) ||
+      (label.is_bare() && eq(bundle.name(), label.name()))
+    FieldIs(key, value) => meta.texts(key.to_string()).any(v => eq(v, value))
   }
 }
 
@@ -49,32 +47,46 @@ pub fn Knowledge::filter(
 }
 
 ///|
+/// What a facet counts.
+pub(all) enum Facet {
+  /// The concept types.
+  Type
+  /// The effective statuses.
+  StatusFacet
+  /// The tags.
+  Tags
+  /// The bundle labels.
+  Bundles
+  /// The values of a frontmatter key.
+  Field(FieldKey)
+} derive(Eq, Debug)
+
+///|
 /// The values of a facet over the concepts that match `filters`, with their
-/// counts, most frequent first. The keys `type`, `status` and `tags` use the
-/// typed fields; other keys read the frontmatter as text.
+/// counts, most frequent first.
 pub fn Knowledge::facet(
   self : Knowledge,
-  key : String,
+  facet : Facet,
   filters~ : ArrayView[Filter] = [],
 ) -> Array[(String, Int32)] {
   let counts : Map[String, Int32] = Map([])
   for pair in self.filter(filters) {
     let (bundle, doc) = pair
     let meta = doc.metadata()
-    let values = match key {
-      "type" =>
+    let values = match facet {
+      Type =>
         match meta.concept_type() {
-          Some(t) => [t]
+          Some(t) => [t.to_string()]
           None => []
         }
-      "status" =>
+      StatusFacet =>
         match meta.effective_status(options=bundle.options()) {
           Some(s) => [s.to_string()]
           None => []
         }
-      "tags" => meta.tags()
-      "bundle" => [bundle.label()]
-      _ => meta.texts(key)
+      Tags => meta.tags()
+      Bundles => [bundle.label().to_string()]
+      Field(key) => meta.texts(key.to_string())
     }
     for v in values {
       counts[v] = counts.get(v).unwrap_or(0) + 1
@@ -92,13 +104,23 @@ pub fn Knowledge::facet(
 }
 
 ///|
+/// A field that a text scan can match.
+pub(all) enum ScanField {
+  TitleField
+  DescriptionField
+  TypeField
+  TagsField
+  PathField
+} derive(Eq, Debug)
+
+///|
 /// One result of a text scan.
-pub(all) struct ScanHit {
+pub struct ScanHit {
   key : DocKey
-  /// The fields that contain the text: `title`, `description`, `type`, `tags` or `path`.
-  fields : Array[String]
+  /// The fields that contain the text.
+  fields : ReadOnlyArray[ScanField]
   /// The body lines that contain the text, as (file line, line text).
-  lines : Array[(Int32, String)]
+  lines : ReadOnlyArray[(Int32, String)]
 } derive(Eq, Debug)
 
 ///|
@@ -115,21 +137,23 @@ pub fn Knowledge::scan(
   for pair in self.filter(filters) {
     let (bundle, doc) = pair
     let meta = doc.metadata()
-    let fields = []
+    let fields : Array[ScanField] = []
     if doc.display_title().to_lower().contains(needle) {
-      fields.push("title")
+      fields.push(TitleField)
     }
     if meta.description().unwrap_or("").to_lower().contains(needle) {
-      fields.push("description")
+      fields.push(DescriptionField)
     }
-    if meta.concept_type().unwrap_or("").to_lower().contains(needle) {
-      fields.push("type")
+    match meta.concept_type() {
+      Some(t) if t.to_string().to_lower().contains(needle) =>
+        fields.push(TypeField)
+      _ => ()
     }
     if meta.tags().any(t => t.to_lower().contains(needle)) {
-      fields.push("tags")
+      fields.push(TagsField)
     }
     if doc.path().to_string().to_lower().contains(needle) {
-      fields.push("path")
+      fields.push(PathField)
     }
     let lines = []
     if bodies {
@@ -140,7 +164,11 @@ pub fn Knowledge::scan(
       }
     }
     if !fields.is_empty() || !lines.is_empty() {
-      out.push({ key: DocKey::of(bundle, doc), fields, lines, })
+      out.push({
+        key: DocKey::of(bundle, doc),
+        fields: ReadOnlyArray::from_array(fields),
+        lines: ReadOnlyArray::from_array(lines),
+      })
     }
   }
   out
@@ -152,13 +180,13 @@ pub fn Knowledge::scan(
 pub fn Knowledge::find_document(
   self : Knowledge,
   path : String,
-  bundle? : String,
+  bundle? : BundleLabel,
 ) -> Lookup[(Bundle, Document)] {
   let bundles = match bundle {
     Some(label) =>
       match self.bundle(label) {
         Found(b) => [b]
-        Ambiguous(list) => list
+        Ambiguous(list) => list.iter().collect()
         NotFound => []
       }
     None => self.bundles.iter().collect()
@@ -191,8 +219,8 @@ pub fn Knowledge::find_document(
 
 ///|
 /// One heading of a document outline.
-pub(all) struct Heading {
-  level : Int32
+pub struct Heading {
+  level : HeadingLevel
   text : String
   slug : String
   line : Int32
@@ -245,7 +273,7 @@ pub fn Document::outline(self : Document) -> Array[Heading] {
               }
             }
             out.push({
-              level,
+              level: HeadingLevel::of_parser(level),
               text,
               slug,
               line: self.file_line(line_of_loc(view.location())),
@@ -309,11 +337,11 @@ pub fn Document::code_blocks(self : Document) -> Array[CodeBlock] {
 
 ///|
 /// The content under one heading, up to the next heading of the same or a higher level.
-pub(all) struct SectionContent {
+pub struct SectionContent {
   heading : Heading
   /// The raw Markdown lines of the section, without the heading line.
   text : String
-  code_blocks : Array[CodeBlock]
+  code_blocks : ReadOnlyArray[CodeBlock]
 } derive(Eq, Debug)
 
 ///|
@@ -344,7 +372,11 @@ pub fn Document::section(self : Document, heading : String) -> SectionContent? {
     .iter()
     .filter(c => c.line > h.line && c.line < end_line)
     .collect()
-  Some({ heading: h, text: lines.join("\n"), code_blocks, })
+  Some({
+    heading: h,
+    text: lines.join("\n"),
+    code_blocks: ReadOnlyArray::from_array(code_blocks),
+  })
 }
 
 ///|
@@ -376,3 +408,15 @@ pub extend SectionContent with Eq::{not_equal, equal}
 
 ///|
 pub extend SectionContent with @debug.Debug::{to_repr}
+
+///|
+pub extend Facet with Eq::{not_equal, equal}
+
+///|
+pub extend Facet with @debug.Debug::{to_repr}
+
+///|
+pub extend ScanField with Eq::{not_equal, equal}
+
+///|
+pub extend ScanField with @debug.Debug::{to_repr}

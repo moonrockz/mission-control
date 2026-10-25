@@ -19,17 +19,14 @@ pub(all) suberror EditError {
   NoEntry(String)
   /// The marker comment is not in the text.
   NoRegion(String)
-  /// A frontmatter key that is not a plain key: a letter, a digit or `_` first,
-  /// then letters, digits, `_`, `.` or `-`.
-  InvalidKey(String)
   /// A raw YAML value whose later lines are not indented, so it would add keys
   /// or close the frontmatter block.
-  InvalidValue(key~ : String, value~ : String)
-  /// A log date that is not a real calendar date in the form `YYYY-MM-DD`.
-  InvalidDate(String)
+  InvalidValue(String)
   /// A text that must be one line, such as a log message or an index entry
   /// title, has a line break.
   LineBreak(field~ : String, text~ : String)
+  /// A text that must not be blank, such as a section name, is blank.
+  BlankText(field~ : String, text~ : String)
 } derive(Eq, Debug)
 
 ///|
@@ -38,51 +35,6 @@ pub(all) suberror EditError {
 fn check_one_line(field : String, text : String) -> Unit raise EditError {
   if text.contains("\n") || text.contains("\r") {
     raise LineBreak(field~, text~)
-  }
-}
-
-///|
-/// Checks a top-level frontmatter key, so that an edit cannot write a line that
-/// YAML reads as another key or as the end of the block.
-fn check_key(key : String) -> Unit raise EditError {
-  // Only plain keys: a letter, a digit or `_` first, then letters, digits,
-  // `_`, `.` or `-`. Quoted, anchored, tagged or padded keys read as another key.
-  let first_ok = (c : Char) => {
-    (c >= 'a' && c <= 'z') ||
-    (c >= 'A' && c <= 'Z') ||
-    (c >= '0' && c <= '9') ||
-    c == '_'
-  }
-  let ok = key.length() > 0 &&
-    first_ok(key.get_char(0).unwrap_or(' ')) &&
-    key.iter().all(c => first_ok(c) || c == '.' || c == '-')
-  if !ok {
-    raise InvalidKey(key)
-  }
-}
-
-///|
-/// Checks a raw YAML value: it is one line, or its later lines are indented
-/// continuation lines.
-fn check_value(key : String, value : String) -> Unit raise EditError {
-  let lines = @okf.split_lines(value)
-  for i, line in lines {
-    if i == 0 {
-      continue
-    }
-    let t = line.text
-    if t.length() > 0 && !t.has_prefix(" ") && !t.has_prefix("\t") {
-      raise InvalidValue(key~, value~)
-    }
-  }
-}
-
-///|
-/// Checks that a date is a real calendar date in the form `YYYY-MM-DD`, with
-/// the one shared rule `@okf.Instant::parse_date`.
-fn check_date(date : String) -> Unit raise EditError {
-  guard @okf.Instant::parse_date(date) is Some(_) else {
-    raise InvalidDate(date)
   }
 }
 
@@ -122,18 +74,31 @@ pub fn yaml_scalar(value : String) -> String {
 ///|
 /// The parts of a text around its frontmatter block.
 priv struct Located {
-  lines : Array[@okf.Line]
+  lines : Array[TextLine]
   /// The index of the opening `---` line, or -1 without a block.
   open : Int32
   /// The index of the closing line.
   close : Int32
-  ending : String
+  ending : @okf.LineEnding
+}
+
+///|
+/// A line that an edit keeps or writes.
+priv struct TextLine {
+  text : String
+  /// A last line can have no line ending.
+  ending : @okf.LineEnding?
+}
+
+///|
+fn text_lines(text : String) -> Array[TextLine] {
+  @okf.split_lines(text).map(l => { text: l.text, ending: l.ending, })
 }
 
 ///|
 fn locate(text : String) -> Located raise EditError {
-  let lines = @okf.split_lines(text)
-  let ending = @okf.detect_line_ending(text).text()
+  let lines = text_lines(text)
+  let ending = @okf.detect_line_ending(text)
   let header = @okf.split_header(text)
   match header.shape {
     NoBlock => { lines, open: -1, close: -1, ending, }
@@ -147,18 +112,21 @@ fn locate(text : String) -> Located raise EditError {
 }
 
 ///|
-fn join_lines(lines : Array[@okf.Line]) -> String {
+fn join_lines(lines : Array[TextLine]) -> String {
   let out = StringBuilder()
   for l in lines {
     out.write_string(l.text)
-    out.write_string(l.ending)
+    match l.ending {
+      Some(e) => out.write_string(e.text())
+      None => ()
+    }
   }
   out.to_string()
 }
 
 ///|
-fn line(text : String, ending : String) -> @okf.Line {
-  { text, start: 0, ending, }
+fn line(text : String, ending : @okf.LineEnding?) -> TextLine {
+  { text, ending, }
 }
 
 ///|
@@ -170,21 +138,17 @@ fn raw_block(loc : Located) -> String {
 ///|
 /// Sets top-level frontmatter keys to raw YAML values (`Some`) or removes them
 /// (`None`). A new key goes after the last non-blank frontmatter line. Every
-/// other byte stays the same. Without a block, a new block is added.
+/// other byte stays the same. Without a block, a new block is added. The key
+/// and value types already hold their rules, so only a broken frontmatter
+/// block raises.
 pub fn set_raw_keys(
   text : String,
-  updates : ArrayView[(String, String?)],
+  updates : ArrayView[(@okf.FieldKey, RawYaml?)],
 ) -> EditResult raise EditError {
-  for update in updates {
-    check_key(update.0)
-    match update.1 {
-      Some(v) => check_value(update.0, v)
-      None => ()
-    }
-  }
   let mut current = text
   for update in updates {
-    let (key, value) = update
+    let key = update.0.to_string()
+    let value = update.1.map(v => v.to_string())
     let loc = locate(current)
     let lines = loc.lines.copy()
     if loc.open < 0 {
@@ -194,7 +158,7 @@ pub fn set_raw_keys(
           let bom = current.length() > 0 && current[0] == 0xFEFF
           let rest = if bom { current[1:].to_owned() } else { current }
           let prefix = if bom { "\u{FEFF}" } else { "" }
-          let e = loc.ending
+          let e = loc.ending.text()
           current = "\{prefix}---\{e}\{key}: \{v}\{e}---\{e}\{rest}"
         }
       }
@@ -231,7 +195,7 @@ pub fn set_raw_keys(
         // The line before the insertion point may lack an ending when the
         // block was empty; a delimiter line always has one.
         let out = lines[:at].to_owned()
-        out.push(line("\{key}: \{v}", loc.ending))
+        out.push(line("\{key}: \{v}", Some(loc.ending)))
         for l in lines[at:] {
           out.push(l)
         }
@@ -247,46 +211,29 @@ pub fn set_raw_keys(
 /// Sets a top-level frontmatter key to a scalar, quoted when YAML needs it.
 pub fn set_key(
   text : String,
-  key : String,
+  key : @okf.FieldKey,
   value : String,
 ) -> EditResult raise EditError {
-  set_raw_keys(text, [(key, Some(yaml_scalar(value)))])
+  set_raw_keys(text, [(key, Some(RawYaml::scalar(value)))])
 }
 
 ///|
 /// Sets a top-level frontmatter key to a list of scalars, in flow form.
 pub fn set_list_key(
   text : String,
-  key : String,
+  key : @okf.FieldKey,
   values : ArrayView[String],
 ) -> EditResult raise EditError {
-  let items = values.iter().map(yaml_scalar).collect().join(", ")
-  set_raw_keys(text, [(key, Some("[\{items}]"))])
+  set_raw_keys(text, [(key, Some(RawYaml::list(values)))])
 }
 
 ///|
 /// Removes a top-level frontmatter key and its value lines.
-pub fn remove_key(text : String, key : String) -> EditResult raise EditError {
+pub fn remove_key(
+  text : String,
+  key : @okf.FieldKey,
+) -> EditResult raise EditError {
   set_raw_keys(text, [(key, None)])
-}
-
-///|
-/// The line of an index entry: `* [title](destination) - description`.
-pub fn index_entry_line(
-  title : String,
-  destination : String,
-  description? : String,
-) -> String raise EditError {
-  check_one_line("title", title)
-  check_one_line("destination", destination)
-  match description {
-    Some(d) => check_one_line("description", d)
-    None => ()
-  }
-  match description {
-    Some(d) if d.length() > 0 => "* [\{title}](\{destination}) - \{d}"
-    _ => "* [\{title}](\{destination})"
-  }
 }
 
 ///|
@@ -294,12 +241,14 @@ pub fn index_entry_line(
 /// entry. Without the section, a `# heading` section is added at the end.
 pub fn add_index_entry(
   text : String,
-  section : String,
-  entry : String,
+  section : SectionName,
+  entry : IndexEntryLine,
 ) -> EditResult raise EditError {
+  let entry = entry.to_string()
+  let section = section.to_string()
   let loc = locate(text)
   let lines = loc.lines.copy()
-  let e = loc.ending
+  let e = loc.ending.text()
   let body_start = if loc.open < 0 { 0 } else { loc.close + 1 }
   // Find the section heading and the end of the section.
   let mut heading_at = -1
@@ -349,10 +298,10 @@ pub fn add_index_entry(
     heading_at + 1
   }
   let out = lines[:at].to_owned()
-  if at > 0 && out[at - 1].ending == "" {
-    out[at - 1] = { ..out[at - 1], ending: e, }
+  if at > 0 && out[at - 1].ending is None {
+    out[at - 1] = { ..out[at - 1], ending: Some(loc.ending), }
   }
-  out.push(line(entry, e))
+  out.push(line(entry, Some(loc.ending)))
   for l in lines[at:] {
     out.push(l)
   }
@@ -389,7 +338,7 @@ pub fn refresh_index_entry(
   destination : String,
   description : String,
 ) -> EditResult raise EditError {
-  let lines = @okf.split_lines(text)
+  let lines = text_lines(text)
   let out = lines.copy()
   let mut found = false
   for i, l in lines {
@@ -399,7 +348,7 @@ pub fn refresh_index_entry(
         let trimmed = l.text.trim_start(chars=" \t").to_owned()
         let indent = l.text[:l.text.length() - trimmed.length()].to_owned()
         let marker = trimmed[0:1].to_owned()
-        let tail = index_entry_line(entry.text, entry.destination, description~)[1:].to_owned()
+        let tail = IndexEntryLine(entry.text, entry.destination, description~).to_string()[1:].to_owned()
         out[i] = { ..l, text: indent + marker + tail, }
       }
       _ => ()
@@ -416,11 +365,10 @@ pub fn refresh_index_entry(
 /// added in newest-first order. `label` gives the bold first word.
 pub fn add_log_entry(
   text : String,
-  date : String,
+  date : @okf.LogDate,
   message : String,
   label? : String,
 ) -> EditResult raise EditError {
-  check_date(date)
   check_one_line("message", message)
   match label {
     Some(l) => check_one_line("label", l)
@@ -428,7 +376,7 @@ pub fn add_log_entry(
   }
   let loc = locate(text)
   let lines = loc.lines.copy()
-  let e = loc.ending
+  let e = loc.ending.text()
   let entry = match label {
     Some(l) => "* **\{l}**: \{message}"
     None => "* \{message}"
@@ -440,11 +388,17 @@ pub fn add_log_entry(
     let t = lines[i].text
     if t.has_prefix("## ") {
       let d = t[3:].trim(chars=" \t").to_owned()
-      if d == date {
+      if d == date.to_string() {
         section_at = i
         break
       }
-      if insert_section_at < 0 && @okf.lexical_compare(d, date) < 0 {
+      // A dated heading orders by its date; any other heading by its text.
+      let older = try @okf.LogDate(d) catch {
+        _ => @okf.lexical_compare(d, date.to_string()) < 0
+      } noraise {
+        other => other < date
+      }
+      if insert_section_at < 0 && older {
         insert_section_at = i
       }
     }
@@ -465,16 +419,21 @@ pub fn add_log_entry(
       i += 1
     }
     let out = lines[:at].to_owned()
-    if at > 0 && out[at - 1].ending == "" {
-      out[at - 1] = { ..out[at - 1], ending: e, }
+    if at > 0 && out[at - 1].ending is None {
+      out[at - 1] = { ..out[at - 1], ending: Some(loc.ending), }
     }
-    out.push(line(entry, e))
+    out.push(line(entry, Some(loc.ending)))
     for l in lines[at:] {
       out.push(l)
     }
     return result_of(text, join_lines(out))
   }
-  let block = [line("## \{date}", e), line("", e), line(entry, e), line("", e)]
+  let block = [
+    line("## \{date}", Some(loc.ending)),
+    line("", Some(loc.ending)),
+    line(entry, Some(loc.ending)),
+    line("", Some(loc.ending)),
+  ]
   if insert_section_at >= 0 {
     let out = lines[:insert_section_at].to_owned()
     for l in block {

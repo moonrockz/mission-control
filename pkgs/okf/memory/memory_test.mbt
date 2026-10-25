@@ -5,7 +5,10 @@ async test "the in-memory store meets the store contract" {
 
 ///|
 async test "the in-memory store meets the contract under a prefix" {
-  @conformance.check_store(@memory.MemoryStore(), prefix=["kb", "bundles"])
+  @conformance.check_store(
+    @memory.MemoryStore(),
+    prefix=@okf.StoreDir("kb/bundles"),
+  )
 }
 
 ///|
@@ -24,13 +27,13 @@ async test "the in-memory index meets the search contract" {
 ///|
 async test "a read-only store refuses writes" {
   let store = @memory.MemoryStore(read_only=true)
-  let refused = try store.write_text(@okf.StorePath("a.md"), "x") catch {
-    @provider.PermissionDenied(_) => true
-    _ => false
+  let path = @okf.StorePath("a.md")
+  let refused = try store.write_text(path, "x") catch {
+    e => Some(e)
   } noraise {
-    _ => false
+    _ => None
   }
-  assert_true(refused)
+  assert_eq(refused, Some(@provider.PermissionDenied(FileAt(path))))
 }
 
 ///|

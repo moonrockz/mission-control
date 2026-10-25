@@ -54,7 +54,7 @@ fn MemoryStore::write(
   content : @okf.FileContent,
 ) -> Unit raise @provider.StoreError {
   if self.read_only {
-    raise PermissionDenied(path.to_string())
+    raise PermissionDenied(FileAt(path))
   }
   let now = match self.clock {
     Some(c) => Some(c.now())
@@ -65,14 +65,14 @@ fn MemoryStore::write(
 
 ///|
 pub impl @provider.DocumentStore for MemoryStore with fn list(self, dir) {
-  let dir = dir.to_owned()
+  let depth = dir.segments().length()
   let names : Map[String, @provider.EntryKind] = Map([])
   for pair in self.files.val {
     let path = pair.0
-    if dir.is_empty() || path.is_under(dir) {
+    if path.is_under(dir) {
       let segments = path.segments()
-      let name = segments[dir.length()]
-      let kind : @provider.EntryKind = if segments.length() == dir.length() + 1 {
+      let name = segments[depth]
+      let kind : @provider.EntryKind = if segments.length() == depth + 1 {
         File
       } else {
         Directory
@@ -80,14 +80,18 @@ pub impl @provider.DocumentStore for MemoryStore with fn list(self, dir) {
       names[name] = kind
     }
   }
-  if names.is_empty() && !dir.is_empty() {
-    raise NotFound(dir.join("/"))
+  if names.is_empty() && !dir.is_root() {
+    raise NotFound(DirectoryAt(dir))
   }
-  let out = names
-    .iter()
-    .map(p => @provider.StoreEntry::{ name: p.0, kind: p.1, })
-    .collect()
-  out.sort_by((a, b) => @okf.lexical_compare(a.name, b.name))
+  let out = []
+  for pair in names {
+    // A segment of a store path is always a valid entry name.
+    let name = @okf.EntryName(pair.0) catch { _ => continue }
+    out.push(@provider.StoreEntry::{ name, kind: pair.1, })
+  }
+  out.sort_by((a, b) => {
+    @okf.lexical_compare(a.name.to_string(), b.name.to_string())
+  })
   out
 }
 
@@ -95,7 +99,7 @@ pub impl @provider.DocumentStore for MemoryStore with fn list(self, dir) {
 pub impl @provider.DocumentStore for MemoryStore with fn read_text(self, path) {
   match self.files.val.get(path) {
     Some((content, _)) => content.text()
-    None => raise NotFound(path.to_string())
+    None => raise NotFound(FileAt(path))
   }
 }
 
@@ -104,7 +108,7 @@ pub impl @provider.DocumentStore for MemoryStore with fn read_bytes(self, path) 
   match self.files.val.get(path) {
     Some((Bytes(b), _)) => b
     Some((Text(t), _)) => @okf.encode_utf8(t)
-    None => raise NotFound(path.to_string())
+    None => raise NotFound(FileAt(path))
   }
 }
 
@@ -129,7 +133,7 @@ pub impl @provider.DocumentStore for MemoryStore with fn write_bytes(
 ///|
 pub impl @provider.DocumentStore for MemoryStore with fn delete(self, path) {
   if self.read_only {
-    raise PermissionDenied(path.to_string())
+    raise PermissionDenied(FileAt(path))
   }
   self.files.val.remove(path)
 }
@@ -138,7 +142,7 @@ pub impl @provider.DocumentStore for MemoryStore with fn delete(self, path) {
 pub impl @provider.DocumentStore for MemoryStore with fn modified(self, path) {
   match self.files.val.get(path) {
     Some((_, at)) => at
-    None => raise NotFound(path.to_string())
+    None => raise NotFound(FileAt(path))
   }
 }
 
@@ -172,13 +176,13 @@ pub fn MemoryIndex::build_now(
   self : MemoryIndex,
   knowledge : @okf.Knowledge,
   clock : &@okf.Clock,
-) -> @provider.IndexMetadata {
+) -> @provider.IndexMetadata raise @provider.IndexError {
   let graph = @okf.Graph::build(knowledge, resolver?=self.resolver)
-  let metadata : @provider.IndexMetadata = {
-    schema_version: memory_schema_version,
-    built_at: clock.now(),
-    document_count: knowledge.documents().length(),
-  }
+  let metadata = @provider.IndexMetadata(
+    schema_version=memory_schema_version,
+    built_at=clock.now(),
+    document_count=knowledge.documents().length(),
+  )
   self.state.val = Some({
     knowledge,
     graph,

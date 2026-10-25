@@ -136,7 +136,7 @@ fn check_log_undated(ctx : ValidationContext) -> Array[Issue] {
           Issue::at(
             bundle,
             doc,
-            "the log section `\{section.date}` is not a `YYYY-MM-DD` date",
+            "the log section `\{section.heading}` is not a `YYYY-MM-DD` date",
             line=section.line,
           ),
         )
@@ -151,11 +151,23 @@ fn check_log_undated(ctx : ValidationContext) -> Array[Issue] {
 /// non-empty `type` on each concept, and `index.md` and `log.md` in their formats.
 pub fn okf_v02_conformance() -> RuleSet {
   RuleSet("okf-v0.2", [
-    Rule("frontmatter-invalid", Error, check_frontmatter_invalid),
-    Rule("concept-no-frontmatter", Error, check_concept_no_frontmatter),
-    Rule("concept-missing-type", Error, check_concept_missing_type),
-    Rule("subindex-has-frontmatter", Error, check_subindex_frontmatter),
-    Rule("log-undated-section", Error, check_log_undated),
+    Rule(builtin_rule("frontmatter-invalid"), Error, check_frontmatter_invalid),
+    Rule(
+      builtin_rule("concept-no-frontmatter"),
+      Error,
+      check_concept_no_frontmatter,
+    ),
+    Rule(
+      builtin_rule("concept-missing-type"),
+      Error,
+      check_concept_missing_type,
+    ),
+    Rule(
+      builtin_rule("subindex-has-frontmatter"),
+      Error,
+      check_subindex_frontmatter,
+    ),
+    Rule(builtin_rule("log-undated-section"), Error, check_log_undated),
   ])
 }
 
@@ -342,11 +354,10 @@ fn check_broken_links(ctx : ValidationContext) -> Array[Issue] {
   ctx.graph
   .broken()
   .map(edge => {
-    Issue(
-      edge.from.bundle,
-      edge.from.path.to_string(),
+    Issue::in_bundle(
+      edge.from,
       "the link to `\{edge.link.destination}` does not resolve",
-      line=edge.link.line,
+      line?=edge.link.line_number(),
     )
   })
 }
@@ -358,11 +369,10 @@ fn check_escaping_links(ctx : ValidationContext) -> Array[Issue] {
   .iter()
   .filter(e => e.escapes && e.link.kind is BundleRooted)
   .map(edge => {
-    Issue(
-      edge.from.bundle,
-      edge.from.path.to_string(),
+    Issue::in_bundle(
+      edge.from,
       "the link to `\{edge.link.destination}` leaves the bundle",
-      line=edge.link.line,
+      line?=edge.link.line_number(),
     )
   })
   .collect()
@@ -373,9 +383,7 @@ fn check_strays(ctx : ValidationContext) -> Array[Issue] {
   ctx.knowledge
   .strays()
   .iter()
-  .map(path => {
-    Issue("", path.to_string(), "the Markdown file belongs to no bundle")
-  })
+  .map(path => Issue::stray(path, "the Markdown file belongs to no bundle"))
   .collect()
 }
 
@@ -391,7 +399,7 @@ fn check_log_order(ctx : ValidationContext) -> Array[Issue] {
             Issue::at(
               bundle,
               doc,
-              "`\{a.date}` comes before the newer `\{b.date}`",
+              "`\{a.heading}` comes before the newer `\{b.heading}`",
               line=b.line,
             ),
           )
@@ -409,7 +417,10 @@ fn check_unknown_version(ctx : ValidationContext) -> Array[Issue] {
     if !bundle.knows_version() {
       match bundle.root_index() {
         Some(doc) => {
-          let version = bundle.okf_version().unwrap_or("")
+          let version = bundle
+            .okf_version()
+            .map(v => v.to_string())
+            .unwrap_or("")
           out.push(
             Issue::at(
               bundle,
@@ -431,7 +442,10 @@ fn check_ignored_logs(ctx : ValidationContext) -> Array[Issue] {
   for bundle in ctx.knowledge.bundles() {
     for path in bundle.ignored_logs() {
       out.push(
-        Issue(bundle.label(), path.to_string(), "the nested log is ignored"),
+        Issue::in_bundle(
+          { bundle: bundle.label(), path, },
+          "the nested log is ignored",
+        ),
       )
     }
   }
@@ -464,25 +478,37 @@ fn check_unresolved_references(ctx : ValidationContext) -> Array[Issue] {
 /// caller sets their severity with `ValidationConfig`.
 pub fn advisory() -> RuleSet {
   RuleSet("okf-advisory", [
-    Rule("concept-missing-title", Warning, concept_rule(check_missing_title)),
     Rule(
-      "concept-missing-description",
+      builtin_rule("concept-missing-title"),
+      Warning,
+      concept_rule(check_missing_title),
+    ),
+    Rule(
+      builtin_rule("concept-missing-description"),
       Warning,
       concept_rule(check_missing_description),
     ),
-    Rule("status-unknown", Warning, concept_rule(check_status_unknown)),
-    Rule("stale-after-passed", Warning, concept_rule(check_stale)),
-    Rule("frontmatter-unknown-key", Info, check_unknown_keys),
-    Rule("index-frontmatter-key", Warning, check_root_index_keys),
-    Rule("concept-not-indexed", Warning, check_not_indexed),
-    Rule("index-description-drift", Warning, check_drift),
-    Rule("duplicate-title", Warning, check_duplicate_titles),
-    Rule("link-broken", Warning, check_broken_links),
-    Rule("link-escapes-bundle", Warning, check_escaping_links),
-    Rule("reference-unresolved", Warning, check_unresolved_references),
-    Rule("stray-markdown", Warning, check_strays),
-    Rule("log-not-newest-first", Warning, check_log_order),
-    Rule("okf-version-unknown", Info, check_unknown_version),
-    Rule("log-ignored", Info, check_ignored_logs),
+    Rule(
+      builtin_rule("status-unknown"),
+      Warning,
+      concept_rule(check_status_unknown),
+    ),
+    Rule(builtin_rule("stale-after-passed"), Warning, concept_rule(check_stale)),
+    Rule(builtin_rule("frontmatter-unknown-key"), Info, check_unknown_keys),
+    Rule(builtin_rule("index-frontmatter-key"), Warning, check_root_index_keys),
+    Rule(builtin_rule("concept-not-indexed"), Warning, check_not_indexed),
+    Rule(builtin_rule("index-description-drift"), Warning, check_drift),
+    Rule(builtin_rule("duplicate-title"), Warning, check_duplicate_titles),
+    Rule(builtin_rule("link-broken"), Warning, check_broken_links),
+    Rule(builtin_rule("link-escapes-bundle"), Warning, check_escaping_links),
+    Rule(
+      builtin_rule("reference-unresolved"),
+      Warning,
+      check_unresolved_references,
+    ),
+    Rule(builtin_rule("stray-markdown"), Warning, check_strays),
+    Rule(builtin_rule("log-not-newest-first"), Warning, check_log_order),
+    Rule(builtin_rule("okf-version-unknown"), Info, check_unknown_version),
+    Rule(builtin_rule("log-ignored"), Info, check_ignored_logs),
   ])
 }

@@ -7,8 +7,8 @@ struct OkfWorld {
   profiles : Array[&@okf.Profile]
   mut knowledge : @okf.Knowledge?
   mut report : @okf.Report?
-  overrides : Array[(String, @okf.Severity)]
-  disabled : Array[String]
+  overrides : Array[(@okf.RuleName, @okf.Severity)]
+  disabled : Array[@okf.RuleName]
   mut text : String
   mut changed : Bool
   mut plan : @edit.EditPlan?
@@ -67,7 +67,11 @@ fn OkfWorld::doc(
 ) -> (@okf.Bundle, @okf.Document) raise {
   let k = self.loaded()
   let (label, path) = match reference.find(":/") {
-    Some(i) => (Some(reference[:i].to_owned()), reference[i + 1:].to_owned())
+    Some(i) =>
+      (
+        Some(@okf.BundleLabel(reference[:i].to_owned())),
+        reference[i + 1:].to_owned(),
+      )
     None => (None, reference)
   }
   match k.find_document(path, bundle?=label) {
@@ -191,7 +195,7 @@ fn configure_given(world : OkfWorld, setup : @moonspec.Setup) -> Unit {
     world.clock = @okf.FixedClock::at(text)
   })
   setup.when1("the bundle at {string} is loaded", (root : String) => {
-    let root = items(root.replace_all(old="/", new=","))
+    let root = @okf.StoreDir(root)
     world.knowledge = Some(
       @okf.Knowledge(
         [
@@ -207,7 +211,7 @@ fn configure_given(world : OkfWorld, setup : @moonspec.Setup) -> Unit {
     )
   })
   setup.when1("the bundles under {string} are discovered", (under : String) => {
-    let under = items(under.replace_all(old="/", new=","))
+    let under = @okf.StoreDir(under)
     world.knowledge = Some(
       @okf.discover(
         world.set(),

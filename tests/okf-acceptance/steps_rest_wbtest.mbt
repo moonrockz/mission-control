@@ -21,7 +21,12 @@ fn configure_relationships(world : OkfWorld, setup : @moonspec.Setup) -> Unit {
     let actual = d
       .links()
       .map(l => {
-        [l.text, l.destination, l.line.to_string(), link_kind_name(l.kind)]
+        [
+          l.text,
+          l.destination,
+          l.line_number().unwrap_or(0).to_string(),
+          link_kind_name(l.kind),
+        ]
       })
     @expect.expect(actual).to_equal(
       table_rows(table, ["text", "destination", "line", "kind"]),
@@ -95,9 +100,9 @@ fn configure_indexes(world : OkfWorld, setup : @moonspec.Setup) -> Unit {
     dates : String,
   ) => {
     let (_, d) = world.doc(path)
-    @expect.expect(d.log_model().sections.map(s => s.date)).to_equal(
-      items(dates),
-    )
+    @expect.expect(
+      d.log_model().sections.iter().map(s => s.heading.to_string()).collect(),
+    ).to_equal(items(dates))
   })
   setup.then1("the log of {string} is not newest first", (path : String) => {
     let (_, d) = world.doc(path)
@@ -107,10 +112,7 @@ fn configure_indexes(world : OkfWorld, setup : @moonspec.Setup) -> Unit {
     dir : String,
     expected : @moonspec.DocString,
   ) => {
-    let text = @okf.generate_index(
-      world.only_bundle(),
-      dir=items(dir.replace_all(old="/", new=",")),
-    )
+    let text = @okf.generate_index(world.only_bundle(), dir=@okf.StoreDir(dir))
     @expect.expect(text).to_equal(expected.content)
   })
   setup.then1("the lookup of {string} finds nothing", (path : String) => {
@@ -135,12 +137,22 @@ fn configure_indexes(world : OkfWorld, setup : @moonspec.Setup) -> Unit {
   ) => {
     let actual = world
       .loaded()
-      .filter([TypeIs(t), HasTag(tag)])
+      .filter([TypeIs(@okf.ConceptType(t)), HasTag(tag)])
       .map(p => p.1.path().to_string())
     @expect.expect(actual).to_equal(items(list))
   })
   setup.then2("the facet {string} is {string}", (key : String, list : String) => {
-    let actual = world.loaded().facet(key).map(p => p.0 + "=" + p.1.to_string())
+    let facet : @okf.Facet = match key {
+      "type" => Type
+      "status" => StatusFacet
+      "tags" => Tags
+      "bundle" => Bundles
+      _ => Field(@okf.FieldKey(key))
+    }
+    let actual = world
+      .loaded()
+      .facet(facet)
+      .map(p => p.0 + "=" + p.1.to_string())
     @expect.expect(actual).to_equal(items(list))
   })
   setup.then3(
@@ -158,7 +170,7 @@ fn configure_indexes(world : OkfWorld, setup : @moonspec.Setup) -> Unit {
   ) => {
     let hits = @okf.search_knowledge(
       world.loaded(),
-      @okf.SearchRequest(query, limit~),
+      @okf.SearchRequest(query, limit=@okf.SearchLimit(limit)),
     )
     @expect.expect(hits.map(h => h.key.path.to_string())).to_equal(items(list))
   })
@@ -167,7 +179,7 @@ fn configure_indexes(world : OkfWorld, setup : @moonspec.Setup) -> Unit {
     list : String,
   ) => {
     let (_, d) = world.doc(path)
-    let actual = d.outline().map(h => "\{h.level}:\{h.text}:\{h.line}")
+    let actual = d.outline().map(h => "\{h.level.to_int()}:\{h.text}:\{h.line}")
     @expect.expect(actual).to_equal(items(list))
   })
   setup.then3("the code of section {string} of {string} is {string}", (
@@ -179,9 +191,10 @@ fn configure_indexes(world : OkfWorld, setup : @moonspec.Setup) -> Unit {
     guard d.section(heading) is Some(section) else {
       fail("no section \{heading}")
     }
-    let actual = section.code_blocks.map(c => {
-      c.language.unwrap_or("") + ": " + c.code
-    })
+    let actual = section.code_blocks
+      .iter()
+      .map(c => c.language.unwrap_or("") + ": " + c.code)
+      .collect()
     @expect.expect(actual).to_equal([code])
   })
 }
@@ -191,12 +204,12 @@ fn configure_validation(world : OkfWorld, setup : @moonspec.Setup) -> Unit {
   setup.given2("the rule {string} has the severity {string}", (
     rule : String,
     severity : String,
-  ) => world.overrides.push((rule, severity_of(severity))))
+  ) => world.overrides.push((@okf.RuleName(rule), severity_of(severity))))
   setup.given1("the rule {string} is turned off", (rule : String) => {
-    world.disabled.push(rule)
+    world.disabled.push(@okf.RuleName(rule))
   })
   setup.when1("the knowledge at {string} is validated", (root : String) => {
-    let root = items(root.replace_all(old="/", new=","))
+    let root = @okf.StoreDir(root)
     let knowledge = @okf.Knowledge(
       [
         @okf.load_bundle(
@@ -236,8 +249,8 @@ fn configure_validation(world : OkfWorld, setup : @moonspec.Setup) -> Unit {
             Warning => "warning"
             Info => "info"
           },
-          f.rule,
-          f.path,
+          f.rule.to_string(),
+          f.subject.path_text().unwrap_or(""),
         ]
       })
       .iter()
@@ -259,8 +272,8 @@ fn configure_validation(world : OkfWorld, setup : @moonspec.Setup) -> Unit {
           Info => "info"
         }) ==
         parts[0] &&
-        f.rule == parts[1] &&
-        f.path == parts[2]
+        f.rule.to_string() == parts[1] &&
+        f.subject.path_text() == Some(parts[2])
       })
     @expect.expect(found).to_equal(true)
   })
@@ -284,7 +297,7 @@ fn configure_editing(world : OkfWorld, setup : @moonspec.Setup) -> Unit {
     key : String,
     value : String,
   ) => {
-    let r = @edit.set_key(world.text, key, value)
+    let r = @edit.set_key(world.text, @okf.FieldKey(key), value)
     world.text = r.text
     world.changed = r.changed
   })
@@ -301,15 +314,17 @@ fn configure_editing(world : OkfWorld, setup : @moonspec.Setup) -> Unit {
     "the concept {string} of type {string} titled {string} is planned on {string}",
     (path : String, t : String, title : String, date : String) => {
       let bundle = world.only_bundle()
+      let t = @okf.ConceptType(t)
+      let date = @okf.LogDate(date)
       world.plan = Some(
         @edit.plan_add_concept(bundle, path, t, title, title, date),
       ) catch {
-        @edit.ReservedName(name) => {
+        PathRefused(ReservedName(name)) => {
           world.failure = Some("\{name} is a reserved name")
           None
         }
         e => {
-          world.failure = Some(e.to_string())
+          world.failure = Some(@debug.to_string(e))
           None
         }
       }

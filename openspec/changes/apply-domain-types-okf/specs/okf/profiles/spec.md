@@ -3,7 +3,7 @@
 ## ADDED Requirements
 
 ### Requirement: Checked registers
-The library SHALL build a register only through a constructor that checks it: the name and the concept type are not empty, an ID width is from 1 to 9, and every transition target and superseded state is one of its states. The constructor SHALL raise a typed error that names the broken rule.
+The library SHALL build a register only through a constructor that checks it: the name and the concept type are not empty, an ID width is from 1 to 9, and, when the register lists states, every transition target and superseded state is one of them. The constructor SHALL raise a typed error that names the broken rule.
 
 #### Scenario: Unknown transition target
 - **WHEN** a caller builds a register with the states `Backlog` and `Done` and a transition to `Review`
