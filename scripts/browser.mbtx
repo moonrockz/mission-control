@@ -15,6 +15,31 @@ import {
 }
 
 ///|
+/// The exit codes of the task scripts: 0 for success, 1 for a failure and 2
+/// for a usage error. A script that succeeds ends `main` normally. Each script
+/// keeps this copy, and `scripts/test-scripts.mbtx` checks that the copies are
+/// equal.
+enum ExitCode {
+  Failure
+  Usage
+}
+
+///|
+/// Ends the script with this exit code.
+fn ExitCode::exit(self : ExitCode) -> Unit {
+  @sys.exit(
+    match self {
+      Failure => 1
+      Usage => 2
+    },
+  )
+}
+// End of the exit codes.
+
+///|
+let usage : String = "Usage: mise run test:browser [-- --install]"
+
+///|
 let site : String = "_build/okf-browser/site"
 
 ///|
@@ -28,13 +53,21 @@ async fn run_or_exit(command : String, args : Array[String], env? : Map[String, 
   )
   if code != 0 {
     println("❌ \{command} \{args.join(" ")} failed")
-    @sys.exit(if code > 0 { code } else { 1 })
+    ExitCode::Failure.exit()
   }
 }
 
 ///|
 async fn main {
-  let args = @env.args()[1:]
+  let install = match @env.args()[1:] {
+    [] => false
+    ["--install"] => true
+    _ => {
+      eprintln(usage)
+      ExitCode::Usage.exit()
+      return
+    }
+  }
   println("🔨 Building the browser page...")
   run_or_exit("moon", ["build", "tests/okf-browser", "--target", "js"])
   @fs.mkdir(site, recursive=true, allow_exist=true)
@@ -51,7 +84,7 @@ async fn main {
     "NODE_PATH": package_dir + "/lib/node_modules",
     "OKF_BROWSER_DIR": @fs.realpath(site),
   }
-  if args.contains("--install") {
+  if install {
     println("📦 Installing Chromium...")
     run_or_exit("playwright", ["install", "--with-deps", "chromium"], env~)
   }

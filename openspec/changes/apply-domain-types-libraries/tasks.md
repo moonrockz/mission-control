@@ -26,9 +26,9 @@ Beads: none yet.
 
 Beads: none yet.
 
-- [ ] 4.1 Parse `RunTrigger`, `GitRef` and `ReleaseFacts` in `scripts/release.mbtx` and pass them to `plan` (design D6); verify the release features, with a scenario for an unknown event
-- [ ] 4.2 Add `Backend` and `DistTarget` to the build, test and distribution scripts; verify a scenario for a misspelled target
-- [ ] 4.3 Add the `Failure` enum from one table in the publish and release scripts, typed script errors and `ExitCode`, and the script test that the failure tables agree; verify `mise run test:scripts`
+- [x] 4.1 Parse `RunTrigger`, `GitRef` and `ReleaseFacts` in `scripts/release.mbtx` and pass them to `plan` (design D6); verify the release features, with a scenario for an unknown event
+- [x] 4.2 Add `Backend` and `DistTarget` to the build, test and distribution scripts; verify a scenario for a misspelled target
+- [x] 4.3 Add the `Failure` enum from one table in the publish and release scripts, typed script errors and `ExitCode`, and the script test that the failure tables agree; verify `mise run test:scripts`
 
 ## 5. Integration
 

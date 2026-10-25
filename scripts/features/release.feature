@@ -333,6 +333,8 @@ Feature: Release tooling
       | push              | tag    | v0.0.1 | no   | no  | no       | yes     | error: v0.0.1 is not on main                                                          |
       | push              | tag    | v0.0.2 | yes  | no  | no       | yes     | error: tag v0.0.2 does not match moon.mod version 0.0.1 (v0.0.1)                      |
       | push              | branch | topic  | no   | no  | no       | yes     | error: topic is not on main                                                           |
+      | pull-request      | branch | main   | yes  | no  | no       | yes     | error: the event pull-request is not pull_request, push or workflow_dispatch          |
+      | push              | release | main  | yes  | no  | no       | yes     | error: the ref type release is not branch or tag                                      |
 
   Scenario Outline: A release needs its highlights
     Given the event is "push", the ref type is "branch" and the ref name is "main"

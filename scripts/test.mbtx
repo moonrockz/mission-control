@@ -17,7 +17,73 @@ import {
 }
 
 ///|
-let all_targets : Array[String] = ["wasm", "wasm-gc", "js", "native"]
+/// The exit codes of the task scripts: 0 for success, 1 for a failure and 2
+/// for a usage error. A script that succeeds ends `main` normally. Each script
+/// keeps this copy, and `scripts/test-scripts.mbtx` checks that the copies are
+/// equal.
+enum ExitCode {
+  Failure
+  Usage
+}
+
+///|
+/// Ends the script with this exit code.
+fn ExitCode::exit(self : ExitCode) -> Unit {
+  @sys.exit(
+    match self {
+      Failure => 1
+      Usage => 2
+    },
+  )
+}
+// End of the exit codes.
+
+///|
+let usage : String = "Usage: mise run test [-- <target>...], where a target is wasm, wasm-gc, js or native"
+
+///|
+/// A MoonBit backend that the build and the tests target.
+enum Backend {
+  Wasm
+  WasmGc
+  Js
+  Native
+} derive(Eq, Debug)
+
+///|
+/// Every backend, in the order that a run with no target uses.
+let all_backends : Array[Backend] = [Wasm, WasmGc, Js, Native]
+
+///|
+/// The name that `moon --target` takes.
+fn Backend::name(self : Backend) -> String {
+  match self {
+    Wasm => "wasm"
+    WasmGc => "wasm-gc"
+    Js => "js"
+    Native => "native"
+  }
+}
+
+///|
+/// The backend that `text` names, or `None` for any other text.
+fn Backend::parse(text : String) -> Backend? {
+  all_backends.iter().find_first(b => b.name() == text)
+}
+
+///|
+/// The backends of the target arguments, or the first argument that names
+/// no backend. No argument gives every backend.
+fn parse_backends(args : ArrayView[String]) -> Result[Array[Backend], String] {
+  let out = []
+  for arg in args {
+    match Backend::parse(arg) {
+      Some(b) => out.push(b)
+      None => return Err(arg)
+    }
+  }
+  Ok(if out.is_empty() { all_backends } else { out })
+}
 
 ///|
 /// Active workspace members, excluding the package-less workspace root.
@@ -38,7 +104,7 @@ fn members(work : String) -> Array[String] {
 
 ///|
 /// A package's optional target restriction, in moon.pkg's target expression.
-fn supports(config : String, target : String) -> Bool {
+fn supports(config : String, target : Backend) -> Bool {
   for line in config.split("\n") {
     let line = line.trim_start()
     guard line.has_prefix("supported_targets") else { continue }
@@ -47,14 +113,14 @@ fn supports(config : String, target : String) -> Bool {
       end > start else {
       return false
     }
-    return line[start + 1:end].split("+").any(t => t == target)
+    return line[start + 1:end].split("+").any(t => t == target.name())
   }
   true
 }
 
 ///|
 /// Find each package once, including newly added and internal packages.
-async fn packages(dir : String, target : String, out : Array[String]) -> Unit {
+async fn packages(dir : String, target : Backend, out : Array[String]) -> Unit {
   let manifest = "\{dir}/moon.pkg"
   if @fs.exists(manifest) && supports(@fs.read_file(manifest).text(), target) {
     out.push(dir)
@@ -73,33 +139,38 @@ async fn packages(dir : String, target : String, out : Array[String]) -> Unit {
 }
 
 ///|
-async fn moon_test(paths : Array[String], target : String) -> Int32 {
+async fn moon_test(paths : Array[String], target : Backend) -> Int32 {
   let args = ["test"]
   args.append(paths)
   args.push("--target")
-  args.push(target)
+  args.push(target.name())
   @process.run("moon", args, stdout=@stdio.stdout, stderr=@stdio.stderr)
 }
 
 ///|
 async fn main {
-  let args = @env.args()[1:]
-  let targets = args.filter(fn(arg) { !arg.has_prefix("--") })
-  let targets = if targets.is_empty() { all_targets } else { targets }
+  let targets = match parse_backends(@env.args()[1:]) {
+    Ok(targets) => targets
+    Err(arg) => {
+      eprintln("❌ \{arg} is not a target.\n\{usage}")
+      ExitCode::Usage.exit()
+      return
+    }
+  }
   for target in targets {
-    println("🧪 Testing for \{target}...")
+    println("🧪 Testing for \{target.name()}...")
     let paths = []
     for module_path in members(@fs.read_file("moon.work").text()) {
       packages(module_path, target, paths)
     }
     if paths.is_empty() {
-      println("No test packages for \{target}")
-      @sys.exit(1)
+      println("No test packages for \{target.name()}")
+      ExitCode::Failure.exit()
     }
     let code = moon_test(paths, target)
     if code != 0 {
-      println("❌ Tests failed for \{target}")
-      @sys.exit(if code > 0 { code } else { 1 })
+      println("❌ Tests failed for \{target.name()}")
+      ExitCode::Failure.exit()
     }
   }
   println("✅ All tests passed")
@@ -115,8 +186,15 @@ test "workspace members ignore commented paths and the workspace root" {
 
 ///|
 test "package target restrictions preserve native and wasm only" {
-  assert_true(supports("supported_targets = \"native+wasm\"", "native"))
-  assert_true(supports("supported_targets = \"native+wasm\"", "wasm"))
-  assert_false(supports("supported_targets = \"native+wasm\"", "wasm-gc"))
-  assert_true(supports("", "js"))
+  assert_true(supports("supported_targets = \"native+wasm\"", Native))
+  assert_true(supports("supported_targets = \"native+wasm\"", Wasm))
+  assert_false(supports("supported_targets = \"native+wasm\"", WasmGc))
+  assert_true(supports("", Js))
+}
+
+///|
+test "a misspelled target is refused before any test runs" {
+  assert_eq(parse_backends(["js", "jss"]), Err("jss"))
+  assert_eq(parse_backends(["wasm-gc", "native"]), Ok([WasmGc, Native]))
+  assert_eq(parse_backends([]), Ok(all_backends))
 }

@@ -17,7 +17,8 @@ Write task and automation scripts in MoonBit, as standalone `.mbtx` scripts, not
 - Pin the version of each import: `"moonbitlang/async@0.22.5/process"`. Use `moonbitlang/async` for processes (`@process.run`, `@process.collect_output`), files (`@fs`) and `@stdio`; `moonbitlang/core/env` for `@env.args()` and environment variables; `moonbitlang/x/sys` for `@sys.exit`.
 - `@env.args()` has the script binary at index 0. Task arguments start at index 1 (`mise run task -- arg`).
 - A `.mbtx` file cannot start with a shebang line, so a mise file task cannot be a `.mbtx` file. Keep the toml task declaration.
-- Exit with a non-zero code on failure. Do not print and continue.
+- Exit with 1 for a failure and 2 for a usage error, through the script's copy of the `ExitCode` enum. Do not print and continue. `scripts/test-scripts.mbtx` checks that every copy of `ExitCode` is the same.
+- Parse arguments and inputs once into types, such as a backend or a release trigger, and stop with a usage error for an argument that the script does not know.
 
 ## Pre-push checks
 

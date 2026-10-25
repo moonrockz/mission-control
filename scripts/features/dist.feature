@@ -14,6 +14,9 @@ Feature: Release outputs
       | darwin-x64   | mission-control-darwin-x64.tar.gz   | mission-control    |
       | windows-x64  | mission-control-windows-x64.zip     | mission-control.exe |
 
+  Scenario: A misspelled target names no target
+    Then the text "linux-x86" names no target
+
   Scenario: The zig cross-build leaves out windows-x64
     Then the cross-built targets are "linux-x64,linux-arm64,darwin-arm64,darwin-x64"
 

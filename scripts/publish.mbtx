@@ -19,6 +19,28 @@ import {
 }
 
 ///|
+/// The exit codes of the task scripts: 0 for success, 1 for a failure and 2
+/// for a usage error. A script that succeeds ends `main` normally. Each script
+/// keeps this copy, and `scripts/test-scripts.mbtx` checks that the copies are
+/// equal.
+enum ExitCode {
+  Failure
+  Usage
+}
+
+///|
+/// Ends the script with this exit code.
+fn ExitCode::exit(self : ExitCode) -> Unit {
+  @sys.exit(
+    match self {
+      Failure => 1
+      Usage => 2
+    },
+  )
+}
+// End of the exit codes.
+
+///|
 /// The packages to publish, with their module names, in dependency order. Add a line for each public
 /// module. `scripts/release.mbtx` keeps the same list, and a scenario checks that the two are equal.
 let publish_list : Array[(String, String)] = [
@@ -32,10 +54,6 @@ let publish_list : Array[(String, String)] = [
 ]
 
 ///|
-/// The text that mooncakes.io answers when the version already exists.
-let duplicated : String = "is duplicated with an existing version"
-
-///|
 /// What a `moon publish` run means.
 enum Outcome {
   Published
@@ -46,21 +64,21 @@ enum Outcome {
 
 ///|
 fn classify(exit_code : Int32, output : String) -> Outcome {
-  if exit_code == 0 {
-    Published
-  } else if output.contains(duplicated) {
-    AlreadyPublished
-  } else if is_transient(exit_code, output) {
-    Transient
-  } else {
-    Failed
+  guard exit_code != 0 else { return Published }
+  match classify_failure(output) {
+    AlreadyPublished => AlreadyPublished
+    Transient => Transient
+    Refused | Conflict | Other => Failed
   }
 }
 
 ///|
 /// True when `word` occurs in `text` as whole words: the characters around it
 /// are not letters or digits. So `401` matches `HTTP 401` but not `4013ab`,
-/// and `eof` matches `unexpected EOF` but not `thereof`.
+/// and `eof` matches `unexpected EOF` but not `thereof`. `scripts/publish.mbtx`
+/// and `scripts/release.mbtx` keep the same copy of this function and of the
+/// failure classes below, and a scenario of `features/publish.feature` checks
+/// that the copies are equal.
 fn has_word(text : String, word : String) -> Bool {
   let is_word_char = (c : UInt16) => (c >= 48 && c <= 57) ||
     (c >= 65 && c <= 90) ||
@@ -85,29 +103,66 @@ fn has_word(text : String, word : String) -> Bool {
 }
 
 ///|
-/// A failed network command is worth a retry only when the failure is probably temporary. A refusal
-/// (401, 403) or a conflict (409) is not, and it wins over the transient words.
-fn is_transient(exit_code : Int32, output : String) -> Bool {
-  if exit_code == 0 {
-    return false
-  }
+/// How a failed command failed.
+enum Failure {
+  /// The version already exists on mooncakes.io.
+  AlreadyPublished
+  /// The server refused the credentials (401, 403).
+  Refused
+  /// The request conflicts with the state of the server (409).
+  Conflict
+  /// A temporary failure that a retry can fix.
+  Transient
+  /// Any other failure.
+  Other
+} derive(Eq, Debug)
+
+///|
+/// The words of each failure class, in the order that `classify_failure`
+/// tries them: the first class with a match wins, so a refusal or a conflict
+/// wins over the transient words. A word of the first list matches as whole
+/// words, so `15020` and `thereof` do not count. A phrase of the second list
+/// matches anywhere, so `TimeoutError` and Rust's `UnexpectedEof` count.
+let failure_table : Array[(Failure, Array[String], Array[String])] = [
+  (AlreadyPublished, [], ["is duplicated with an existing version"]),
+  (Refused, ["401", "403"], []),
+  (Conflict, ["409"], []),
+  (
+    Transient,
+    ["eof", "502", "503", "504"],
+    [
+      "timed out", "timeout", "connection reset", "connection refused", "temporary failure",
+      "rate limit", "prebuilt wasm asset does not exist", "unexpectedeof",
+    ],
+  ),
+]
+
+///|
+/// The class of a command that failed with this output.
+fn classify_failure(output : String) -> Failure {
   let text = output.to_lower()
-  for word in ["401", "403", "409"] {
-    if has_word(text, word) {
-      return false
+  for row in failure_table {
+    let (failure, words, phrases) = row
+    if words.any(w => has_word(text, w)) || phrases.any(p => text.contains(p)) {
+      return failure
     }
   }
-  // Status codes and `eof` match as whole words, so `15020` and `thereof` do
-  // not count. Phrases match anywhere, so `TimeoutError` and Rust's
-  // `UnexpectedEof` still count.
-  ["eof", "502", "503", "504"].any(word => has_word(text, word)) ||
-  ["timed out", "timeout", "connection reset", "connection refused", "temporary failure", "rate limit", "prebuilt wasm asset does not exist", "unexpectedeof"].any(word => text.contains(word))
+  Other
 }
+
+///|
+/// A failed network command is worth a retry only when the failure is
+/// transient.
+fn is_transient(exit_code : Int, output : String) -> Bool {
+  exit_code != 0 && classify_failure(output) is Transient
+}
+// End of the failures.
+
 
 ///|
 fn fail_with(message : String) -> Unit {
   eprintln("❌ \{message}")
-  @sys.exit(1)
+  ExitCode::Failure.exit()
 }
 
 ///|
@@ -200,7 +255,10 @@ async fn main {
   match @env.args()[1:] {
     [] => publish_all()
     ["verify-cli", version] => verify_cli(version)
-    _ => fail_with("Usage: publish.mbtx [verify-cli X.Y.Z]")
+    _ => {
+      eprintln("Usage: publish.mbtx [verify-cli X.Y.Z]")
+      ExitCode::Usage.exit()
+    }
   }
 }
 
@@ -208,6 +266,7 @@ async fn main {
 /// Scenario state for `features/publish.feature`.
 struct PublishWorld {
   moon_work : String
+  own_source : String
   release_source : String
   mut exit_code : Int32
   mut output : String
@@ -218,9 +277,19 @@ struct PublishWorld {
 /// cannot read a file, so the test reads them before the run.
 fn PublishWorld::new(
   moon_work : String,
+  own_source : String,
   release_source : String,
 ) -> PublishWorld {
-  { moon_work, release_source, exit_code: 0, output: "", }
+  { moon_work, own_source, release_source, exit_code: 0, output: "" }
+}
+
+///|
+/// The text of `source` from the line that starts with `start` to the line
+/// `end`, both included, or `None` when either line is missing.
+fn shared_block(source : String, start : String, end : String) -> String? {
+  guard source.find(start) is Some(from) else { return None }
+  guard source[from:].find(end) is Some(length) else { return None }
+  Some(source[from:from + length + end.length()].to_owned())
 }
 
 ///|
@@ -281,6 +350,26 @@ impl @moonspec.World for PublishWorld with fn configure(self, setup) {
       @expect.expect(members.contains(entry.0)).to_equal(true)
     }
   })
+  setup.then1("the failure class is {string}", fn(expected : String) raise {
+    let actual = match classify_failure(self.output) {
+      AlreadyPublished => "already published"
+      Refused => "refused"
+      Conflict => "conflict"
+      Transient => "transient"
+      Other => "other"
+    }
+    @expect.expect(actual).to_equal(expected)
+  })
+  setup.then0("the failure classes are the ones in release.mbtx", fn() raise {
+    let start = "/// True when `word` occurs in `text` as whole words"
+    let end = "// End of the failures."
+    guard shared_block(self.own_source, start, end) is Some(own) else {
+      fail("publish.mbtx has no failure block")
+    }
+    @expect.expect(shared_block(self.release_source, start, end)).to_equal(
+      Some(own),
+    )
+  })
   setup.then0("the publish list is the one in release.mbtx", fn() raise {
     let release = self.release_source
     guard release.find("let publish_list") is Some(start) else {
@@ -305,9 +394,10 @@ impl @moonspec.World for PublishWorld with fn configure(self, setup) {
 ///|
 async test "publish feature" {
   let moon_work = @fs.read_file("../moon.work").text()
+  let own_source = @fs.read_file("publish.mbtx").text()
   let release_source = @fs.read_file("release.mbtx").text()
   @moonspec.run_or_fail(
-    () => PublishWorld::new(moon_work, release_source),
+    () => PublishWorld::new(moon_work, own_source, release_source),
     @moonspec.RunOptions::new([
       @moonspec.FeatureSource::File("features/publish.feature"),
     ]),

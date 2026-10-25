@@ -19,6 +19,31 @@ import {
 }
 
 ///|
+/// The exit codes of the task scripts: 0 for success, 1 for a failure and 2
+/// for a usage error. A script that succeeds ends `main` normally. Each script
+/// keeps this copy, and `scripts/test-scripts.mbtx` checks that the copies are
+/// equal.
+enum ExitCode {
+  Failure
+  Usage
+}
+
+///|
+/// Ends the script with this exit code.
+fn ExitCode::exit(self : ExitCode) -> Unit {
+  @sys.exit(
+    match self {
+      Failure => 1
+      Usage => 2
+    },
+  )
+}
+// End of the exit codes.
+
+///|
+let usage : String = "Usage: mise run hooks:install"
+
+///|
 /// The marker line of the hook that the retired `setup:hooks` task wrote.
 let legacy_marker : String = "# Installed by `mise run setup:hooks` (scripts/setup-hooks.mbtx)."
 
@@ -32,6 +57,11 @@ fn truthy(name : String) -> Bool {
 
 ///|
 async fn main {
+  guard @env.args().length() <= 1 else {
+    eprintln(usage)
+    ExitCode::Usage.exit()
+    return
+  }
   if truthy("CI") || truthy("GITHUB_ACTIONS") {
     return
   }
@@ -51,7 +81,7 @@ async fn main {
     )
     println("   lefthook would not be used. To move this checkout to lefthook on purpose, run:")
     println("   git config --local --unset core.hooksPath && mise run hooks:install")
-    @sys.exit(1)
+    ExitCode::Failure.exit()
   }
   // Only now, with git on its default hooks directory, retire the old hook.
   let hook = "\{out.text().trim()}/pre-push"
@@ -65,7 +95,7 @@ async fn main {
   )
   if code != 0 {
     println("❌ lefthook install failed. Run 'mise install' to get lefthook.")
-    @sys.exit(if code > 0 { code } else { 1 })
+    ExitCode::Failure.exit()
   }
   println("✅ Git hooks installed. See lefthook.yml for what they run.")
 }

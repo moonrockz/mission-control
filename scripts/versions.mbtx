@@ -22,6 +22,28 @@ import {
 }
 
 ///|
+/// The exit codes of the task scripts: 0 for success, 1 for a failure and 2
+/// for a usage error. A script that succeeds ends `main` normally. Each script
+/// keeps this copy, and `scripts/test-scripts.mbtx` checks that the copies are
+/// equal.
+enum ExitCode {
+  Failure
+  Usage
+}
+
+///|
+/// Ends the script with this exit code.
+fn ExitCode::exit(self : ExitCode) -> Unit {
+  @sys.exit(
+    match self {
+      Failure => 1
+      Usage => 2
+    },
+  )
+}
+// End of the exit codes.
+
+///|
 let usage : String = "Usage: versions.mbtx check [X.Y.Z] | set X.Y.Z"
 
 ///|
@@ -45,32 +67,54 @@ let version_files : Array[(String, String)] = [
 ///|
 fn fail_with(message : String) -> Unit {
   eprintln("❌ \{message}")
-  @sys.exit(1)
+  ExitCode::Failure.exit()
 }
 
 ///|
-/// Whether `text` is `N.N.N`: each part is 1 to 9 digits with no leading zero,
-/// the same rule as `parse_version` in `scripts/release.mbtx`.
-fn is_semver(text : String) -> Bool {
-  let parts = text.split(".").map(p => p.to_owned()).collect()
-  if parts.length() != 3 {
-    return false
-  }
-  for part in parts {
-    if part.is_empty() ||
-      part.length() > 9 ||
-      (part.length() > 1 && part.has_prefix("0")) {
-      return false
-    }
-    for i in 0..<part.length() {
-      let c = part.code_unit_at(i).to_int()
-      if c < 48 || c > 57 {
-        return false
-      }
-    }
-  }
-  true
+/// A `major.minor.patch` version: each part is 1 to 9 digits with no leading
+/// zero. `scripts/release.mbtx` and `scripts/versions.mbtx` keep the same
+/// copy, and a scenario of `features/versions.feature` checks that the copies
+/// are equal.
+struct Version {
+  major : Int
+  minor : Int
+  patch : Int
+} derive(Eq, Compare, Debug)
+
+///|
+impl Show for Version with fn output(self, logger) {
+  logger.write_string("\{self.major}.\{self.minor}.\{self.patch}")
 }
+
+///|
+/// One part of a version: 1 to 9 digits with no leading zero.
+fn version_part(text : StringView) -> Int? {
+  guard text.length() > 0 &&
+    text.length() <= 9 &&
+    !(text.length() > 1 && text.has_prefix("0")) else {
+    return None
+  }
+  let mut n = 0
+  for c in text {
+    guard c >= '0' && c <= '9' else { return None }
+    n = n * 10 + (c.to_int() - '0'.to_int())
+  }
+  Some(n)
+}
+
+///|
+/// Reads `N.N.N`, or gives `None` for any other text.
+fn Version::parse(text : StringView) -> Version? {
+  match text.split(".").collect() {
+    [major, minor, patch] =>
+      match (version_part(major), version_part(minor), version_part(patch)) {
+        (Some(major), Some(minor), Some(patch)) => Some({ major, minor, patch })
+        _ => None
+      }
+    _ => None
+  }
+}
+// End of the version.
 
 ///|
 /// Whether `text` looks like a version: it starts with a digit and has only
@@ -91,9 +135,9 @@ fn is_version_like(text : String) -> Bool {
 
 ///|
 /// The version of the root `moon.mod`, or the message that says why it has none.
-fn root_version(moon_mod : String) -> Result[String, String] {
+fn root_version(moon_mod : String) -> Result[Version, String] {
   match mod_version(moon_mod) {
-    Some(v) if is_semver(v) => Ok(v)
+    Some(text) if Version::parse(text) is Some(v) => Ok(v)
     Some(v) => Err("The root moon.mod version \{v} is not a version of the form X.Y.Z.")
     None => Err("The root moon.mod has no version line.")
   }
@@ -320,13 +364,13 @@ async fn workspace_files() -> Array[(String, String)] {
 }
 
 ///|
-async fn check(expected : String?) -> Unit {
+async fn check(expected : Version?) -> Unit {
   let files = workspace_files()
   let expected = match expected {
-    Some(v) => v
+    Some(v) => "\{v}"
     None =>
       match root_version(files[0].1) {
-        Ok(v) => v
+        Ok(v) => "\{v}"
         Err(message) => {
           fail_with(message)
           ""
@@ -344,7 +388,8 @@ async fn check(expected : String?) -> Unit {
 }
 
 ///|
-async fn set(version : String) -> Unit {
+async fn set(version : Version) -> Unit {
+  let version = "\{version}"
   let files = workspace_files()
   let siblings = []
   for file in files {
@@ -378,24 +423,29 @@ async fn main {
   match @env.args()[1:] {
     ["check"] => check(None)
     ["check", v] =>
-      if is_semver(v) {
-        check(Some(v))
-      } else {
-        fail_with("\{v} is not a version of the form X.Y.Z.")
+      match Version::parse(v) {
+        Some(version) => check(Some(version))
+        None => fail_with("\{v} is not a version of the form X.Y.Z.")
       }
     ["set", v] =>
-      if is_semver(v) {
-        set(v)
-      } else {
-        fail_with("\{v} is not a version of the form X.Y.Z.")
+      match Version::parse(v) {
+        Some(version) => set(version)
+        None => fail_with("\{v} is not a version of the form X.Y.Z.")
       }
-    _ => fail_with(usage)
+    _ => {
+      eprintln(usage)
+      ExitCode::Usage.exit()
+    }
   }
 }
 
 ///|
 /// Scenario state for `features/versions.feature`.
 struct VersionsWorld {
+  /// The texts of `scripts/versions.mbtx` and `scripts/release.mbtx`. A step
+  /// cannot read a file, so the test reads them before the run.
+  own_source : String
+  release_source : String
   mut text : String
   mut result : String
   files : Array[(String, String)]
@@ -403,8 +453,20 @@ struct VersionsWorld {
 }
 
 ///|
-fn VersionsWorld::new() -> VersionsWorld {
-  { text: "", result: "", files: [], found: [] }
+fn VersionsWorld::new(
+  own_source : String,
+  release_source : String,
+) -> VersionsWorld {
+  { own_source, release_source, text: "", result: "", files: [], found: [] }
+}
+
+///|
+/// The text of `source` from the line that starts with `start` to the line
+/// `end`, both included, or `None` when either line is missing.
+fn shared_block(source : String, start : String, end : String) -> String? {
+  guard source.find(start) is Some(from) else { return None }
+  guard source[from:].find(end) is Some(length) else { return None }
+  Some(source[from:from + length + end.length()].to_owned())
 }
 
 ///|
@@ -453,13 +515,25 @@ impl @moonspec.World for VersionsWorld with fn configure(self, setup) {
   })
   setup.then1("the root version check gives {string}", fn(expected : String) raise {
     let actual = match root_version(self.text) {
-      Ok(v) => v
+      Ok(v) => "\{v}"
       Err(message) => message
     }
     @expect.expect(actual).to_equal(expected)
   })
   setup.then2("{string} is a version: {string}", fn(text : String, answer : String) raise {
-    @expect.expect(if is_semver(text) { "yes" } else { "no" }).to_equal(answer)
+    @expect.expect(if Version::parse(text) is Some(_) { "yes" } else { "no" }).to_equal(
+      answer,
+    )
+  })
+  setup.then0("the version type is the one in release.mbtx", fn() raise {
+    let start = "/// A `major.minor.patch` version: each part"
+    let end = "// End of the version."
+    guard shared_block(self.own_source, start, end) is Some(own) else {
+      fail("versions.mbtx has no version block")
+    }
+    @expect.expect(shared_block(self.release_source, start, end)).to_equal(
+      Some(own),
+    )
   })
   setup.then1("the mismatches are {string}", fn(expected : String) raise {
     @expect.expect(self.found.join("|")).to_equal(expected)
@@ -468,8 +542,10 @@ impl @moonspec.World for VersionsWorld with fn configure(self, setup) {
 
 ///|
 async test "versions feature" {
+  let own_source = @fs.read_file("versions.mbtx").text()
+  let release_source = @fs.read_file("release.mbtx").text()
   @moonspec.run_or_fail(
-    VersionsWorld::new,
+    () => VersionsWorld::new(own_source, release_source),
     @moonspec.RunOptions::new([
       @moonspec.FeatureSource::File("features/versions.feature"),
     ]),

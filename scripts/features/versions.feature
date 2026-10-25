@@ -177,3 +177,6 @@ Feature: One version across the workspace
       """
     When I look for versions other than "0.0.2"
     Then the mismatches are "b/moon.mod: found 0.0.02, expected 0.0.2"
+
+  Scenario: The version type is the one in release.mbtx
+    Then the version type is the one in release.mbtx

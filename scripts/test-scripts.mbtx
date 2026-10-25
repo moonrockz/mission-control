@@ -13,7 +13,33 @@ import {
   "moonbitlang/async@0.22.5/process",
   "moonbitlang/async@0.22.5/stdio",
   "moonbitlang/x@0.5.5/sys",
+  "moonbitlang/core/env",
 }
+
+///|
+/// The exit codes of the task scripts: 0 for success, 1 for a failure and 2
+/// for a usage error. A script that succeeds ends `main` normally. Each script
+/// keeps this copy, and `scripts/test-scripts.mbtx` checks that the copies are
+/// equal.
+enum ExitCode {
+  Failure
+  Usage
+}
+
+///|
+/// Ends the script with this exit code.
+fn ExitCode::exit(self : ExitCode) -> Unit {
+  @sys.exit(
+    match self {
+      Failure => 1
+      Usage => 2
+    },
+  )
+}
+// End of the exit codes.
+
+///|
+let usage : String = "Usage: mise run test:scripts"
 
 ///|
 let scripts_dir : String = "scripts"
@@ -28,6 +54,11 @@ fn feature_name(file : String) -> String? {
 
 ///|
 async fn main {
+  guard @env.args().length() <= 1 else {
+    eprintln(usage)
+    ExitCode::Usage.exit()
+    return
+  }
   let files = @fs.readdir(scripts_dir, sort=true)
   let mut tested = 0
   for file in files {
@@ -51,9 +82,31 @@ async fn main {
     )
     if code != 0 {
       eprintln("❌ The tests of \{scripts_dir}/\{file} failed.")
-      @sys.exit(if code > 0 { code } else { 1 })
+      ExitCode::Failure.exit()
     }
     tested += 1
   }
   println("✅ Tested \{tested} scripts")
+}
+
+///|
+/// The text of `source` from the line that starts with `start` to the line
+/// `end`, both included, or `None` when either line is missing.
+fn shared_block(source : String, start : String, end : String) -> String? {
+  guard source.find(start) is Some(from) else { return None }
+  guard source[from:].find(end) is Some(length) else { return None }
+  Some(source[from:from + length + end.length()].to_owned())
+}
+
+///|
+async test "every script keeps the same copy of the exit codes" {
+  let start = "/// The exit codes of the task scripts"
+  let end = "// End of the exit codes."
+  let own = shared_block(@fs.read_file("test-scripts.mbtx").text(), start, end)
+  assert_true(own is Some(_))
+  for file in @fs.readdir(".", sort=true) {
+    guard feature_name(file) is Some(_) else { continue }
+    let source = @fs.read_file(file).text()
+    assert_eq(shared_block(source, start, end), own, msg=file)
+  }
 }

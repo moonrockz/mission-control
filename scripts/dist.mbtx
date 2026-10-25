@@ -28,6 +28,28 @@ import {
 }
 
 ///|
+/// The exit codes of the task scripts: 0 for success, 1 for a failure and 2
+/// for a usage error. A script that succeeds ends `main` normally. Each script
+/// keeps this copy, and `scripts/test-scripts.mbtx` checks that the copies are
+/// equal.
+enum ExitCode {
+  Failure
+  Usage
+}
+
+///|
+/// Ends the script with this exit code.
+fn ExitCode::exit(self : ExitCode) -> Unit {
+  @sys.exit(
+    match self {
+      Failure => 1
+      Usage => 2
+    },
+  )
+}
+// End of the exit codes.
+
+///|
 let usage : String = "Usage: dist.mbtx [build | build-windows | pack]"
 
 ///|
@@ -43,18 +65,60 @@ let exe_stem : String = "mission-control-cli"
 let bin : String = "mission-control"
 
 ///|
-let targets : Array[String] = [
-  "linux-x64", "linux-arm64", "darwin-arm64", "darwin-x64", "windows-x64",
+/// A native release target: one archive with one executable.
+enum DistTarget {
+  LinuxX64
+  LinuxArm64
+  DarwinArm64
+  DarwinX64
+  WindowsX64
+} derive(Eq, Debug)
+
+///|
+/// Every native release target, in release order.
+let dist_targets : Array[DistTarget] = [
+  LinuxX64, LinuxArm64, DarwinArm64, DarwinX64, WindowsX64,
 ]
 
 ///|
 /// The targets that zig cross-builds. windows-x64 is built on a Windows host.
-let cross_targets : Array[String] = [
-  "linux-x64", "linux-arm64", "darwin-arm64", "darwin-x64",
+let cross_targets : Array[DistTarget] = [
+  LinuxX64, LinuxArm64, DarwinArm64, DarwinX64,
 ]
 
 ///|
-let windows_target : String = "windows-x64"
+/// The target name, as zig-cross and the archive names use it.
+fn DistTarget::name(self : DistTarget) -> String {
+  match self {
+    LinuxX64 => "linux-x64"
+    LinuxArm64 => "linux-arm64"
+    DarwinArm64 => "darwin-arm64"
+    DarwinX64 => "darwin-x64"
+    WindowsX64 => "windows-x64"
+  }
+}
+
+///|
+/// The target that `text` names, or `None` for any other text.
+fn DistTarget::parse(text : String) -> DistTarget? {
+  dist_targets.iter().find_first(t => t.name() == text)
+}
+
+///|
+/// A wasm backend that the release builds.
+enum WasmBackend {
+  Wasm
+  WasmGc
+}
+
+///|
+/// The name that `moon --target` takes.
+fn WasmBackend::name(self : WasmBackend) -> String {
+  match self {
+    Wasm => "wasm"
+    WasmGc => "wasm-gc"
+  }
+}
 
 ///|
 let wasm_name : String = "mission-control.wasm"
@@ -71,27 +135,27 @@ let dist_dir : String = "dist"
 ///|
 fn fail_with(message : String) -> Unit {
   eprintln("❌ \{message}")
-  @sys.exit(1)
+  ExitCode::Failure.exit()
 }
 
 ///|
-fn is_windows(target : String) -> Bool {
-  target.has_prefix("windows")
+fn is_windows(target : DistTarget) -> Bool {
+  target is WindowsX64
 }
 
 ///|
 /// The archive file name of one target.
-fn archive_name(target : String) -> String {
+fn archive_name(target : DistTarget) -> String {
   if is_windows(target) {
-    "mission-control-\{target}.zip"
+    "mission-control-\{target.name()}.zip"
   } else {
-    "mission-control-\{target}.tar.gz"
+    "mission-control-\{target.name()}.tar.gz"
   }
 }
 
 ///|
 /// The name of the executable inside the archive of one target.
-fn binary_name(target : String) -> String {
+fn binary_name(target : DistTarget) -> String {
   if is_windows(target) {
     bin + ".exe"
   } else {
@@ -102,7 +166,7 @@ fn binary_name(target : String) -> String {
 ///|
 /// The names of the eight files that `dist/` must hold.
 fn expected_outputs() -> Array[String] {
-  let names = targets.map(archive_name)
+  let names = dist_targets.map(archive_name)
   names.push(wasm_name)
   names.push(wasm_gc_name)
   names.push(checksums_name)
@@ -239,8 +303,8 @@ fn zip_file(name : String, data : Bytes) -> Bytes raise {
 }
 
 ///|
-fn cross_pattern(target : String) -> String {
-  "_build/cross/\{target}/native/release/build/**/\{exe_stem}.exe"
+fn cross_pattern(target : DistTarget) -> String {
+  "_build/cross/\{target.name()}/native/release/build/**/\{exe_stem}.exe"
 }
 
 ///|
@@ -266,14 +330,14 @@ async fn run_step(label : String, cmd : String, args : Array[String]) -> Unit {
 async fn build() -> Unit {
   let args = ["run", "build:cross", "--"]
   for target in cross_targets {
-    args.push(target)
+    args.push(target.name())
   }
   args.push("--")
   args.push(package_path)
   run_step("Cross-compiling the native binaries", "mise", args)
-  for wasm in ["wasm", "wasm-gc"] {
-    run_step("Building \{wasm}", "moon", [
-      "build", package_path, "--target", wasm, "--release",
+  for wasm in [Wasm, WasmGc] {
+    run_step("Building \{wasm.name()}", "moon", [
+      "build", package_path, "--target", wasm.name(), "--release",
     ])
   }
 }
@@ -301,7 +365,7 @@ async fn build_windows() -> Unit {
     "build", package_path, "--target", "native", "--release",
   ])
   let exe = single_match(native_exe_pattern)
-  let dir = "_build/cross/\{windows_target}/native/release/build/moonrockz/\{exe_stem}"
+  let dir = "_build/cross/\{WindowsX64.name()}/native/release/build/moonrockz/\{exe_stem}"
   @fs.mkdir(dir, recursive=true)
   @fs.write_file("\{dir}/\{exe_stem}.exe", read_bytes(exe))
   println("✅ Wrote \{dir}/\{exe_stem}.exe")
@@ -313,8 +377,8 @@ async fn read_bytes(path : String) -> Bytes {
 }
 
 ///|
-async fn wasm_output(backend : String) -> String {
-  single_match("_build/\{backend}/release/build/**/\{exe_stem}.wasm")
+async fn wasm_output(backend : WasmBackend) -> String {
+  single_match("_build/\{backend.name()}/release/build/**/\{exe_stem}.wasm")
 }
 
 ///|
@@ -324,10 +388,10 @@ async fn pack() -> Unit {
   }
   @fs.mkdir(dist_dir, recursive=true)
   let written : Array[(String, Bytes)] = []
-  for target in targets {
-    if target == windows_target && @shell.glob(cross_pattern(target)).is_empty() {
+  for target in dist_targets {
+    if target == WindowsX64 && @shell.glob(cross_pattern(target)).is_empty() {
       fail_with(
-        "I found no binary for \{target}. Build it on Windows with `mise run build:windows`, or download the windows-x64-exe artifact of the Release workflow.",
+        "I found no binary for \{target.name()}. Build it on Windows with `mise run build:windows`, or download the windows-x64-exe artifact of the Release workflow.",
       )
     }
     let exe = read_bytes(single_match(cross_pattern(target)))
@@ -335,7 +399,7 @@ async fn pack() -> Unit {
     let archive = if is_windows(target) {
       zip_file(name, exe) catch {
         error => {
-          fail_with("I could not write the zip for \{target}: \{error}")
+          fail_with("I could not write the zip for \{target.name()}: \{error}")
           Bytes::from_array([])
         }
       }
@@ -344,8 +408,8 @@ async fn pack() -> Unit {
     }
     written.push((archive_name(target), archive))
   }
-  written.push((wasm_name, read_bytes(wasm_output("wasm"))))
-  written.push((wasm_gc_name, read_bytes(wasm_output("wasm-gc"))))
+  written.push((wasm_name, read_bytes(wasm_output(Wasm))))
+  written.push((wasm_gc_name, read_bytes(wasm_output(WasmGc))))
   for file in written {
     @fs.write_file("\{dist_dir}/\{file.0}", file.1)
   }
@@ -371,14 +435,17 @@ async fn main {
     ["build"] => build()
     ["build-windows"] => build_windows()
     ["pack"] => pack()
-    _ => fail_with(usage)
+    _ => {
+      eprintln(usage)
+      ExitCode::Usage.exit()
+    }
   }
 }
 
 ///|
 /// Scenario state for `features/dist.feature`.
 struct DistWorld {
-  mut target : String
+  mut target : DistTarget?
   mut os : String?
   files : Array[(String, Bytes)]
   mut expected : Array[String]
@@ -388,7 +455,7 @@ struct DistWorld {
 
 ///|
 fn DistWorld::new() -> DistWorld {
-  { target: "", os: None, files: [], expected: [], present: [], tar: b"" }
+  { target: None, os: None, files: [], expected: [], present: [], tar: b"" }
 }
 
 ///|
@@ -405,14 +472,18 @@ fn text_of(tar : Bytes, offset : Int, len : Int) -> String {
 ///|
 impl @moonspec.World for DistWorld with fn configure(self, setup) {
   setup.given1("the target {string}", fn(target : String) {
-    self.target = target
+    self.target = DistTarget::parse(target)
   })
   setup.then2("the archive is {string} and the binary is {string}", fn(
     archive : String,
     binary : String,
   ) raise {
-    @expect.expect(archive_name(self.target)).to_equal(archive)
-    @expect.expect(binary_name(self.target)).to_equal(binary)
+    guard self.target is Some(target) else { fail("not a target") }
+    @expect.expect(archive_name(target)).to_equal(archive)
+    @expect.expect(binary_name(target)).to_equal(binary)
+  })
+  setup.then1("the text {string} names no target", fn(text : String) raise {
+    @expect.expect(DistTarget::parse(text) is None).to_equal(true)
   })
   setup.given2("a file {string} with the content {string}", fn(
     name : String,
@@ -432,7 +503,7 @@ impl @moonspec.World for DistWorld with fn configure(self, setup) {
     )
   })
   setup.then1("the cross-built targets are {string}", fn(names : String) raise {
-    @expect.expect(cross_targets.join(",")).to_equal(names)
+    @expect.expect(cross_targets.map(t => t.name()).join(",")).to_equal(names)
   })
   setup.given1("the expected files {string}", fn(names : String) {
     self.expected = names.split(",").map(n => n.to_owned()).collect()
