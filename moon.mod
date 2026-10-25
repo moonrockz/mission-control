@@ -1,6 +1,6 @@
 name = "mission-control-monorepo"
 
-version = "0.0.2"
+version = "0.1.0"
 
 description = "Mission Control for the MoonBit ecosystem: workspace root"
 

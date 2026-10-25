@@ -1,6 +1,6 @@
 name = "moonrockz/mission-control-desktop"
 
-version = "0.0.2"
+version = "0.1.0"
 
 description = "Mission Control desktop shell: Proton command contract and HTML document"
 
@@ -15,6 +15,6 @@ preferred_target = "wasm"
 keywords = [ "mission-control", "proton", "desktop", "ui" ]
 
 import {
-  "moonrockz/mission-control-contracts@0.0.2",
+  "moonrockz/mission-control-contracts@0.1.0",
   "moonbit-community/proton_contract@0.4.0",
 }

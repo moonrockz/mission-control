@@ -20,7 +20,7 @@ test "command names, aliases and Proton IDs" {
 
 ///|
 test "version is the workspace version" {
-  inspect(version(), content="0.0.2")
+  inspect(version(), content="0.1.0")
 }
 
 ///|
