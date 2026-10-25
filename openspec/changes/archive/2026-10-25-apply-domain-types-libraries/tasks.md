@@ -35,7 +35,7 @@ Beads: none yet.
 Beads: none yet.
 
 - [x] 5.1 Run `mise run check`, `mise run test:scripts`, `mise run test:browser` and `openspec validate --all --strict`; verify all pass
-- [ ] 5.2 Write the release note highlights for the breaking mdc and ears changes in the next release pull request; verify they name each changed case
+- [x] 5.2 Write the release note highlights for the breaking mdc and ears changes in the next release pull request; verify they name each changed case
 - [x] 5.3 Review the change with the `code-reviewer` checklist; verify that it reports no Domain types finding in the changed packages
 
 ## 6. Follow-ups

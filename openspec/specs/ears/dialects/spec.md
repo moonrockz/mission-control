@@ -110,7 +110,7 @@ The library SHALL provide a lexicon: a dialect defined as data, with a name and 
 - **THEN** `OpenSpec SHALL validate the change.` parses with the system `OpenSpec`
 
 ### Requirement: Lexicon files
-The library SHALL parse a lexicon from YAML text with the keys `name`, `modals`, `determiners`, `pronouns`, `systems`, `lead_ins` and `headings`, where each heading has a `level` and a `prefix`. It SHALL report an unknown key or a wrong value type as an error with its line.
+The library SHALL parse a lexicon from YAML text with the keys `name`, `modals`, `determiners`, `pronouns`, `systems`, `lead_ins` and `headings`, where each heading has a `level` and a `prefix`. It SHALL report an unknown key or a wrong value type as an error with its line. WHEN a list item is wrong, the library SHALL report the line of that item, in a block list and in a flow list.
 
 #### Scenario: Lexicon file
 - **WHEN** a caller parses a lexicon file with `systems: [Mission Control]` and `lead_ins: [otherwise]`
@@ -119,6 +119,10 @@ The library SHALL parse a lexicon from YAML text with the keys `name`, `modals`,
 #### Scenario: Wrong type
 - **WHEN** a lexicon file has `modals: must`
 - **THEN** parsing fails with an error that names `modals` and its line
+
+#### Scenario: Flow list item
+- **WHEN** a lexicon file has `modals: [must,` on line 1 and `"a b"]` on line 2
+- **THEN** parsing fails with an error that names `modals` and line 2
 
 ### Requirement: OpenSpec dialect
 The library SHALL ship an OpenSpec dialect that adds the modal verbs `shall` and `must`, the determiners `a`, `an`, `each`, `every`, `any`, `these`, `those`, `this`, `that`, `its` and `their`, the pronouns `it` and `they`, the lead-in `otherwise`, and the heading rule level 3 with the prefix `Requirement:`.

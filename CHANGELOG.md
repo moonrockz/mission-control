@@ -8,7 +8,46 @@ is 0.x, a minor release can contain breaking changes.
 
 ## [0.1.0] - 2026-10-25
 
-<!-- Highlights: replace this comment with a few sentences on what this release brings. -->
+This release adds `moonrockz/okf`, a module that reads, queries, checks and
+edits Open Knowledge Format bundles. It stores bundles on the file system, in
+the browser's origin private file system, with a worker fallback for Safari, and
+in IndexedDB. Its OpenSpec profile imports and exports OpenSpec trees.
+
+`moonrockz/ears` adds dialects and lexicons. A dialect adds modal verbs, subject
+openers, system nouns, lead-in phrases and Markdown requirement headings, so the
+parser accepts OpenSpec requirements. Without a dialect, it parses strict EARS
+as before. `Lexicon::from_yaml` reads a lexicon file, and the okf OpenSpec
+profile checks requirements as EARS with the project lexicon in
+`openspec/ears.yaml`.
+
+The libraries now use typed values in place of raw integers and texts. Change
+your code as follows:
+
+- `moonrockz/mdc`:
+  - `BlockKind::Heading` holds a `HeadingLevel` (`H1` to `H6`) in place of an
+    `Int`.
+  - `Frontmatter::Frontmatter` raises `FrontmatterError` with the cases
+    `InvalidYaml`, `NotAMapping` and `MultipleDocuments`, and
+    `ParseError::InvalidFrontmatter` wraps it.
+  - Source positions are `TextPosition` and `SourceRange` values.
+    `Document::source_range` gives the source range of a location.
+- `moonrockz/ears`:
+  - `ParseError::EmptyClause` holds a `Keyword` (`Where`, `While`, `When` or
+    `If`) in place of a text.
+  - Parse errors carry their position as a `SentencePosition`.
+  - `ParseError` has the new case `UnresolvedPronoun`.
+  - `Trigger` is read-only.
+  - `Requirement::system()` gives `String?`, because a requirement with a
+    pronoun subject can have no system.
+  - `SourceSpan` is removed. `Origin::Text` and `Origin::Markdown` hold an
+    `@mdc.SourceRange`.
+- `moonrockz/mission-control-contracts`:
+  - `version()` gives a `Version` value.
+  - `Command::Command(name)` and `Command::name()` replace `parse_command` and
+    `command_name`. `Command::Command` raises `CommandError` for an unknown
+    name.
+- `moonrockz/mission-control-cli`: the `mission-control` command exits with 2
+  for an unknown command.
 
 ### ⚠️ Breaking changes
 
