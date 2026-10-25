@@ -232,22 +232,65 @@ pub fn parse_text(
 ///|
 /// The ranges of the sentences of `text`, without surrounding white space. A
 /// sentence ends at a full stop, a question mark or an exclamation mark that
-/// white space or the end follows, outside backticks.
+/// white space or the end follows, outside backticks; closing brackets and
+/// quote marks after the mark belong to the sentence. A blank line also ends
+/// a sentence. A backtick with no closing backtick on its line is text.
 fn sentence_ranges(text : String) -> Array[(Int32, Int32)] {
   let raw = []
   let n = text.length()
   let mut start = 0
   let mut in_code = false
-  for i in 0..<n {
+  let closing = (c : UInt16) => {
+    c == 41 || c == 93 || c == 34 || c == 39 || c == 0x201D || c == 0x2019
+  }
+  let mut i = 0
+  while i < n {
     let c = text.code_unit_at(i)
-    if c == 96 {
-      in_code = !in_code
-    } else if !in_code &&
-      (c == 46 || c == 63 || c == 33) &&
-      (i + 1 == n || is_space(text.code_unit_at(i + 1))) {
-      raw.push((start, i + 1))
-      start = i + 1
+    if c == 10 || c == 13 {
+      in_code = false
+      // A blank line: a line break, optional white space, a line break.
+      let mut j = i + 1
+      if c == 13 && j < n && text.code_unit_at(j) == 10 {
+        j += 1
+      }
+      let mut k = j
+      while k < n && (text.code_unit_at(k) == 32 || text.code_unit_at(k) == 9) {
+        k += 1
+      }
+      if k < n && (text.code_unit_at(k) == 10 || text.code_unit_at(k) == 13) {
+        raw.push((start, i))
+        start = k
+        i = k
+        continue
+      }
+    } else if c == 96 {
+      // A backtick opens code only when another one closes it on the same
+      // line; an unclosed backtick is text.
+      if in_code {
+        in_code = false
+      } else {
+        let mut j = i + 1
+        while j < n &&
+              text.code_unit_at(j) != 96 &&
+              text.code_unit_at(j) != 10 &&
+              text.code_unit_at(j) != 13 {
+          j += 1
+        }
+        in_code = j < n && text.code_unit_at(j) == 96
+      }
+    } else if !in_code && (c == 46 || c == 63 || c == 33) {
+      let mut end = i + 1
+      while end < n && closing(text.code_unit_at(end)) {
+        end += 1
+      }
+      if end == n || is_space(text.code_unit_at(end)) {
+        raw.push((start, end))
+        start = end
+        i = end
+        continue
+      }
     }
+    i += 1
   }
   if start < n {
     raw.push((start, n))

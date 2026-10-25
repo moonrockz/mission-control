@@ -31,7 +31,12 @@ pub(all) suberror LexiconError {
 
 ///|
 fn has_space_char(text : String) -> Bool {
-  text.iter().any(c => c == ' ' || c == '\t' || c == '\n' || c == '\r')
+  for i in 0..<text.length() {
+    if is_space(text.code_unit_at(i)) {
+      return true
+    }
+  }
+  false
 }
 
 ///|
@@ -103,10 +108,7 @@ struct Phrase {
 pub fn Phrase::Phrase(text : String) -> Phrase raise LexiconError {
   let words = text.split(" ").collect()
   let ok = !text.is_empty() &&
-    words.iter().all(w => w.length() > 0) &&
-    !text.contains("\t") &&
-    !text.contains("\n") &&
-    !text.contains("\r") &&
+    words.iter().all(w => w.length() > 0 && !has_space_char(w.to_owned())) &&
     !text.contains(",") &&
     !text.contains(".")
   if !ok {
@@ -206,7 +208,13 @@ fn HeadingRule::name_of(
   guard level == self.level && text.has_prefix(self.prefix.text) else {
     return None
   }
-  Some(text[self.prefix.text.length():].trim(chars=" \t").to_owned())
+  // A heading with the prefix and no name names no block.
+  let name = text[self.prefix.text.length():].trim(chars=" \t").to_owned()
+  if name.is_empty() {
+    None
+  } else {
+    Some(name)
+  }
 }
 
 ///|
@@ -365,6 +373,10 @@ priv struct Vocabulary {
   systems : Array[String]
   lead_ins : Array[String]
   headings : Array[HeadingRule]
+  /// A dialect adds vocabulary. Only then does `not` negate a modal verb,
+  /// and does a clause take every comma that a subject word follows up to
+  /// the last one before the modal verb; strict EARS keeps both as before.
+  extended : Bool
 }
 
 ///|
@@ -418,6 +430,12 @@ fn Vocabulary::of(dialects : ArrayView[&Dialect]) -> Vocabulary {
       }
     }
   }
+  let extended = modals.length() > 1 ||
+    determiners.length() > 1 ||
+    !pronouns.is_empty() ||
+    !systems.is_empty() ||
+    !lead_ins.is_empty() ||
+    !headings.is_empty()
   {
     modals,
     determiners,
@@ -425,6 +443,7 @@ fn Vocabulary::of(dialects : ArrayView[&Dialect]) -> Vocabulary {
     systems: longest_first(systems),
     lead_ins: longest_first(lead_ins),
     headings,
+    extended,
   }
 }
 

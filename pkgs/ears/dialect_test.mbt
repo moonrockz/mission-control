@@ -323,3 +323,116 @@ test "the OpenSpec dialect parses each failure class of the probe" {
   )
   assert_eq(block.diagnostics().length(), 0)
 }
+
+///|
+test "a lead-in ends at the first clause or subject after it" {
+  let dialects : Array[&@ears.Dialect] = [@ears.openspec_dialect()]
+  let saves = @ears.parse(
+    "Otherwise when the user saves, the store SHALL write.",
+    dialects~,
+  )
+  assert_eq(saves.lead_in(), Some("Otherwise"))
+  assert_true(saves.trigger() is Some(Event("the user saves")))
+  let idle = @ears.parse("Otherwise while idle, it SHALL wait.", dialects~)
+  assert_eq(idle.lead_in(), Some("Otherwise"))
+  assert_eq(idle.preconditions().iter().collect(), ["idle"])
+  for
+    text in [
+      "Otherwise it SHALL list files, then exit.", "Otherwise it SHALL retry, when possible.",
+      "Otherwise the store SHALL keep files, the index and logs.",
+    ] {
+    let r = @ears.parse(text, dialects~)
+    assert_eq(r.lead_in(), Some("Otherwise"), msg=text)
+  }
+  let unwanted = @ears.parse("Otherwise if x, then it SHALL y.", dialects~)
+  assert_true(unwanted.trigger() is Some(Unwanted("x")))
+}
+
+///|
+test "strict EARS keeps not in the response" {
+  let r = @ears.parse("The system shall not crash.")
+  assert_eq((r.modal().negated, r.response()), (false, "not crash."))
+  assert_eq(@ears.parse("The system shall not").response(), "not")
+  let empty : Array[&@ears.Dialect] = [NameOnly::{ }]
+  assert_eq(@ears.parse("The system shall not crash.", dialects=empty), r)
+}
+
+///|
+test "with a dialect, a clause takes commas up to the last subject comma before the modal verb" {
+  let dialects : Array[&@ears.Dialect] = [@ears.openspec_dialect()]
+  let cold = @ears.parse(
+    "While the cache is cold, that is, empty, the store SHALL wait.",
+    dialects~,
+  )
+  assert_eq(cold.preconditions().iter().collect(), [
+    "the cache is cold, that is, empty",
+  ])
+  assert_eq(cold.system(), Some("store"))
+  let file = @ears.parse(
+    "When a file, a folder or a link changes, the store SHALL reindex.",
+    dialects~,
+  )
+  assert_true(
+    file.trigger() is Some(Event("a file, a folder or a link changes")),
+  )
+  let large = @ears.parse(
+    "If the file is large, that is, over 1 MB, then the store SHALL reject it.",
+    dialects~,
+  )
+  assert_true(
+    large.trigger() is Some(Unwanted("the file is large, that is, over 1 MB")),
+  )
+}
+
+///|
+test "sentence ends: code, brackets, quote marks and blank lines" {
+  let dialects : Array[&@ears.Dialect] = [@ears.openspec_dialect()]
+  let count = (text : String) => {
+    let spec = @ears.parse_block(text, dialects~)
+    (spec.requirements().length(), spec.diagnostics().length())
+  }
+  assert_eq(count("The store SHALL read ` files.\nIt SHALL sort them."), (2, 0))
+  assert_eq(
+    count("The store SHALL list files (see below.) It SHALL sort them."),
+    (2, 0),
+  )
+  assert_eq(count("The store SHALL list files\n\nIt SHALL sort them."), (2, 0))
+  let markdown = @ears.parse_markdown(
+    "### Requirement: A\nThe store SHALL write `x. y` z.\n",
+    dialects~,
+  )
+  assert_eq(
+    (markdown.requirements().length(), markdown.diagnostics().length()),
+    (1, 0),
+  )
+}
+
+///|
+test "lexicon rules: white space, empty heading names and large heading levels" {
+  assert_eq(
+    lexicon_error(() => @ears.Word("a\u{0B}b") |> ignore),
+    Some(InvalidWord("a\u{0B}b")),
+  )
+  assert_eq(
+    lexicon_error(() => @ears.Phrase("a\u{0B}b") |> ignore),
+    Some(InvalidPhrase("a\u{0B}b")),
+  )
+  assert_true(
+    lexicon_error(() => {
+      @ears.Lexicon::from_yaml(
+        "headings:\n  - level: 4294967299\n    prefix: X\n",
+      )
+      |> ignore
+    })
+    is Some(InvalidEntry(key="headings", error=InvalidHeadingLevel(_), ..)),
+  )
+  assert_eq(
+    lexicon_error(() => @ears.Lexicon::from_yaml("\"verbs\": [x]\n") |> ignore),
+    Some(UnknownKey(key="verbs", line=1)),
+  )
+  let spec = @ears.parse_markdown(
+    "### Requirement:\nThe store SHALL list files.\n",
+    dialects=[@ears.openspec_dialect()],
+  )
+  assert_eq(spec.blocks().length(), 0)
+}

@@ -1,13 +1,20 @@
 ///|
 // Flatten inline presentation only. Destinations, raw HTML and image alt text
 // cannot introduce requirement words. Code spans in a sentence remain text.
-fn paragraph_text(node : @mdc.Node) -> String {
+fn paragraph_text(node : @mdc.Node, code_marks~ : Bool = false) -> String {
   let out = StringBuilder()
   @mdc.walk(node, node => {
     if node is Inline(view) {
       match view.kind() {
         Text(text~) => out.write_string(text)
-        CodeSpan(code~) => out.write_string(code)
+        CodeSpan(code~) =>
+          // Block parsing keeps the backticks, so that a full stop in code
+          // does not end a sentence.
+          if code_marks {
+            out.write_string("`" + code + "`")
+          } else {
+            out.write_string(code)
+          }
         Break => out.write_string(" ")
         Autolink =>
           if view.to_cmark() is Autolink({ v, .. }) {
@@ -167,7 +174,9 @@ fn blocks_of(
         Paragraph => {
           match current {
             Some(b) => {
-              let text = normalize(paragraph_text(cursor.node()))
+              let text = normalize(
+                paragraph_text(cursor.node(), code_marks=true),
+              )
               let origin = Markdown(
                 path=cursor.path(),
                 span=view_span(document, view),

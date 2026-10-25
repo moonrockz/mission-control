@@ -238,7 +238,9 @@ view gives each requirement its `sentences` and `sentence_diagnostics`, and a
 pronoun refers to the system of an earlier sentence of the requirement.
 `OpenSpecProfile::of_tree(set, root)` reads the project lexicon from
 `ears.yaml` at the root of the tree; `OpenSpecProfile(lexicon=...)` takes one in
-code. Pass the profile to `view(bundle, profile~)`.
+code. Pass the profile to `view(bundle, profile~)`; without one, the view
+parses with the OpenSpec dialect alone. List markers and `**` emphasis marks
+are removed before parsing, and a finding names the file line of its sentence.
 
 ```yaml
 # openspec/ears.yaml

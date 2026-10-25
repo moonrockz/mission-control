@@ -51,21 +51,21 @@ Alternative: a grammar plug-in per dialect. Rejected: separate grammars would dr
 
 `Requirement` gains `lead_in : String?`, `subject : Subject` and `modal : Modal` (`{ verb : Word, negated : Bool }`). `Subject` is `Determined(opener~ : Word, system~ : String)` (the determiner as written; `the` for strict input), `Noun(String)` (a system noun) or `Pronoun(opener~ : Word, resolved~ : String?)` (the antecedent, set only by block parsing). `opener()` gives the determiner or pronoun, and none for a system noun. `system()` gives `String?`: the system, or for a pronoun its resolved system, so an unresolved pronoun has no system rather than an empty one. `resolved_system()` gives the antecedent of a pronoun. `pattern()` does not change, because lead-ins, openers and modals are not EARS clauses.
 
-`to_string()` renders `[lead_in, ]clauses, <opener> <system> <verb>[ not] <response>`, with the opener as written and keywords in canonical lower case. Parsing that text with the same dialects gives an equal requirement. For strict input the output is the same as today.
+`to_string()` renders `[lead_in, ]clauses, <opener> <system> <verb>[ not] <response>`, with the opener and the modal verb in lower case and a capital first letter at the start of the sentence, as strict EARS renders `The` and `shall` today. Parsing that text with the same dialects gives an equal requirement. For strict input the output is the same as today.
 
 ### D3. Parsing order with a vocabulary
 
 1. Normalize white space.
-2. If the text starts with a lead-in (longest match, any case), take it up to the first comma that is followed by a clause keyword or a subject start, or up to the subject start when no comma follows.
-3. Read `Where`, `While`, `When` and `If ... then` clauses as today. A comma is structural when a clause keyword, `then`, or a subject start follows it. A subject start is `the`, a determiner, a pronoun or a system noun.
+2. If the text starts with a lead-in (longest match, any case), take it up to the first comma or space after the phrase that a clause keyword or a subject start follows, and never past the modal verb.
+3. Read `Where`, `While`, `When` and `If ... then` clauses as today. A comma is structural when a clause keyword or `then` follows it. A subject start is `the`, a determiner, a pronoun or a system noun. Without a dialect, a comma that a subject start follows ends the clause, as today. With a dialect, such words are common inside clause text (`a`, `that`, `its`), so a clause takes every comma that a subject start follows up to the last one before the modal verb, and an `If` clause ignores them, because it ends at `then`.
 4. Read the subject: an opener word, or a system noun. After a determiner (or `the`), the system runs to the modal verb. After a pronoun, the modal verb must follow directly. A system noun is the whole system.
-5. Find the first modal verb of the vocabulary (`shall` always, plus dialect modals) as a word. An optional `not` after it sets `negated`. The rest is the response.
+5. Find the first modal verb of the vocabulary (`shall` always, plus dialect modals) as a word. With a dialect, an optional `not` after it sets `negated`; without one, `not` stays in the response, as today. The rest is the response.
 
 Strict input passes through the same steps with an empty dialect vocabulary, so `the` and `shall` give the same results as today. The acceptance tests of `tests/ears-acceptance` and the laws of `tests/ears-laws` run unchanged as the strictness proof.
 
 ### D4. Blocks and Markdown
 
-`parse_block(text, dialects?) -> Specification` splits sentences (D-goal rule), parses each with the vocabulary, and resolves pronouns to the nearest previous `system`. Each sentence keeps a `SourceSpan` relative to the block; an unresolved pronoun adds an `UnresolvedPronoun` diagnostic (a new `ParseError` case with the pronoun and its position) and keeps the requirement.
+`parse_block(text, dialects?) -> Specification` splits sentences at a blank line or at `.`, `?` or `!` followed by white space or the end, outside backticks (closing brackets and quote marks after the mark stay in the sentence, and a backtick with no closing backtick on its line is text), parses each with the vocabulary, and resolves pronouns to the nearest previous `system`. Each sentence keeps a `SourceSpan` relative to the block; an unresolved pronoun adds an `UnresolvedPronoun` diagnostic (a new `ParseError` case with the pronoun and its position) and keeps the requirement.
 
 `parse_markdown(source, dialects?)` keeps today's extraction when no heading rule is active. With heading rules, it walks the MDC block tree: a heading that matches a rule (level and case-sensitive prefix) opens a `RequirementBlock { name, heading : @mdc.SourceRange?, requirements, diagnostics }`; the paragraphs and list items after it, up to the next heading of any level, form the block text, and each sentence has the span of its paragraph. The `Specification` gains `blocks()`; `requirements()` and `diagnostics()` stay flat lists over all blocks.
 
@@ -75,9 +75,9 @@ Strict input passes through the same steps with an empty dialect vocabulary, so 
 
 ### D6. `moonrockz/okf/openspec` uses `moonrockz/ears`
 
-A bundle keeps the paths of its assets but not their contents, so the profile reads the lexicon file from the document set. `OpenSpecProfile::OpenSpecProfile(lexicon? : @ears.Lexicon)` makes a profile with a lexicon in code, and `OpenSpecProfile::of_tree(set, root, lexicon?)` also reads `ears.yaml` at `root` when it exists. `view(bundle, profile?)` parses each requirement text with `parse_block` and the dialects of the profile (the OpenSpec dialect, the lexicon file when it parses, and the lexicon in code), and gives each `Requirement` of the view `sentences`, `sentence_diagnostics` and `text_line` (the file line of the first line of the text). The profile adds the rule `openspec-requirement-not-ears` (warning) for each diagnostic of a spec or an active change, and the rule `openspec-lexicon-invalid` (error) for a lexicon file that does not parse. Archived changes are history, so the EARS check skips them.
+A bundle keeps the paths of its assets but not their contents, so the profile reads the lexicon file from the document set. `OpenSpecProfile::OpenSpecProfile(lexicon? : @ears.Lexicon)` makes a profile with a lexicon in code, and `OpenSpecProfile::of_tree(set, root, lexicon?)` also reads `ears.yaml` at `root` when it exists. `view(bundle, profile?)` parses each requirement text with `parse_block` and the dialects of the profile (the OpenSpec dialect, the lexicon file when it parses, and the lexicon in code), and gives each `Requirement` of the view `sentences`, `sentence_diagnostics` and `text_line` (the file line of the first line of the text). Before parsing, the profile removes list markers and `**` and `__` emphasis marks from each line of the text, and it maps each sentence to its file line through the lines of the text, so a fenced block in the text does not shift the line. The profile adds the rule `openspec-requirement-not-ears` (warning) for each diagnostic of a spec or an active change, and the rule `openspec-lexicon-invalid` (error) for a lexicon file that does not parse. Archived changes are history, so the EARS check skips them.
 
-The struct gets private fields, so callers write `OpenSpecProfile()` in place of the `OpenSpecProfile::{}` literal.
+The struct gets private fields, so callers write `OpenSpecProfile()` in place of the `OpenSpecProfile::{}` literal. `view(bundle)` without a profile parses with the OpenSpec dialect alone. An invalid lexicon file under a root that no bundle has is reported by its store path.
 
 ### D7. This repository gets a lexicon file
 

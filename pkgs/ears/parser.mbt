@@ -42,7 +42,7 @@ priv enum ClauseWord {
   Clause(Keyword)
   Then
   SubjectWord
-} derive(Eq)
+}
 
 ///|
 fn clause_word(text : String, vocabulary : Vocabulary) -> ClauseWord? {
@@ -74,6 +74,9 @@ fn starts_then_system(
 ///|
 // A comma is structural only when a reserved clause keyword follows it.
 // Ordinary commas in natural-language clauses remain part of that clause.
+// With a dialect, a comma that a subject word follows ends the clause only
+// when it is the last such comma before the modal verb, and an `If` clause
+// ignores such commas, because it ends at `then`.
 fn take_clause(
   text : String,
   unwanted : Bool,
@@ -81,15 +84,32 @@ fn take_clause(
   at~ : SentencePosition,
 ) -> (String, String) raise ParseError {
   let mut saw_incomplete_then = false
+  let mut subject_comma : Int32? = None
+  let split = (i : Int32) => {
+    (text[:i].trim_end().to_owned(), text[i + 1:].trim_start().to_owned())
+  }
   for i in 0..<text.length() {
+    if vocabulary.extended &&
+      subject_comma is Some(c) &&
+      text.code_unit_at(i - 1) == 32 &&
+      vocabulary.modal_at(text, i) is Some(_) {
+      return split(c)
+    }
     if text.code_unit_at(i) == 44 {
       let rest = text[i + 1:].trim_start().to_owned()
-      if clause_word(rest, vocabulary) is Some(word) {
-        if unwanted && word == Then && !starts_then_system(rest, 0, vocabulary) {
+      match clause_word(rest, vocabulary) {
+        Some(Then) if unwanted && !starts_then_system(rest, 0, vocabulary) => {
           saw_incomplete_then = true
           continue
         }
-        return (text[:i].trim_end().to_owned(), rest)
+        Some(SubjectWord) if vocabulary.extended => {
+          if !unwanted {
+            subject_comma = Some(i)
+          }
+          continue
+        }
+        Some(_) => return split(i)
+        None => ()
       }
     }
     if unwanted && text.code_unit_at(i) == 32 {
@@ -100,6 +120,10 @@ fn take_clause(
         saw_incomplete_then = true
       }
     }
+  }
+  match subject_comma {
+    Some(c) => return split(c)
+    None => ()
   }
   if unwanted {
     if saw_incomplete_then {
@@ -131,26 +155,22 @@ fn lead_in_at_start(text : String, vocabulary : Vocabulary) -> Int32? {
 
 ///|
 /// The lead-in phrase at the start of `text`, when a dialect gives one: up to
-/// the first comma that a clause keyword or a subject follows, or else up to
-/// the first word that starts a subject. Gives the lead-in and the rest.
+/// the first comma or space after the phrase that a clause keyword or a
+/// subject follows, and never past the modal verb. Gives the lead-in and the
+/// rest.
 fn take_lead_in(text : String, vocabulary : Vocabulary) -> (String?, String) {
   guard lead_in_at_start(text, vocabulary) is Some(length) else {
     return (None, text)
   }
   for i in length..<text.length() {
-    if text.code_unit_at(i) == 44 {
-      let rest = text[i + 1:].trim_start().to_owned()
-      if clause_word(rest, vocabulary) is Some(_) {
-        return (Some(text[:i].trim_end().to_owned()), rest)
-      }
+    let c = text.code_unit_at(i)
+    guard c == 44 || c == 32 else { continue }
+    let rest = text[i + 1:].trim_start().to_owned()
+    if vocabulary.modal_at(rest, 0) is Some(_) {
+      break
     }
-  }
-  for i in length..<text.length() {
-    if text.code_unit_at(i) == 32 {
-      let rest = text[i + 1:].to_owned()
-      if clause_word(rest, vocabulary) is Some(_) {
-        return (Some(text[:i].trim_end().to_owned()), rest)
-      }
+    if clause_word(rest, vocabulary) is Some(_) {
+      return (Some(text[:i].trim_end().to_owned()), rest)
     }
   }
   (None, text)
@@ -259,7 +279,9 @@ fn parse_sentence(
   }
   let verb_length = vocabulary.modal_at(from_modal, 0).unwrap_or(0)
   let verb : Word = { text: from_modal[:verb_length].to_owned(), }
-  let negated = starts_word_at(from_modal, verb_length + 1, "not")
+  // Strict EARS keeps `not` in the response, as before dialects.
+  let negated = vocabulary.extended &&
+    starts_word_at(from_modal, verb_length + 1, "not")
   let after_modal = if negated {
     from_modal[verb_length + 4:].to_owned()
   } else {

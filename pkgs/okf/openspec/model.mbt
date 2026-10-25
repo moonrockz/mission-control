@@ -16,8 +16,8 @@ pub struct Requirement {
   text : String
   scenarios : ReadOnlyArray[Scenario]
   line : Int32
-  /// The file line of the first line of the text, when there is text.
-  text_line : Int32?
+  /// The file line of each line of the text, in order.
+  text_lines : ReadOnlyArray[Int32]
   /// The EARS requirements of the text, one for each sentence that parses.
   sentences : ReadOnlyArray[@ears.Occurrence]
   /// The sentences of the text that do not parse as EARS. Their spans are
@@ -121,6 +121,29 @@ fn[T] frozen(items : Array[T]) -> ReadOnlyArray[T] {
 }
 
 ///|
+/// A requirement line as EARS reads it: without a list marker at the start
+/// and without `**` and `__` emphasis marks.
+fn ears_line(line : String) -> String {
+  let t = line.trim_start(chars=" \t").to_owned()
+  let indent = line.length() - t.length()
+  let marker = if t.has_prefix("- ") || t.has_prefix("* ") || t.has_prefix("+ ") {
+    2
+  } else {
+    let mut d = 0
+    while d < t.length() && t.code_unit_at(d) >= 48 && t.code_unit_at(d) <= 57 {
+      d += 1
+    }
+    if d > 0 && t[d:].has_prefix(". ") {
+      d + 2
+    } else {
+      0
+    }
+  }
+  let rest = line[indent + marker:].to_owned()
+  rest.replace_all(old="**", new="").replace_all(old="__", new="")
+}
+
+///|
 fn heading(line : String) -> (Int32, String)? {
   let t = line.trim_start(chars=" ").to_owned()
   let mut level = 0
@@ -206,7 +229,8 @@ priv struct RequirementBuilder {
   text : Array[String]
   scenarios : Array[Scenario]
   line : Int32
-  mut text_line : Int32?
+  /// The file line of each line of `text`.
+  lines : Array[Int32]
 }
 
 ///|
@@ -280,13 +304,24 @@ pub fn parse_spec(
     match current_req {
       Some(r) => {
         let text = r.text.join("\n").trim(chars="\n ").to_owned()
-        let ears = @ears.parse_block(text, dialects~)
+        // The lines that `text` keeps: blank lines at either end go.
+        let blank = (s : String) => s.iter().all(c => c == ' ')
+        let mut first = 0
+        let mut last = r.text.length()
+        while first < last && blank(r.text[first]) {
+          first += 1
+        }
+        while last > first && blank(r.text[last - 1]) {
+          last -= 1
+        }
+        let kept = r.text[first:last].iter().map(ears_line).collect()
+        let ears = @ears.parse_block(kept.join("\n"), dialects~)
         let req : Requirement = {
           name: r.name,
           text,
           scenarios: frozen(r.scenarios),
           line: r.line,
-          text_line: r.text_line,
+          text_lines: frozen(r.lines[first:last].to_owned()),
           sentences: ears.requirements(),
           sentence_diagnostics: ears.diagnostics(),
         }
@@ -337,7 +372,7 @@ pub fn parse_spec(
               text: [],
               scenarios: [],
               line: number,
-              text_line: None,
+              lines: [],
             })
           None => unnamed.push(number)
         }
@@ -403,10 +438,8 @@ pub fn parse_spec(
           None =>
             match current_req {
               Some(r) => {
-                if r.text_line is None && line.trim(chars=" \t").length() > 0 {
-                  r.text_line = Some(number)
-                }
                 r.text.push(line)
+                r.lines.push(number)
               }
               None => ()
             }

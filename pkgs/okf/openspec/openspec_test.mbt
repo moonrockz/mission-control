@@ -683,7 +683,7 @@ test "the view gives the EARS sentences of each requirement" {
   assert_eq(r.sentences.length(), 2)
   assert_eq(r.sentence_diagnostics.length(), 0)
   assert_eq(r.sentences[1].requirement().resolved_system(), Some("store"))
-  assert_eq(r.text_line, Some(10))
+  assert_eq(r.text_lines.iter().collect(), [10])
 }
 
 ///|
@@ -745,4 +745,43 @@ test "a sentence that is not EARS is reported with its line" {
   assert_eq(ears_findings(set, profile), [
     ("openspec-requirement-not-ears", "/specs/a/spec.md", Some(11)),
   ])
+}
+
+///|
+test "finding lines follow the file after a fenced block, and list markers are read" {
+  let text = "The store SHALL list files.\n\n```text\na\nb\n```\n\nFast responses are important.\n\n- The store SHALL sort them.\n\n**The store** SHALL keep them."
+  let set = ears_tree(text)
+  let profile = @openspec.OpenSpecProfile::of_tree(
+    set,
+    @okf.StoreDir("openspec"),
+  )
+  let findings = ears_findings(set, profile)
+  assert_eq(findings.map(f => (f.0, f.2)), [
+    ("openspec-requirement-not-ears", Some(17)),
+  ])
+}
+
+///|
+test "an invalid lexicon file under a root that no bundle has is still reported" {
+  let set = ears_tree("The store SHALL list files.", lexicon="systems: [\n")
+  let profile = @openspec.OpenSpecProfile::of_tree(
+    set,
+    @okf.StoreDir("openspec"),
+  )
+  let profiles : Array[&@okf.Profile] = [profile]
+  let b = @okf.load_bundle(set, root=@okf.StoreDir("openspec/specs"), profiles~)
+  let findings = @okf.validate(
+    @okf.Knowledge([b]),
+    [],
+    @okf.FixedClock(@okf.Instant::of_millis(0L)),
+    profiles~,
+  ).findings()
+  assert_true(
+    findings
+    .iter()
+    .any(f => {
+      f.rule.to_string() == "openspec-lexicon-invalid" &&
+      f.subject.path_text() == Some("openspec/ears.yaml")
+    }),
+  )
 }

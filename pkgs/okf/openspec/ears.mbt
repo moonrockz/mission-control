@@ -134,9 +134,9 @@ fn check_not_ears(
     guard model_of(pair.1, dialects) is Some(model) else { continue }
     for r in all_requirements(model) {
       for d in r.sentence_diagnostics {
-        let line = match (r.text_line, d.origin()) {
-          (Some(first), Text(span)) => Some(first + span.line() - 1)
-          (first, _) => first
+        let line = match d.origin() {
+          Text(span) => r.text_lines.get(span.line() - 1)
+          Markdown(..) => r.text_lines.get(0)
         }
         out.push(
           @okf.Issue::at(
@@ -165,17 +165,26 @@ fn check_lexicon(
   let path = @okf.BundlePath("/" + lexicon_file_name) catch {
     _ => abort("the lexicon file path is not a bundle path")
   }
+  let message = "the lexicon file does not parse: \{@debug.to_string(error)}"
   let out = []
   for bundle in ctx.knowledge.bundles() {
     if bundle.root() == root {
       out.push(
         @okf.Issue::in_bundle(
           { bundle: bundle.label(), path, },
-          "the lexicon file does not parse: \{@debug.to_string(error)}",
+          message,
           line?=lexicon_line(error),
         ),
       )
     }
+  }
+  // No bundle has the root of the tree: report the file by its store path.
+  if out.is_empty() {
+    let name = @okf.EntryName(lexicon_file_name) catch {
+      _ => abort("the lexicon file name is not an entry name")
+    }
+    let at = lexicon_line(error).map(l => " (line \{l})").unwrap_or("")
+    out.push(@okf.Issue::stray(root.file(name), message + at))
   }
   out
 }

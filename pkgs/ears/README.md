@@ -123,7 +123,7 @@ default, so a dialect gives only what it adds:
 
 | Method | Adds | Example |
 | --- | --- | --- |
-| `modals` | modal verbs besides `shall`; `not` after one negates it | `must` |
+| `modals` | modal verbs besides `shall`; with a dialect, `not` after one negates it | `must` |
 | `determiners` | words that start a subject besides `the` | `each`, `an` |
 | `pronouns` | words that stand for a system | `it` |
 | `system_nouns` | phrases that are a whole subject | `Mission Control` |
@@ -138,9 +138,15 @@ Keywords match without letter case. A `Requirement` records its `lead_in()`, its
 system that block parsing resolved it to. `to_string()` renders the requirement
 so that parsing it again with the same dialects gives an equal requirement.
 
+With a dialect, a comma inside a clause that a subject word follows (such as
+`a` or `that`) ends the clause only when it is the last such comma before the
+modal verb, and an `If` clause ends only at `then`. Without a dialect, both
+rules stay as in strict EARS, and `not` stays in the response.
+
 `parse_block(text, dialects=[...])` splits a requirement text into sentences: a
-sentence ends at `.`, `?` or `!` that white space or the end follows, outside
-backticks. A pronoun subject refers to the system of the nearest earlier
+sentence ends at a blank line, or at `.`, `?` or `!` that white space or the
+end follows, outside backticks. Closing brackets and quote marks after the mark
+belong to the sentence. A pronoun subject refers to the system of the nearest earlier
 sentence; without one, the requirement stays and an `UnresolvedPronoun`
 diagnostic names it. With heading rules, `parse_markdown` gives one
 `RequirementBlock` for each matching heading (`blocks()`): its name, its heading

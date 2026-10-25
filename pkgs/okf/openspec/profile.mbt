@@ -381,7 +381,7 @@ fn zero_requirement(r : Requirement) -> Requirement {
   {
     ..r,
     line: 0,
-    text_line: None,
+    text_lines: [],
     scenarios: frozen(r.scenarios.iter().map(s => { ..s, line: 0, }).collect()),
   }
 }

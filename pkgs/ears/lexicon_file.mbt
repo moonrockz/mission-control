@@ -8,7 +8,9 @@ let lexicon_keys : Array[String] = [
 /// The file line of the top-level `key:` line, or 1.
 fn key_line(text : String, key : String) -> Int32 {
   for i, line in text.split("\n").collect() {
-    if line.has_prefix(key + ":") {
+    if line.has_prefix(key + ":") ||
+      line.has_prefix("\"" + key + "\":") ||
+      line.has_prefix("'" + key + "':") {
       return i + 1
     }
   }
@@ -114,13 +116,26 @@ fn headings_of(
     }
     let level = match fields.get("level") {
       Some(Integer(n)) =>
-        match @mdc.HeadingLevel::of_int(n.to_int()) {
+        match
+          (if n >= 1L && n <= 6L {
+            @mdc.HeadingLevel::of_int(n.to_int())
+          } else {
+            None
+          }) {
           Some(level) => level
           None =>
             raise InvalidEntry(
               key~,
               line=at,
-              error=InvalidHeadingLevel(n.to_int()),
+              error=InvalidHeadingLevel(
+                if n > 2147483647L {
+                  2147483647
+                } else if n < -2147483648L {
+                  -2147483648
+                } else {
+                  n.to_int()
+                },
+              ),
             )
         }
       _ => raise WrongType(key="headings.level", line=at, expected=Number)
