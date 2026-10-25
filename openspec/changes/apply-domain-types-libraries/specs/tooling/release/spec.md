@@ -33,3 +33,24 @@ Every task script SHALL exit with 0 for success, 1 for a failure and 2 for a usa
 #### Scenario: Usage error
 - **WHEN** a user runs `moonx scripts/versions.mbtx` with no arguments
 - **THEN** the script prints its usage and exits with 2
+
+### Requirement: Release facts
+The release script SHALL read whether the commit is on main and the state of the GitHub release (missing, incomplete or complete) as typed values, and SHALL skip only a version whose release is complete.
+
+#### Scenario: Draft release
+- **WHEN** the GitHub release of the version is a draft with every asset
+- **THEN** the plan releases the version
+
+### Requirement: Typed script errors
+The version and credentials scripts SHALL give each error as a typed case, and SHALL print the message of that case.
+
+#### Scenario: No version line
+- **WHEN** the root `moon.mod` has no version line
+- **THEN** the version check fails with the message `The root moon.mod has no version line.`
+
+### Requirement: Whole breaking change notes
+WHEN a commit body wraps a `BREAKING CHANGE:` footer at a line that starts with `Type::name` or `owner/module:`, the changelog SHALL show the whole footer.
+
+#### Scenario: Wrapped footer
+- **WHEN** a footer line ends with `use OpenSpecProfile() or` and the next line starts with `OpenSpecProfile::of_tree.`
+- **THEN** the breaking change note ends with `OpenSpecProfile::of_tree.`

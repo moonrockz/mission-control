@@ -11,6 +11,12 @@ The review against the Domain types section of `AGENTS.md` also covered `moonroc
 - **`moonrockz/mission-control-contracts`:** `version()` gives a `Version` value; `Command::Command(name)` raises `CommandError::UnknownCommand` with the name; commands give their CLI names and Proton IDs, so the apps copy no names.
 - **`apps/cli`:** the command result carries an `ExitCode` (0 to 255) with named constructors for success, failure and usage errors.
 - **Task scripts:** the release script parses the GitHub event, the ref and the release facts once into `RunTrigger`, `GitRef` and `ReleaseFacts`; build targets become `Backend` and `DistTarget` enums; command failures become a `Failure` enum from one keyword table; exit codes and script errors are typed.
+- **Follow-ups (design D7):**
+  - **BREAKING (`moonrockz/ears`):** `Origin` holds an `@mdc.SourceRange` in place of `SourceSpan`, which is removed.
+  - `Lexicon::from_yaml` reports the line of a wrong item in a flow list.
+  - `ReleaseFacts` holds a `MainState` and a `ReleaseState` in place of two Boolean flags.
+  - `versions.mbtx` and `credentials.mbtx` give typed errors in place of message texts.
+  - `cliff.toml` keeps a wrapped `BREAKING CHANGE:` footer whole.
 
 ### Out of scope
 
@@ -30,10 +36,10 @@ The review against the Domain types section of `AGENTS.md` also covered `moonroc
 
 ### Modified Capabilities
 
-None.
+- `ears/dialects`: a lexicon error names the line of the wrong item, also in a flow list.
 
 ## Impact
 
-- **Affected published modules:** `moonrockz/mdc` and `moonrockz/ears` (breaking: callers that match `Heading(level~)`, `InvalidFrontmatter` or `EmptyClause(keyword~)` change), `moonrockz/mission-control-contracts`, `moonrockz/mission-control-cli`, `moonrockz/mission-control-desktop` and `moonrockz/okf` (it consumes the mdc values).
+- **Affected published modules:** `moonrockz/mdc` and `moonrockz/ears` (breaking: callers that match `Heading(level~)`, `InvalidFrontmatter`, `EmptyClause(keyword~)` or `Origin::Text(span)` change), `moonrockz/mission-control-contracts`, `moonrockz/mission-control-cli`, `moonrockz/mission-control-desktop` and `moonrockz/okf` (it consumes the mdc values).
 - **Release notes:** the breaking changes go in the highlights of the next release.
 - **Scripts:** `scripts/*.mbtx` and their features change; `mise run test:scripts` covers them.

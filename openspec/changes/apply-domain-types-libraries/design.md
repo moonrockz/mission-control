@@ -41,6 +41,16 @@ All breaking changes to `moonrockz/mdc` and `moonrockz/ears` land in one release
 
 Each script that needs them gets private `Version`, `ExitCode`, `Backend` and `Failure` types. `scripts/test-scripts.mbtx` gains a check that the copies of the failure table in `publish.mbtx` and `release.mbtx` are equal, as it does today for the publish lists.
 
+### D7. Follow-ups
+
+The review of the dialects change found four more places with raw values. They land before the release, so the breaking changes still ship in one release (D1).
+
+- `SourceSpan` duplicated the offsets and the start position of `@mdc.SourceRange` as raw integers and had no end position. `Origin::Text` and `Origin::Markdown` now hold `@mdc.SourceRange`, and `SourceSpan` is removed. Markdown origins take the range from `Document::source_range` with no copy.
+- `Lexicon::from_yaml` found lines by matching text, so a flow list, a quoted key or a block scalar gave the key line. It now reads the line of each top-level key and each list item from the marked events of the YAML parser.
+- `ReleaseFacts { on_main : Bool; released : Bool }` becomes `{ main : MainState; release : ReleaseState }`, with `MainState { OnMain; OffMain }` and `ReleaseState { Missing; Incomplete; Complete }`. `ReleaseState::of` replaces `release_complete`.
+- `versions.mbtx` gives `RootVersionError { NoVersionLine; NotAVersion }` and `credentials.mbtx` gives `CredentialsError { TokenNotSet; NoMoonDirectory }`, each with `message()`.
+- git-cliff read a wrapped footer line that starts with `Type::name` or `owner/module:` as a new footer, so the breaking change notes of #16 and #18 stopped in the middle of a sentence. Two commit preprocessors in `cliff.toml` join such lines to the line before them.
+
 ## Risks / Trade-offs
 
 - [Breaking published APIs] → One release with clear notes (D1); the modules are at 0.0.x.
@@ -49,4 +59,4 @@ Each script that needs them gets private `Version`, `ExitCode`, `Backend` and `F
 
 ## Migration Plan
 
-Callers of `moonrockz/mdc` change `Heading(level~)` matches to `HeadingLevel`, and `InvalidFrontmatter` matches to `FrontmatterError` cases. Callers of `moonrockz/ears` change `EmptyClause(keyword~)` matches to `Keyword`. The release notes list each change. Rollback is a revert before the release.
+Callers of `moonrockz/mdc` change `Heading(level~)` matches to `HeadingLevel`, and `InvalidFrontmatter` matches to `FrontmatterError` cases. Callers of `moonrockz/ears` change `EmptyClause(keyword~)` matches to `Keyword`, and read `Origin` ranges with `start_offset()`, `end_offset()`, `start().line()` and `start().column()` in place of the `SourceSpan` methods. The release notes list each change. Rollback is a revert before the release.
