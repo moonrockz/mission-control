@@ -24,7 +24,7 @@ The library SHALL classify each link destination as external (a URI with a schem
 - **THEN** the kinds are external, anchor, bundle-rooted and relative
 
 ### Requirement: Link resolution
-WHEN the library resolves a link, it SHALL remove the fragment, resolve a bundle-rooted link from the bundle root, and resolve a relative link from the base that the options select. The default base SHALL be the directory of the file.
+WHEN the library resolves a link, the library SHALL remove the fragment, resolve a bundle-rooted link from the bundle root, and resolve a relative link from the base that the options select. The default base SHALL be the directory of the file.
 
 #### Scenario: Relative link from the file
 - **WHEN** `/tables/orders.md` links to `customers.md` with the default options

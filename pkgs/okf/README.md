@@ -231,5 +231,27 @@ deltas and tasks with typed names (`CapabilityPath`, `ChangeName`,
 (`ChangeState`). Native bundles can also use `Requirement` and `Scenario`
 concepts.
 
+The profile parses each requirement text as EARS with `moonrockz/ears`: the
+OpenSpec dialect (`SHALL` and `MUST`, the usual determiners, `it` and `they`,
+the lead-in `otherwise`), the project lexicon file, and a lexicon in code. The
+view gives each requirement its `sentences` and `sentence_diagnostics`, and a
+pronoun refers to the system of an earlier sentence of the requirement.
+`OpenSpecProfile::of_tree(set, root)` reads the project lexicon from
+`ears.yaml` at the root of the tree; `OpenSpecProfile(lexicon=...)` takes one in
+code. Pass the profile to `view(bundle, profile~)`.
+
+```yaml
+# openspec/ears.yaml
+name: my-project
+systems: [Mission Control, Text comparison]
+lead_ins: [for each]
+```
+
+Two more checks cover EARS: `openspec-requirement-not-ears` (a warning) reports
+a requirement sentence that does not parse, with its line and the reason, and
+`openspec-lexicon-invalid` reports a lexicon file that does not parse; the
+profile then parses with the other dialects. Archived changes are history, so
+the EARS check skips them.
+
 `import_openspec` plans a native OKF bundle from a tree, and `export_openspec`
 plans the tree again; the round trip keeps every file.

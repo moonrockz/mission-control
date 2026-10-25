@@ -72,7 +72,7 @@ pub fn import_openspec(
   target_root : @okf.StoreDir,
   date : @okf.LogDate,
 ) -> @edit.EditPlan raise ConvertError {
-  let profile : &@okf.Profile = OpenSpecProfile::{ }
+  let profile : &@okf.Profile = OpenSpecProfile()
   let bundle = @okf.load_bundle(set, root=source_root, profiles=[profile])
   let changes = []
   let entries : Array[(String, String, String, String?)] = []

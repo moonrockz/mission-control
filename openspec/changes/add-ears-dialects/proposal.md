@@ -37,6 +37,6 @@ Projects also use their own words for systems and clause lead-ins. The parser mu
 ## Impact
 
 - **Affected published modules:** `moonrockz/ears` (new API; strict default unchanged) and `moonrockz/okf` (`moonrockz/okf/openspec` gains a dependency on `moonrockz/ears`).
-- **API:** `Requirement` gains accessors for the modal verb, the subject opener and the lead-in. `parse`, `parse_text` and `parse_markdown` take optional dialects.
+- **API:** `Requirement` gains accessors for the modal verb, the subject and its opener, and the lead-in. `parse`, `parse_text` and `parse_markdown` take optional dialects. **BREAKING:** `Requirement::system()` gives `String?`, because a pronoun subject has no system until block parsing resolves it, and `ParseError` gains `UnresolvedPronoun`. `OpenSpecProfile` is built with `OpenSpecProfile()` or `OpenSpecProfile::of_tree(set, root)` in place of the `OpenSpecProfile::{}` literal.
 - **Tests:** new acceptance features and laws in `tests/ears-acceptance` and `tests/ears-laws`, and a probe of this repository's own OpenSpec requirements as an acceptance test.
 - **Dependencies:** `moonrockz/ears` already depends on `moonrockz/mdc` and `moonbit-community/yaml` through it; no new external dependency.

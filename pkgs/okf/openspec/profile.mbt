@@ -110,12 +110,6 @@ pub fn derived_fields(doc : @okf.Document) -> @okf.Fields? {
 }
 
 ///|
-/// The OpenSpec profile. It reads `openspec/` trees as OKF bundles, defines
-/// native OKF types for OpenSpec content, links changes to capabilities, and
-/// adds the OpenSpec checks.
-pub(all) struct OpenSpecProfile {}
-
-///|
 pub impl @okf.Profile for OpenSpecProfile with fn name(_) {
   "openspec"
 }
@@ -158,8 +152,8 @@ pub impl @okf.Profile for OpenSpecProfile with fn derive_metadata(_, doc) {
 }
 
 ///|
-pub impl @okf.Profile for OpenSpecProfile with fn rule_sets(_) {
-  [openspec_checks()]
+pub impl @okf.Profile for OpenSpecProfile with fn rule_sets(self) {
+  [openspec_checks(profile=self)]
 }
 
 ///|
@@ -280,14 +274,19 @@ fn of_type(bundle : @okf.Bundle, t : OpenSpecType) -> Array[@okf.Document] {
 /// The structured OpenSpec view of a bundle, from an `openspec/` tree (with
 /// this profile's derived metadata) or from a native bundle. A concept whose
 /// capability, change or requirement value is not a valid name is left out;
-/// validation reports it.
-pub fn view(bundle : @okf.Bundle) -> OpenSpecView {
+/// validation reports it. Requirement texts are parsed as EARS with the
+/// dialects of `profile`.
+pub fn view(
+  bundle : @okf.Bundle,
+  profile~ : OpenSpecProfile = OpenSpecProfile(),
+) -> OpenSpecView {
+  let dialects = profile.dialects()
   let requirement_docs = of_type(bundle, RequirementConcept)
   let scenario_docs = of_type(bundle, ScenarioConcept)
   let specs = []
   for doc in of_type(bundle, Specification) {
     guard capability_of(doc) is Some(cap) else { continue }
-    let model = parse_spec(cap, doc.prose_lines())
+    let model = parse_spec(cap, doc.prose_lines(), dialects~)
     let requirements = model.requirements.iter().collect()
     for r in requirement_docs {
       guard capability_of(r) == Some(cap) else { continue }
@@ -297,6 +296,7 @@ pub fn view(bundle : @okf.Bundle) -> OpenSpecView {
       let parsed = parse_spec(
         cap,
         [(line, "### Requirement: " + name.to_string())] + r.prose_lines(),
+        dialects~,
       )
       for req in parsed.requirements {
         requirements.push(req)
@@ -321,6 +321,7 @@ pub fn view(bundle : @okf.Bundle) -> OpenSpecView {
           (line, "#### Scenario: " + name),
         ] +
         s.prose_lines(),
+        dialects~,
       )
       match requirements.search_by(r => r.name == req_name) {
         Some(i) => {
@@ -359,7 +360,7 @@ pub fn view(bundle : @okf.Bundle) -> OpenSpecView {
     for d in of_type(bundle, SpecDelta) {
       guard same(d) else { continue }
       guard capability_of(d) is Some(cap) else { continue }
-      deltas.push(parse_spec(cap, d.prose_lines()))
+      deltas.push(parse_spec(cap, d.prose_lines(), dialects~))
     }
     deltas.sort_by((a, b) => a.capability.compare(b.capability))
     changes.push({
@@ -380,6 +381,7 @@ fn zero_requirement(r : Requirement) -> Requirement {
   {
     ..r,
     line: 0,
+    text_line: None,
     scenarios: frozen(r.scenarios.iter().map(s => { ..s, line: 0, }).collect()),
   }
 }

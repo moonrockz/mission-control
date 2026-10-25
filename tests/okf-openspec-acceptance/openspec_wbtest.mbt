@@ -31,8 +31,13 @@ fn repository_tree() -> @okf.DocumentSet raise {
 }
 
 ///|
-fn profiles() -> Array[&@okf.Profile] {
-  [@openspec.OpenSpecProfile::{ }]
+fn profiles() -> Array[&@okf.Profile] raise {
+  [
+    @openspec.OpenSpecProfile::of_tree(
+      repository_tree(),
+      @okf.StoreDir("openspec"),
+    ),
+  ]
 }
 
 ///|
@@ -75,14 +80,20 @@ test "the OpenSpec checks report nothing for this repository's tree" {
     @okf.FixedClock(@okf.Instant::of_millis(0L)),
     profiles=profiles(),
   )
-  assert_eq(
-    report
+  let lines = report
     .findings()
-    .map(f => f.rule.to_string() + " " + f.subject.path_text().unwrap_or(""))
+    .map(f => {
+      f.rule.to_string() +
+      " " +
+      f.subject.path_text().unwrap_or("") +
+      ":" +
+      f.line.map(l => l.to_string()).unwrap_or("") +
+      " " +
+      f.message
+    })
     .iter()
-    .collect(),
-    [],
-  )
+    .collect()
+  assert_eq(lines, [], msg=lines.join("\n"))
 }
 
 ///|

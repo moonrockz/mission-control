@@ -86,7 +86,7 @@ The library SHALL parse a requirement block into sentences. A sentence SHALL end
 - **THEN** the block has one requirement
 
 ### Requirement: Pronoun resolution
-In a requirement block, the library SHALL resolve a pronoun subject to the system of the nearest previous sentence that has a system. WHEN no previous sentence has a system, the library SHALL keep the pronoun unresolved and SHALL report it as a diagnostic.
+WHEN a caller parses a requirement block, the library SHALL resolve a pronoun subject to the system of the nearest previous sentence that has a system. WHEN no previous sentence has a system, the library SHALL keep the pronoun unresolved and SHALL report it as a diagnostic.
 
 #### Scenario: It refers back
 - **WHEN** a caller parses `The store SHALL list files. It SHALL sort them by path.` with the OpenSpec dialect

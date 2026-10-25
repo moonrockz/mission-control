@@ -9,12 +9,20 @@ pub struct Scenario {
 } derive(Eq, Debug)
 
 ///|
-/// One OpenSpec requirement: `### Requirement: name`, its text and its scenarios.
+/// One OpenSpec requirement: `### Requirement: name`, its text and its
+/// scenarios, and the EARS sentences of its text.
 pub struct Requirement {
   name : RequirementName
   text : String
   scenarios : ReadOnlyArray[Scenario]
   line : Int32
+  /// The file line of the first line of the text, when there is text.
+  text_line : Int32?
+  /// The EARS requirements of the text, one for each sentence that parses.
+  sentences : ReadOnlyArray[@ears.Occurrence]
+  /// The sentences of the text that do not parse as EARS. Their spans are
+  /// relative to the text.
+  sentence_diagnostics : ReadOnlyArray[@ears.Diagnostic]
 } derive(Eq, Debug)
 
 ///|
@@ -198,6 +206,7 @@ priv struct RequirementBuilder {
   text : Array[String]
   scenarios : Array[Scenario]
   line : Int32
+  mut text_line : Int32?
 }
 
 ///|
@@ -236,7 +245,13 @@ fn DeltaBuilder::build(self : DeltaBuilder) -> DeltaSection {
 pub fn parse_spec(
   capability : CapabilityPath,
   lines : ArrayView[(Int32, String)],
+  dialects? : ArrayView[&@ears.Dialect],
 ) -> SpecModel {
+  let default_dialects : Array[&@ears.Dialect] = [@ears.openspec_dialect()]
+  let dialects = match dialects {
+    Some(d) => d
+    None => default_dialects[:]
+  }
   let requirements : Array[Requirement] = []
   let unnamed : Array[Int32] = []
   let deltas : Array[DeltaBuilder] = []
@@ -264,11 +279,16 @@ pub fn parse_spec(
     flush_scenario()
     match current_req {
       Some(r) => {
+        let text = r.text.join("\n").trim(chars="\n ").to_owned()
+        let ears = @ears.parse_block(text, dialects~)
         let req : Requirement = {
           name: r.name,
-          text: r.text.join("\n").trim(chars="\n ").to_owned(),
+          text,
           scenarios: frozen(r.scenarios),
           line: r.line,
+          text_line: r.text_line,
+          sentences: ears.requirements(),
+          sentence_diagnostics: ears.diagnostics(),
         }
         match current_delta {
           Some(d) => d.requirements.push(req)
@@ -312,7 +332,13 @@ pub fn parse_spec(
         flush_req()
         match heading_requirement(text) {
           Some(name) =>
-            current_req = Some({ name, text: [], scenarios: [], line: number, })
+            current_req = Some({
+              name,
+              text: [],
+              scenarios: [],
+              line: number,
+              text_line: None,
+            })
           None => unnamed.push(number)
         }
       }
@@ -376,7 +402,12 @@ pub fn parse_spec(
             }
           None =>
             match current_req {
-              Some(r) => r.text.push(line)
+              Some(r) => {
+                if r.text_line is None && line.trim(chars=" \t").length() > 0 {
+                  r.text_line = Some(number)
+                }
+                r.text.push(line)
+              }
               None => ()
             }
         }

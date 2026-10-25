@@ -8,7 +8,7 @@ Beads: none yet.
 
 - [x] 1.0 Add `Word`, `Phrase`, `HeadingLevel`, `HeadingPrefix` and `HeadingRule` with smart constructors, `LexiconError`, and tests on each side of each rule (design D8); verify the unit tests
 - [x] 1.1 Add the `Dialect` trait with default methods, `HeadingRule`, `Lexicon` (implementing `Dialect`) and the internal merged vocabulary (design D1); verify unit tests for an empty dialect and for the union of two dialects
-- [x] 1.2 Add `lead_in`, `opener`, `modal` and `resolved_system` to `Requirement` with accessors, and extend `to_string()` (design D2); verify that the existing unit tests, `tests/ears-acceptance` and `tests/ears-laws` pass unchanged
+- [x] 1.2 Add `lead_in`, `subject` (with `opener` and `resolved_system`) and `modal` to `Requirement` with accessors, and extend `to_string()` (design D2); verify that the existing unit tests, `tests/ears-acceptance` and `tests/ears-laws` pass, changed only for `system()` giving `String?`
 - [x] 1.3 Implement the vocabulary parsing order: lead-ins, clauses with subject-aware commas, openers, system nouns, modal verbs with `not` (design D3); verify unit tests from the `ears/dialects` scenarios
 - [x] 1.4 Add laws in `tests/ears-laws`: strict input gives the same requirement with and without an empty dialect, and render then parse gives an equal requirement for generated dialect sentences; verify they pass on all four targets
 
@@ -26,17 +26,17 @@ Beads: none yet.
 
 Beads: none yet.
 
-- [ ] 3.1 Add the `moonrockz/ears` dependency to `moonrockz/okf/openspec`, the optional lexicon on `OpenSpecProfile`, and the reading of `ears.yaml` at the bundle root (design D6); verify unit tests for a lexicon in code, a lexicon file and an invalid lexicon file
-- [ ] 3.2 Add the parsed EARS specification to each requirement of the view, and the rules `openspec-requirement-not-ears` and `openspec-lexicon-invalid`; verify unit tests from the `okf/openspec` scenarios
-- [ ] 3.3 Add `openspec/ears.yaml` for this repository and an acceptance test in `tests/okf-openspec-acceptance` that parses every requirement of `openspec/specs/` and lists any sentence that fails (design D7); verify it passes, with word-choice fixes in the specs where needed
-- [ ] 3.4 Document the EARS check and the lexicon file in `pkgs/okf/README.md` and `AGENTS.md`; verify `mise run lint` passes
+- [x] 3.1 Add the `moonrockz/ears` dependency to `moonrockz/okf/openspec`, the optional lexicon on `OpenSpecProfile`, and the reading of `ears.yaml` at the tree root with `OpenSpecProfile::of_tree` (design D6); verify unit tests for a lexicon in code, a lexicon file and an invalid lexicon file
+- [x] 3.2 Add the parsed EARS specification to each requirement of the view, and the rules `openspec-requirement-not-ears` and `openspec-lexicon-invalid`; verify unit tests from the `okf/openspec` scenarios
+- [x] 3.3 Add `openspec/ears.yaml` for this repository and an acceptance test in `tests/okf-openspec-acceptance` that parses every requirement of `openspec/specs/` and lists any sentence that fails (design D7); verify it passes, with word-choice fixes in the specs where needed
+- [x] 3.4 Document the EARS check and the lexicon file in `pkgs/okf/README.md` and `AGENTS.md`; verify `mise run lint` passes
 
 ## 4. Integration
 
 Beads: none yet.
 
-- [ ] 4.1 Run `mise run check`, `mise run test:scripts` and `openspec validate --all --strict`; verify all pass
-- [ ] 4.2 Check every scenario of the delta specs against a test that covers it; verify that no scenario lacks a test
+- [x] 4.1 Run `mise run check`, `mise run test:scripts` and `openspec validate --all --strict`; verify all pass
+- [x] 4.2 Check every scenario of the delta specs against a test that covers it; verify that no scenario lacks a test
 
 ## Workflow follow-up
 
