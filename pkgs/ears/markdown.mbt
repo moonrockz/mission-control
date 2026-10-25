@@ -25,8 +25,8 @@ fn paragraph_text(node : @mdc.Node) -> String {
 
 ///|
 fn is_candidate(text : String) -> Bool {
-  for keyword in ["where", "while", "when", "if"] {
-    if starts_word(text, keyword) {
+  for keyword in keywords {
+    if starts_word(text, keyword.word()) {
       return true
     }
   }

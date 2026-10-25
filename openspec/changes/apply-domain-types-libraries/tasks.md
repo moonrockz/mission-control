@@ -13,7 +13,7 @@ Beads: none yet.
 
 Beads: none yet.
 
-- [ ] 2.1 Add `Keyword`, use it in `EmptyClause`, keep one keyword table, make `Trigger` read-only and add error positions (design D4); verify unit tests from the `ears/parsing` scenarios, `tests/ears-acceptance` and `tests/ears-laws`
+- [x] 2.1 Add `Keyword`, use it in `EmptyClause`, keep one keyword table, make `Trigger` read-only and add error positions (design D4); verify unit tests from the `ears/parsing` scenarios, `tests/ears-acceptance` and `tests/ears-laws`
 
 ## 3. Contracts and apps
 

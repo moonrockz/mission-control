@@ -75,15 +75,24 @@ test "law: parsing generated syntax preserves each independent clause" {
     (input : RequirementCase) => {
       let requirement = @ears.parse(input.source())
       let feature = if input.feature { Some("logging is fitted") } else { None }
+      // The trigger as text: `when <event>` or `if <event>`.
       let trigger = match input.trigger % 3 {
-        1 => Some(@ears.Event("polled"))
-        2 => Some(@ears.Unwanted("disconnected"))
+        1 => Some("when polled")
+        2 => Some("if disconnected")
         _ => None
       }
+      let actual = requirement
+        .trigger()
+        .map(t => {
+          match t {
+            Event(event) => "when " + event
+            Unwanted(event) => "if " + event
+          }
+        })
       @expect.expect_all(s => {
         s.expect(requirement.feature()).to_equal(feature)
         s.expect(requirement.preconditions()).to_equal(input.preconditions())
-        s.expect(requirement.trigger()).to_equal(trigger)
+        s.expect(actual).to_equal(trigger)
         s.expect(requirement.system()).to_equal(input.system())
         s
         .expect(requirement.response())

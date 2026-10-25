@@ -16,15 +16,19 @@ let requirement = @ears.Requirement::Requirement(
 )
 // requirement.pattern() == @ears.Complex
 // requirement.preconditions() == ["enabled"]
-// requirement.trigger() == Some(@ears.Event("polled"))
+// requirement.trigger() is Some(Event("polled"))
 // requirement.system() == "sensor"
 // requirement.response() == "report temperature."
 ```
 
 `parse(source)` is an alias for the constructor. Both raise a typed `ParseError`
-on invalid syntax. `Requirement` is opaque and immutable. Accessors expose an
-optional feature, a read-only sequence of preconditions, an optional event or
-unwanted trigger, the system name and its response. `pattern()` derives the
+on invalid syntax. Each case except `EmptyRequirement` has the
+`SentencePosition` in the normalized sentence where the parse failed
+(`error.position()`), and `EmptyClause` names its `Keyword` (`Where`, `While`,
+`When` or `If`). `keywords` lists the clause keywords. `Requirement` is opaque
+and immutable. Accessors expose an optional feature, a read-only sequence of
+preconditions, an optional event or unwanted trigger (a read-only `Trigger`),
+the system name and its response. `pattern()` derives the
 classification from those clauses. Multiple clauses produce `Complex`.
 
 The accepted grammar is:

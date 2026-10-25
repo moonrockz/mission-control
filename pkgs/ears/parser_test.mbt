@@ -30,8 +30,8 @@ test "all basic patterns and complex clauses expose their structure" {
     s.expect(requirement.feature()).to_equal(Some("fitted"))
     s.expect(requirement.preconditions()).to_equal(["enabled", "powered"])
     s
-    .expect(requirement.trigger())
-    .to_equal(Some(@ears.Unwanted("disconnected")))
+    .expect(requirement.trigger() is Some(Unwanted("disconnected")))
+    .to_be_true()
     s.expect(requirement.response()).to_equal("report a fault.")
   })
 }
@@ -44,8 +44,8 @@ test "whitespace and keyword case normalize without changing natural-language ca
   @expect.expect_all(s => {
     s.expect(requirement.preconditions()).to_equal(["Ready"])
     s
-    .expect(requirement.trigger())
-    .to_equal(Some(@ears.Event("Café 🌙 is polled")))
+    .expect(requirement.trigger() is Some(Event("Café 🌙 is polled")))
+    .to_be_true()
     s
     .expect(requirement.to_string())
     .to_equal(
@@ -61,8 +61,10 @@ test "ordinary commas stay in clauses and responses" {
   )
   @expect.expect_all(s => {
     s
-    .expect(requirement.trigger())
-    .to_equal(Some(@ears.Event("red, green or blue is selected")))
+    .expect(
+      requirement.trigger() is Some(Event("red, green or blue is selected")),
+    )
+    .to_be_true()
     s.expect(requirement.response()).to_equal("blink, beep and stop.")
   })
 }
@@ -79,8 +81,8 @@ test "THEN inside unwanted conditions does not end a clause" {
       )
       @expect.expect_all(s => {
         s
-        .expect(requirement.trigger())
-        .to_equal(Some(@ears.Unwanted(condition)))
+        .expect(requirement.trigger() is Some(Unwanted(c)) && c == condition)
+        .to_be_true()
         s.expect(requirement.system()).to_equal("scanner")
         s.expect(@ears.parse(requirement.to_string())).to_equal(requirement)
       })
@@ -121,41 +123,80 @@ fn rejection(source : String) -> @ears.ParseError raise {
 }
 
 ///|
-test "malformed requirements report typed errors" {
-  let cases : Array[(String, @ears.ParseError)] = [
-    (" \n", @ears.EmptyRequirement),
-    ("A sensor shall measure.", @ears.ExpectedSystem),
-    ("The shall measure.", @ears.ExpectedSystem),
-    ("The sensor should measure.", @ears.MissingShall),
-    ("The sensor shall", @ears.MissingResponse),
-    ("The sensor shall .", @ears.MissingResponse),
-    ("When , the sensor shall measure.", @ears.EmptyClause(keyword="when")),
-    ("While , the sensor shall measure.", @ears.EmptyClause(keyword="while")),
-    ("Where , the sensor shall measure.", @ears.EmptyClause(keyword="where")),
-    ("If , then the sensor shall measure.", @ears.EmptyClause(keyword="if")),
-    ("When polled the sensor shall measure.", @ears.MissingSeparator),
-    ("If disconnected, the sensor shall stop.", @ears.MissingThen),
-    ("If disconnected then a sensor shall stop.", @ears.ExpectedSystem),
+/// The error case, its keyword and its position, such as `EmptyClause(When)@0`.
+fn error_text(error : @ears.ParseError) -> String {
+  let name = match error {
+    EmptyRequirement => "EmptyRequirement"
+    ExpectedSystem(_) => "ExpectedSystem"
+    MissingShall(_) => "MissingShall"
+    MissingResponse(_) => "MissingResponse"
+    EmptyClause(keyword~, ..) => "EmptyClause(\{keyword})"
+    MissingSeparator(_) => "MissingSeparator"
+    MissingThen(_) => "MissingThen"
+    InvalidClauseOrder(_) => "InvalidClauseOrder"
+  }
+  match error.position() {
+    Some(at) => "\{name}@\{at}"
+    None => name
+  }
+}
+
+///|
+test "malformed requirements report typed errors with positions" {
+  let cases : Array[(String, String)] = [
+    (" \n", "EmptyRequirement"),
+    ("A sensor shall measure.", "ExpectedSystem@0"),
+    ("The shall measure.", "ExpectedSystem@4"),
+    ("The sensor should measure.", "MissingShall@4"),
+    ("The sensor shall", "MissingResponse@16"),
+    ("The sensor shall .", "MissingResponse@16"),
+    ("When , the sensor shall measure.", "EmptyClause(When)@0"),
+    ("While , the sensor shall measure.", "EmptyClause(While)@0"),
+    ("Where , the sensor shall measure.", "EmptyClause(Where)@0"),
+    ("If , then the sensor shall measure.", "EmptyClause(If)@0"),
+    ("When polled the sensor shall measure.", "MissingSeparator@0"),
+    ("If disconnected, the sensor shall stop.", "MissingThen@0"),
+    ("If disconnected then a sensor shall stop.", "ExpectedSystem@0"),
     (
-      "While enabled, where fitted, the sensor shall measure.",
-      @ears.InvalidClauseOrder,
+      "While enabled, where fitted, the sensor shall measure.", "InvalidClauseOrder@15",
     ),
     (
-      "When polled, while enabled, the sensor shall measure.",
-      @ears.InvalidClauseOrder,
+      "When polled, while enabled, the sensor shall measure.", "InvalidClauseOrder@13",
     ),
     (
-      "When polled, when polled again, the sensor shall measure.",
-      @ears.InvalidClauseOrder,
+      "When polled, when polled again, the sensor shall measure.", "InvalidClauseOrder@13",
     ),
     (
-      "Where fitted, where powered, the sensor shall measure.",
-      @ears.InvalidClauseOrder,
+      "Where fitted, where powered, the sensor shall measure.", "InvalidClauseOrder@14",
     ),
   ]
   for (source, expected) in cases {
-    @expect.expect(rejection(source), label=source).to_equal(expected)
+    @expect.expect(error_text(rejection(source)), label=source).to_equal(
+      expected,
+    )
   }
+}
+
+///|
+test "an empty clause names its keyword as a keyword value" {
+  let error = rejection("When , the sensor shall reply.")
+  guard error is EmptyClause(keyword~, at~) else { fail("not an empty clause") }
+  assert_eq(keyword, @ears.Keyword::When)
+  assert_eq(at.offset(), 0)
+  assert_eq(@ears.keywords.iter().map(k => k.to_string()).collect(), [
+    "Where", "While", "When", "If",
+  ])
+}
+
+///|
+test "sentence positions are not negative" {
+  assert_eq(@ears.SentencePosition(0).offset(), 0)
+  let refused = try @ears.SentencePosition(-1) catch {
+    e => Some(e)
+  } noraise {
+    _ => None
+  }
+  assert_eq(refused, Some(NegativeOffset(-1)))
 }
 
 ///|
@@ -166,7 +207,7 @@ test "plain text preserves valid siblings and exact line spans" {
     s.expect(spec.requirements().length()).to_equal(3)
     s.expect(spec.diagnostics().length()).to_equal(1)
     s.expect(spec.document()).to_be_none()
-    s.expect(spec.diagnostics()[0].error()).to_equal(@ears.ExpectedSystem)
+    s.expect(spec.diagnostics()[0].error() is ExpectedSystem(_)).to_be_true()
     s.expect(spec.diagnostics()[0].text()).to_equal("invalid")
   })
   let first = spec.requirements()[0]
@@ -195,7 +236,7 @@ test "Markdown extraction retains metadata, positions and paths" {
     s
     .expect(spec.requirements()[0].requirement().to_string())
     .to_equal("When polled, the sensor shall return READY.")
-    s.expect(spec.diagnostics()[0].error()).to_equal(@ears.MissingShall)
+    s.expect(spec.diagnostics()[0].error() is MissingShall(_)).to_be_true()
   })
   guard spec.document() is Some(doc) else { fail("no retained document") }
   guard doc.frontmatter() is Some(header) else { fail("no metadata") }

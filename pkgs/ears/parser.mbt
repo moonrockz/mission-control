@@ -37,13 +37,27 @@ fn starts_word_at(text : String, at : Int32, word : String) -> Bool {
 }
 
 ///|
-fn clause_keyword(text : String) -> String? {
-  for word in ["where", "while", "when", "if", "then", "the"] {
-    if starts_word(text, word) {
-      return Some(word)
+/// A word that starts a clause: a clause keyword, `then` or `the`.
+priv enum ClauseWord {
+  Clause(Keyword)
+  Then
+  The
+} derive(Eq)
+
+///|
+fn clause_word(text : String) -> ClauseWord? {
+  for keyword in keywords {
+    if starts_word(text, keyword.word()) {
+      return Some(Clause(keyword))
     }
   }
-  None
+  if starts_word(text, "then") {
+    Some(Then)
+  } else if starts_word(text, "the") {
+    Some(The)
+  } else {
+    None
+  }
 }
 
 ///|
@@ -57,13 +71,14 @@ fn starts_then_system(text : String, at : Int32) -> Bool {
 fn take_clause(
   text : String,
   unwanted : Bool,
+  at~ : SentencePosition,
 ) -> (String, String) raise ParseError {
   let mut saw_incomplete_then = false
   for i in 0..<text.length() {
     if text.code_unit_at(i) == 44 {
       let rest = text[i + 1:].trim_start().to_owned()
-      if clause_keyword(rest) is Some(keyword) {
-        if unwanted && keyword == "then" && !starts_then_system(rest, 0) {
+      if clause_word(rest) is Some(word) {
+        if unwanted && word == Then && !starts_then_system(rest, 0) {
           saw_incomplete_then = true
           continue
         }
@@ -81,11 +96,11 @@ fn take_clause(
   }
   if unwanted {
     if saw_incomplete_then {
-      raise ExpectedSystem
+      raise ExpectedSystem(at~)
     }
-    raise MissingThen
+    raise MissingThen(at~)
   }
-  raise MissingSeparator
+  raise MissingSeparator(at~)
 }
 
 ///|
@@ -97,37 +112,42 @@ pub fn Requirement::Requirement(
 ) -> Requirement raise ParseError {
   let text = normalize(source)
   guard !text.is_empty() else { raise EmptyRequirement }
+  // Each remaining text is a suffix of `text`, so its start is a position.
+  let position_of = (rest : String) => {
+    let p : SentencePosition = { offset: text.length() - rest.length(), }
+    p
+  }
   let mut rest = text
   let mut feature = None
   let states = []
   let mut trigger = None
   while !starts_word(rest, "the") {
-    guard clause_keyword(rest) is Some(keyword) else { raise ExpectedSystem }
-    match keyword {
-      "where" => {
-        guard feature is None && states.is_empty() && trigger is None else {
-          raise InvalidClauseOrder
-        }
-      }
-      "while" | "when" | "if" => {
-        guard trigger is None else { raise InvalidClauseOrder }
-      }
-      _ => raise InvalidClauseOrder
+    let at = position_of(rest)
+    let keyword = match clause_word(rest) {
+      Some(Clause(keyword)) => keyword
+      Some(Then | The) => raise InvalidClauseOrder(at~)
+      None => raise ExpectedSystem(at~)
     }
-    let payload = rest[keyword.length():].trim_start().to_owned()
-    let (clause, next) = take_clause(payload, keyword == "if")
-    guard !clause.is_empty() else { raise EmptyClause(keyword~) }
-    match keyword {
-      "where" => feature = Some(clause)
-      "while" => states.push(clause)
-      "when" => trigger = Some(Event(clause))
-      "if" => trigger = Some(Unwanted(clause))
-      _ => ()
+    let in_order = match keyword {
+      Where => feature is None && states.is_empty() && trigger is None
+      While | When | If => trigger is None
     }
-    rest = if keyword == "if" {
-      guard starts_word(next, "then") else { raise MissingThen }
+    guard in_order else { raise InvalidClauseOrder(at~) }
+    let payload = rest[keyword.word().length():].trim_start().to_owned()
+    let (clause, next) = take_clause(payload, keyword == If, at~)
+    guard !clause.is_empty() else { raise EmptyClause(keyword~, at~) }
+    match keyword {
+      Where => feature = Some(clause)
+      While => states.push(clause)
+      When => trigger = Some(Event(clause))
+      If => trigger = Some(Unwanted(clause))
+    }
+    rest = if keyword == If {
+      guard starts_word(next, "then") else { raise MissingThen(at~) }
       let after_then = next[4:].trim_start().to_owned()
-      guard starts_word(after_then, "the") else { raise ExpectedSystem }
+      guard starts_word(after_then, "the") else {
+        raise ExpectedSystem(at=position_of(after_then))
+      }
       after_then
     } else {
       next
@@ -142,11 +162,14 @@ pub fn Requirement::Requirement(
       break
     }
   }
-  guard shall_at is Some(at) else { raise MissingShall }
+  guard shall_at is Some(at) else { raise MissingShall(at=position_of(body)) }
   let system = body[:at].trim_end().to_owned()
-  guard !system.is_empty() else { raise ExpectedSystem }
-  let response = body[at + 5:].trim_start().to_owned()
-  guard !response.is_empty() && response != "." else { raise MissingResponse }
+  guard !system.is_empty() else { raise ExpectedSystem(at=position_of(body)) }
+  let after_shall = body[at + 5:].to_owned()
+  let response = after_shall.trim_start().to_owned()
+  guard !response.is_empty() && response != "." else {
+    raise MissingResponse(at=position_of(after_shall))
+  }
   {
     feature,
     preconditions: ReadOnlyArray::from_array(states[:]),
