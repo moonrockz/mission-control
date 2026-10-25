@@ -1,5 +1,5 @@
 ///|
-/// A key-value adapter with `get`, `put`, `delete` and `keys`: IndexedDB, or
+/// A key-value adapter with `get`, `place`, `delete` and `keys`: IndexedDB, or
 /// a map in memory for tests outside a browser.
 #external
 priv type Adapter
@@ -110,21 +110,59 @@ extern "js" fn open_indexed_db(
   #|     t.onerror = () => fail(t.error);
   #|     t.onabort = () => fail(t.error || { name: "AbortError", message: "the transaction was aborted" });
   #|   });
-  #|   const tx = async (mode, act) => {
+  #|   const withDb = async (use) => {
   #|     if (db === null) await connect();
   #|     try {
-  #|       return await run(db, mode, act);
+  #|       return await use(db);
   #|     } catch (e) {
   #|       // A connection that closed since the last call: open it again once.
   #|       if (!(e && e.name === "InvalidStateError")) throw e;
   #|       db = null;
   #|       await connect();
-  #|       return await run(db, mode, act);
+  #|       return await use(db);
   #|     }
   #|   };
+  #|   const tx = (mode, act) => withDb((d) => run(d, mode, act));
+  #|   // Checks that no file is under `key` and that no ancestor of `key` is a
+  #|   // file, and writes the record, in one readwrite transaction.
+  #|   const place = (key, value) => withDb((d) => new Promise((done, fail) => {
+  #|     let t;
+  #|     try {
+  #|       t = d.transaction(store, "readwrite");
+  #|     } catch (e) {
+  #|       fail(e);
+  #|       return;
+  #|     }
+  #|     const os = t.objectStore(store);
+  #|     const parts = key.split("/");
+  #|     const above = parts.slice(1).map((_, i) => parts.slice(0, i + 1).join("/"));
+  #|     let conflict = null;
+  #|     let waiting = above.length + 1;
+  #|     const next = () => {
+  #|       waiting -= 1;
+  #|       if (waiting > 0) return;
+  #|       if (conflict !== null) t.abort(); else os.put(value, key);
+  #|     };
+  #|     const below = os.getAllKeys(IDBKeyRange.bound(key + "/", key + "0", false, true));
+  #|     below.onsuccess = () => {
+  #|       if (below.result.length > 0 && conflict === null) conflict = key + " is a directory";
+  #|       next();
+  #|     };
+  #|     for (const a of above) {
+  #|       const r = os.get(a);
+  #|       r.onsuccess = () => {
+  #|         if (r.result !== undefined && conflict === null) conflict = a + " is a file";
+  #|         next();
+  #|       };
+  #|     }
+  #|     t.oncomplete = () => done(undefined);
+  #|     t.onabort = () => fail(conflict !== null
+  #|       ? { name: "TypeMismatchError", message: conflict }
+  #|       : (t.error || { name: "AbortError", message: "the transaction was aborted" }));
+  #|   }));
   #|   const adapter = {
   #|     get: (key) => tx("readonly", (os) => os.get(key)),
-  #|     put: (key, value) => tx("readwrite", (os) => os.put(value, key)),
+  #|     place,
   #|     delete: (key) => tx("readwrite", (os) => os.delete(key)),
   #|     keys: (lower, upper) => tx("readonly", (os) =>
   #|       os.getAllKeys(lower === null ? undefined : IDBKeyRange.bound(lower, upper, false, true))),
@@ -145,14 +183,19 @@ extern "js" fn memory_adapter(limited : Bool, quota : Int32) -> Adapter =
   #|   const size = (r) => r.kind === "text" ? r.data.length * 2 : r.data.byteLength;
   #|   return {
   #|     get: async (key) => map.get(key),
-  #|     put: async (key, value) => {
+  #|     // The checks and the write run with no await between them, so no other
+  #|     // call can come between them.
+  #|     place: async (key, value) => {
+  #|       const fail = (name, message) => { const e = new Error(message); e.name = name; throw e; };
+  #|       for (const k of map.keys()) if (k.startsWith(key + "/")) fail("TypeMismatchError", key + " is a directory");
+  #|       const parts = key.split("/");
+  #|       for (let i = 1; i < parts.length; i++) {
+  #|         const a = parts.slice(0, i).join("/");
+  #|         if (map.has(a)) fail("TypeMismatchError", a + " is a file");
+  #|       }
   #|       let total = size(value);
   #|       for (const [k, v] of map) if (k !== key) total += size(v);
-  #|       if (limited && total > quota) {
-  #|         const e = new Error("the write needs " + total + " bytes and the quota is " + quota);
-  #|         e.name = "QuotaExceededError";
-  #|         throw e;
-  #|       }
+  #|       if (limited && total > quota) fail("QuotaExceededError", "the write needs " + total + " bytes and the quota is " + quota);
   #|       map.set(key, value);
   #|     },
   #|     delete: async (key) => { map.delete(key); },
@@ -175,16 +218,6 @@ extern "js" fn idb_call(
 ) -> @js_async.Promise[CallResult] =
   #| (adapter, op, key, text, bytes, lower, upper) => (async () => {
   #|   const missing = () => { const e = new Error(key); e.name = "NotFoundError"; throw e; };
-  #|   const mismatch = (message) => { const e = new Error(message); e.name = "TypeMismatchError"; throw e; };
-  #|   // A file cannot have the path of a directory, nor be under another file.
-  #|   const placeable = async () => {
-  #|     if ((await adapter.keys(key + "/", key + "0")).length > 0) mismatch(key + " is a directory");
-  #|     const parts = key.split("/");
-  #|     for (let i = 1; i < parts.length; i++) {
-  #|       const above = parts.slice(0, i).join("/");
-  #|       if ((await adapter.get(above)) !== undefined) mismatch(above + " is a file");
-  #|     }
-  #|   };
   #|   try {
   #|     switch (op) {
   #|       case "keys":
@@ -205,12 +238,10 @@ extern "js" fn idb_call(
   #|         return { ok: true, value: r.modified };
   #|       }
   #|       case "writeText":
-  #|         await placeable();
-  #|         await adapter.put(key, { kind: "text", data: text, modified: Date.now() });
+  #|         await adapter.place(key, { kind: "text", data: text, modified: Date.now() });
   #|         return { ok: true, value: null };
   #|       case "writeBytes":
-  #|         await placeable();
-  #|         await adapter.put(key, { kind: "bytes", data: new Uint8Array(bytes), modified: Date.now() });
+  #|         await adapter.place(key, { kind: "bytes", data: new Uint8Array(bytes), modified: Date.now() });
   #|         return { ok: true, value: null };
   #|       case "delete":
   #|         await adapter.delete(key);

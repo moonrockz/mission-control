@@ -128,3 +128,23 @@ async test "a file cannot take the path of a directory or sit under a file" {
   }
   assert_eq(store.read_text(@okf.StorePath("kb/d/x.md")), "# X")
 }
+
+///|
+async test "concurrent writes of a file and a file under it leave one of them" {
+  let store = @idb.IdbStore::in_memory()
+  let file = @okf.StorePath("kb/a")
+  let below = @okf.StorePath("kb/a/b.md")
+  let failures = []
+  @async.with_task_group(group => {
+    for path in [file, below] {
+      group.spawn_bg(() => {
+        store.write_text(path, "x") catch {
+          e => failures.push(e)
+        }
+      })
+    }
+  })
+  assert_eq(failures.length(), 1)
+  let names = store.list(@okf.StoreDir("kb")).map(e => e.name.to_string())
+  assert_eq(names, ["a"])
+}

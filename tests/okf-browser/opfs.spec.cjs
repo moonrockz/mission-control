@@ -42,6 +42,7 @@ test("the browser stores meet the store contract", async ({ playwright, browserN
     }
     expect(Object.keys(results)).toEqual([
       "writable", "worker", "auto", "idb", "idb-separate", "root-worker", "worker-sequence", "idb-reopen",
+      "idb-conflict",
     ]);
     expect(results.writable, "the createWritable() check").toMatch(/^(ok|skipped: )/);
     const { writable, ...rest } = results;
@@ -53,6 +54,7 @@ test("the browser stores meet the store contract", async ({ playwright, browserN
       "root-worker": "ok",
       "worker-sequence": "ok",
       "idb-reopen": "ok",
+      "idb-conflict": "ok",
     });
     expect(workers.length, "workers that the page started").toBe(1);
     expect(workers[0]).toMatch(/^blob:/);

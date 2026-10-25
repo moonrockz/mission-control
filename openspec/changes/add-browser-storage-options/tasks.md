@@ -28,7 +28,7 @@ Beads: none yet.
 
 - [x] 3.1 Extend `tests/okf-browser` to run four checks (browser store with `Writable`, `SyncAccessWorker` and `Auto`, and the IndexedDB store), each in its own directory or database, and to report a check that needs a missing API as skipped; verify `mise run test:browser` passes in Chromium
 - [x] 3.2 Add the `webkit` and `firefox` projects to `tests/okf-browser/playwright.config.cjs`, and install all three browsers with `--install`; verify `mise run test:browser -- --install` passes in all three engines locally
-- [ ] 3.3 Update the `Test browser` CI job name and cache for three engines; verify the job passes on the pull request
+- [x] 3.3 Update the `Test browser` CI job name and cache for three engines; verify the job passes on the pull request
 
 ## 4. Integration
 

@@ -8,8 +8,8 @@ extern "js" fn publish(result : String) -> Unit =
 /// of the origin private file system or its own IndexedDB database: the
 /// browser store with each write method and on the root handle, worker writes
 /// in a row and at the same time, the IndexedDB store, two IndexedDB databases
-/// that share no file, and an IndexedDB store whose database another store
-/// upgrades. Publishes one `name=result` line for each check, where the result
+/// that share no file, an IndexedDB store whose database another store
+/// upgrades, and two IndexedDB writes at the same time that conflict. Publishes one `name=result` line for each check, where the result
 /// is `ok`, `skipped: <reason>` or `failed: <error>`.
 async fn main {
   let worker = check(() => {
@@ -35,6 +35,7 @@ async fn main {
   )
   let worker_sequence = worker_sequence_check()
   let idb_reopen = idb_reopen_check()
+  let idb_conflict = idb_conflict_check()
   let lines = [
     "writable=" + writable,
     "worker=" + worker,
@@ -44,6 +45,7 @@ async fn main {
     "root-worker=" + root_worker,
     "worker-sequence=" + worker_sequence,
     "idb-reopen=" + idb_reopen,
+    "idb-conflict=" + idb_conflict,
   ]
   publish(lines.join("\n"))
 }
@@ -153,6 +155,32 @@ async fn idb_reopen_check() -> String {
     let names = first.list(@okf.StoreDir::root()).map(e => e.name.to_string())
     if names != ["a.md", "c.md"] {
       return "failed: the first store lists \{names.join(", ")}"
+    }
+  } catch {
+    e => return "failed: " + describe(e)
+  }
+  "ok"
+}
+
+///|
+/// Two writes at the same time, of a file and of a file under it, leave one
+/// of them: the path check and the write share one transaction.
+async fn idb_conflict_check() -> String {
+  try {
+    let store = @idb.IdbStore::open(database=@idb.DatabaseName("okf-conflict"))
+    let failures = []
+    @async.with_task_group(group => {
+      for text in ["kb/a", "kb/a/b.md"] {
+        let path = @okf.StorePath(text)
+        group.spawn_bg(() => {
+          store.write_text(path, "x") catch {
+            e => failures.push(e)
+          }
+        })
+      }
+    })
+    if failures.length() != 1 {
+      return "failed: \{failures.length()} of the two writes failed"
     }
   } catch {
     e => return "failed: " + describe(e)
