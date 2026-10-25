@@ -16,7 +16,8 @@ test "bundle labels: segments on each side of the rules" {
     (label.name(), label.group().iter().collect(), label.is_bare()),
     ("ir", ["morphir"], false),
   )
-  for text in ["", "morphir//ir", "/ir", "ir/", "a b", "a:b", "a\tb"] {
+  assert_eq(@okf.BundleLabel("my notes").name(), "my notes")
+  for text in ["", "morphir//ir", "/ir", "ir/", "a:b", "a\nb", "a\rb"] {
     assert_eq(
       outcome(() => @okf.BundleLabel(text) |> ignore),
       @debug.to_string(@okf.ValueError::InvalidLabel(text)),

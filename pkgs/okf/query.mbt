@@ -20,11 +20,15 @@ pub fn Filter::matches(self : Filter, bundle : Bundle, doc : Document) -> Bool {
   let eq = (a : String, b : String) => a.to_lower() == b.to_lower()
   match self {
     TypeIs(t) => meta.concept_type() == Some(t)
-    StatusIs(s) => meta.effective_status(options=bundle.options()) == Some(s)
+    StatusIs(s) =>
+      match meta.effective_status(options=bundle.options()) {
+        Some(v) => eq(v.to_string(), s.to_string())
+        None => false
+      }
     HasTag(tag) => meta.tags().any(v => eq(v, tag))
     InBundle(label) =>
-      bundle.label() == label ||
-      (label.is_bare() && bundle.name() == label.name())
+      eq(bundle.label().to_string(), label.to_string()) ||
+      (label.is_bare() && eq(bundle.name(), label.name()))
     FieldIs(key, value) => meta.texts(key.to_string()).any(v => eq(v, value))
   }
 }

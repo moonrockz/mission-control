@@ -50,19 +50,18 @@ test "document references parse labels and paths at the boundary" {
   assert_eq(same.path().to_string(), "/tables/orders.md")
   let other = @okf.DocRef("morphir/ir:/names.md")
   assert_eq(other.bundle().map(l => l.to_string()), Some("morphir/ir"))
-  let kinds = ["names.md", ":/names.md", "Bad Label:/names.md", "ir:/../x.md"].map(text => {
-      let e = try @okf.DocRef(text) catch {
-        e => e
-      } noraise {
-        _ => fail("parsed \{text}")
-      }
-      match e {
-        NotADocRef(_) => "not-a-ref"
-        BadLabel(..) => "bad-label"
-        BadPath(..) => "bad-path"
-      }
-    },
-  )
+  let kinds = ["names.md", ":/names.md", "a//b:/names.md", "ir:/../x.md"].map(text => {
+    let e = try @okf.DocRef(text) catch {
+      e => e
+    } noraise {
+      _ => fail("parsed \{text}")
+    }
+    match e {
+      NotADocRef(_) => "not-a-ref"
+      BadLabel(..) => "bad-label"
+      BadPath(..) => "bad-path"
+    }
+  })
   assert_eq(kinds, ["not-a-ref", "not-a-ref", "bad-label", "bad-path"])
 }
 
@@ -546,4 +545,70 @@ test "generated index sections keep concept type spellings apart" {
   let text = @okf.generate_index(b)
   assert_true(text.contains("# Decision\n\n* [A](a.md)"))
   assert_true(text.contains("# decision\n\n* [B](b.md)"))
+}
+
+///|
+test "directory names with spaces or colons give labels that parse back" {
+  let k = @okf.discover(
+    set_of([
+      ("my notes/index.md", "---\nokf_version: \"0.2\"\n---\n"),
+      ("my notes/a.md", "---\ntype: Note\n---\n"),
+      ("a:b/index.md", "---\nokf_version: \"0.2\"\n---\n"),
+    ]),
+  )
+  let labels = k.bundles().iter().map(b => b.label().to_string()).collect()
+  labels.sort_by(@okf.lexical_compare)
+  assert_eq(labels, ["a-b", "my notes"])
+  for b in k.bundles() {
+    assert_eq(@okf.BundleLabel(b.label().to_string()), b.label())
+  }
+  let doc_ref = @okf.DocRef("my notes:/a.md")
+  assert_eq(doc_ref.bundle().map(l => l.to_string()), Some("my notes"))
+}
+
+///|
+test "filters on bundles and statuses ignore letter case" {
+  let k = @okf.discover(
+    set_of([
+      ("ir/index.md", "---\nokf_version: \"0.2\"\n---\n"),
+      ("ir/a.md", "---\ntype: Note\nstatus: archived\n---\n"),
+    ]),
+  )
+  assert_eq(k.filter([InBundle(@okf.BundleLabel("IR"))]).length(), 1)
+  guard @okf.Status::parse("ARCHIVED") is Some(archived) else {
+    fail("no status")
+  }
+  assert_eq(k.filter([StatusIs(archived)]).length(), 1)
+}
+
+///|
+test "a blank ID field gives no record ID, and a supersedes value that is not an ID is reported" {
+  let by_field = @okf.Register(
+    @okf.RegisterName("item"),
+    @okf.ConceptType("Item"),
+    id_rule=FieldValue(@okf.FieldKey("id")),
+  )
+  let b = @okf.load_bundle(
+    set_of([
+      ("index.md", "---\nokf_version: \"0.2\"\n---\n"),
+      ("a.md", "---\ntype: Item\nid: \"   \"\n---\n"),
+    ]),
+  )
+  assert_eq(by_field.records(b).map(r => r.id), [None])
+  let decisions = @okf.Register(
+    @okf.RegisterName("decision"),
+    @okf.ConceptType("Decision"),
+    supersedes_key=@okf.FieldKey("supersedes"),
+  )
+  let b = @okf.load_bundle(
+    set_of([
+      ("index.md", "---\nokf_version: \"0.2\"\n---\n"),
+      ("decisions/0001-a.md", "---\ntype: Decision\nsupersedes: typo\n---\n"),
+    ]),
+  )
+  let issues = decisions.supersession_issues(decisions.records(b))
+  assert_eq(issues.length(), 1)
+  assert_true(
+    issues[0] is UnknownPredecessor(_, id) && id.to_string() == "typo",
+  )
 }

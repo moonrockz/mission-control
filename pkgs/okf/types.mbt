@@ -38,7 +38,8 @@ fn is_space_char(c : Char) -> Bool {
 
 ///|
 /// A bundle label: its group segments and its name, joined with `/`, such as
-/// `morphir/ir`. No segment is empty or holds `/`, `:` or white space.
+/// `morphir/ir` or `my notes`. No segment is empty or holds `/`, `:` or a
+/// line break.
 struct BundleLabel {
   segments : ReadOnlyArray[String]
 } derive(Eq, Hash, Debug)
@@ -48,7 +49,10 @@ struct BundleLabel {
 pub fn BundleLabel::BundleLabel(text : String) -> BundleLabel raise ValueError {
   let segments = text.split("/").map(s => s.to_owned()).collect()
   for s in segments {
-    if s.length() == 0 || s.contains(":") || s.iter().any(is_space_char) {
+    if s.length() == 0 ||
+      s.contains(":") ||
+      s.contains("\n") ||
+      s.contains("\r") {
       raise InvalidLabel(text)
     }
   }
@@ -57,13 +61,21 @@ pub fn BundleLabel::BundleLabel(text : String) -> BundleLabel raise ValueError {
 
 ///|
 /// The label of a bundle from its group directories and its directory name.
-/// Directory names come from store paths, so they are valid segments.
+/// A store path segment is not empty and has no `/`, but it can hold `:` or a
+/// line break, which a label cannot. Each `:` becomes `-` and each line break
+/// becomes a space, so that every directory gives a label that parses back.
 fn BundleLabel::of_parts(
   group : ArrayView[String],
   name : String,
 ) -> BundleLabel {
   let segments = group.to_owned()
   segments.push(name)
+  let segments = segments.map(s => {
+    s
+    .replace_all(old=":", new="-")
+    .replace_all(old="\r", new=" ")
+    .replace_all(old="\n", new=" ")
+  })
   { segments: ReadOnlyArray::from_array(segments), }
 }
 

@@ -380,7 +380,13 @@ pub fn Register::record_id(self : Register, doc : Document) -> RecordId? {
       }
     FieldValue(key) =>
       match doc.metadata().text(key.to_string()) {
-        Some(text) => Some({ text, })
+        // A blank field gives no ID.
+        Some(text) =>
+          try RecordId(text) catch {
+            _ => None
+          } noraise {
+            id => Some(id)
+          }
         None => None
       }
   }
@@ -575,9 +581,21 @@ fn Register::ids_at(
   record : Record,
   key : FieldKey?,
 ) -> Array[RecordId] {
+  // Text that is not an ID of this register stays as written, so that the
+  // checks report it as unknown. Blank text names no record.
+  let id_of = (text : String) => {
+    match self.parse_id(text) {
+      Some(id) => Some(id)
+      None =>
+        try RecordId(text.trim(chars=" \t").to_owned()) catch {
+          _ => None
+        } noraise {
+          id => Some(id)
+        }
+    }
+  }
   match key {
-    Some(k) =>
-      record.metadata().texts(k.to_string()).filter_map(t => self.parse_id(t))
+    Some(k) => record.metadata().texts(k.to_string()).filter_map(id_of)
     None => []
   }
 }
