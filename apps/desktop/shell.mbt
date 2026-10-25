@@ -7,7 +7,7 @@ pub struct VersionReply {
 ///|
 /// The reply the desktop shell sends for `mission-control.version`.
 pub fn version_reply() -> VersionReply {
-  { version: @contracts.version(), }
+  { version: @contracts.version().to_string(), }
 }
 
 ///|
@@ -16,13 +16,13 @@ pub fn version_command() -> @proton_contract.Command[
   @proton_contract.EmptyRequest,
   VersionReply,
 ] {
-  @proton_contract.command("mission-control.version")
+  @proton_contract.command(@contracts.Command::Version.proton_id())
 }
 
 ///|
 /// The HTML document a Proton window loads. The web UI mounts into `app`.
 pub fn document() -> String {
-  let version = @contracts.version()
+  let version = @contracts.version().to_string()
   "<!doctype html><html><head><meta charset=\"utf-8\"><title>Mission Control</title></head><body><h1>Mission Control</h1><p>" +
   version +
   "</p><div id=\"app\"></div></body></html>"

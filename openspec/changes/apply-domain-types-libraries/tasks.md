@@ -19,8 +19,8 @@ Beads: none yet.
 
 Beads: none yet.
 
-- [ ] 3.1 Add `Version`, `Command::Command` with `CommandError`, `Command::name()` and `Command::proton_id()`, and update `scripts/versions.mbtx` for the new version pattern (design D5); verify unit tests and `mise run validate:versions`
-- [ ] 3.2 Add `ExitCode` to `apps/cli`, carry it in the command result, and build `usage()` from the commands; verify the CLI tests and the release smoke test locally with `mise run build:release`
+- [x] 3.1 Add `Version`, `Command::Command` with `CommandError`, `Command::name()` and `Command::proton_id()`, and update `scripts/versions.mbtx` for the new version pattern (design D5); verify unit tests and `mise run validate:versions`
+- [x] 3.2 Add `ExitCode` to `apps/cli`, carry it in the command result, and build `usage()` from the commands; verify the CLI tests and the release smoke test locally with `mise run build:release`
 
 ## 4. Scripts
 

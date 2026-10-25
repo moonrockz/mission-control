@@ -119,9 +119,7 @@ Feature: One version across the workspace
       """
       pub let spec : String = "1.0.0"
 
-      pub fn version() -> String {
-        "0.1.0"
-      }
+      let current_version : String = "0.1.0"
       """
     When I look for versions other than "0.1.0"
     Then the mismatches are ""

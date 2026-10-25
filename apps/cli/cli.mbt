@@ -1,4 +1,48 @@
 ///|
+/// Raised when a number is not an exit code.
+pub(all) suberror ExitCodeError {
+  /// The number is outside 0 to 255.
+  InvalidExitCode(Int32)
+} derive(Eq, Debug)
+
+///|
+/// The exit code of a process: a number from 0 to 255.
+struct ExitCode {
+  value : Int32
+} derive(Eq, Hash, Debug)
+
+///|
+pub fn ExitCode::ExitCode(value : Int32) -> ExitCode raise ExitCodeError {
+  if value < 0 || value > 255 {
+    raise InvalidExitCode(value)
+  }
+  { value, }
+}
+
+///|
+/// 0: the command did what it was asked.
+pub fn ExitCode::success() -> ExitCode {
+  { value: 0, }
+}
+
+///|
+/// 1: the command failed.
+pub fn ExitCode::failure() -> ExitCode {
+  { value: 1, }
+}
+
+///|
+/// 2: the arguments are not a valid use of the command.
+pub fn ExitCode::usage() -> ExitCode {
+  { value: 2, }
+}
+
+///|
+pub fn ExitCode::to_int(self : ExitCode) -> Int32 {
+  self.value
+}
+
+///|
 /// What `run` decided to do with the arguments.
 pub enum Run {
   Text(String)
@@ -6,8 +50,24 @@ pub enum Run {
 }
 
 ///|
+/// The exit code of the result: success for text, a usage error for an
+/// unknown command.
+pub fn Run::exit_code(self : Run) -> ExitCode {
+  match self {
+    Text(_) => ExitCode::success()
+    Unknown(_) => ExitCode::usage()
+  }
+}
+
+///|
 pub fn usage() -> String {
-  "Usage: mission-control <command>\n\nCommands:\n  help       Print this help\n  version    Print the version"
+  let lines = ["Usage: mission-control <command>", "", "Commands:"]
+  for command in @contracts.commands {
+    let name = command.name()
+    let pad = " ".repeat(11 - name.length())
+    lines.push("  \{name}\{pad}\{command.description()}")
+  }
+  lines.join("\n")
 }
 
 ///|
@@ -17,9 +77,10 @@ pub fn run(args : Array[String]) -> Run {
     [] => "help"
     [command, ..] => command
   }
-  match @contracts.parse_command(name) {
-    Some(Help) => Text(usage())
-    Some(Version) => Text("mission-control " + @contracts.version())
-    None => Unknown(name)
+  try @contracts.Command::Command(name) catch {
+    UnknownCommand(_) => Unknown(name)
+  } noraise {
+    Help => Text(usage())
+    Version => Text("mission-control " + @contracts.version().to_string())
   }
 }
