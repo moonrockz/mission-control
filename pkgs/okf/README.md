@@ -20,6 +20,7 @@ this module keeps those concerns behind provider traits and a profile API.
 | `moonrockz/okf/fs` | File system store | native, wasm |
 | `moonrockz/okf/fs/node` | File system store over `node:fs/promises` (Node.js 20.16+, Bun, Deno) | js |
 | `moonrockz/okf/fs/browser` | Store over the File System Access API | js |
+| `moonrockz/okf/idb` | Store over IndexedDB, for pages and workers in every browser | js |
 | `moonrockz/okf/openspec` | OpenSpec profile, structured view, import and export | all |
 
 ## Load and query
@@ -135,12 +136,47 @@ store)` writes the changed documents.
 | Tests, wasm-gc, any target | `@memory.MemoryStore` (its `snapshot()` is synchronous) |
 | Native and wasm | `@fs.FsStore(@provider.StoreRoot(root))` |
 | Node.js, Bun, Deno | `@node.NodeStore(@provider.StoreRoot(root))` |
-| Browser | `@browser.BrowserStore(handle)`, with `@browser.origin_private_root()` or `@browser.pick_directory()` |
+| Browser, origin private file system | `@browser.BrowserStore::origin_private(path=@okf.StoreDir("kb"))` |
+| Browser, a directory that the user selects | `@browser.BrowserStore(@browser.pick_directory())` |
+| Browser or worker, IndexedDB | `@idb.IdbStore::open(database=@idb.DatabaseName("kb"))` |
 
 MoonBit has one js target, so choose the Node.js or the browser store by the
 package you import. A `StoreError` names a location relative to the store root
 (`FileAt(StorePath)` or `DirectoryAt(StoreDir)`), never a host path, so every
-store gives the same error for the same failure. `@memory.MemoryIndex` implements `IndexProvider` and
+store gives the same error for the same failure.
+
+The browser store writes with one of three methods (`writes=`):
+
+- `Writable` uses `FileSystemFileHandle.createWritable()` on the page.
+- `SyncAccessWorker` sends each write to a dedicated worker that writes with
+  `createSyncAccessHandle()`. It replaces the whole file in one session and
+  closes the handle when a step fails. The worker code is part of the package,
+  so a page serves no extra file. One worker serves every store of the page.
+  The worker opens the origin private file system by itself, so this method
+  needs a store from `origin_private`. A store over a directory that the user
+  selected refuses it with `InvalidPath`.
+- `Auto`, the default, uses `createWritable()` when the browser has it, and the
+  worker otherwise. The store chooses once, at its first write.
+
+Safari 15.2 to 18 has no `createWritable()`, so `Auto` writes through the worker
+there. Safari 26 has `createWritable()`; one report says that Safari 26.5 keeps a
+temporary copy of each file that it writes, so `SyncAccessWorker` is a choice
+there too. A page with a Content Security Policy needs `worker-src blob:` for the
+worker. Reads, listings and deletes always run on the page.
+
+`@idb.IdbStore` keeps each file in one record of an IndexedDB object store,
+under its store path. A directory exists while a file is under it. Each write
+and delete is one transaction, so a failed write, for example over the storage
+quota, keeps the earlier content. A browser can evict IndexedDB and origin
+private data under storage pressure; for data that must stay, the application
+can call `navigator.storage.persist()`. The library does not call it, because
+the browser can show a prompt. `IdbStore::in_memory()` runs the same logic over
+a map, for tests outside a browser.
+
+`mise run test:browser` runs the store checks in Chromium, WebKit and Firefox.
+WebKit in Playwright is close to Safari, but it is not the same browser.
+
+`@memory.MemoryIndex` implements `IndexProvider` and
 `SearchProvider` (BM25 over title, description, tags and body). A new provider,
 for example over SQLite or RocksDB, proves its contract with
 `@conformance.check_store`, `check_index` and `check_search`.

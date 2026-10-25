@@ -1,0 +1,19 @@
+import {
+  "moonrockz/okf",
+  "moonrockz/okf/provider",
+  "moonbitlang/async/js_async",
+  "moonbitlang/core/debug",
+}
+
+import {
+  "moonrockz/okf",
+  "moonrockz/okf/idb",
+  "moonrockz/okf/conformance",
+  "moonrockz/okf/provider",
+  "moonbitlang/async",
+} for "test"
+
+// Browsers only: the store calls IndexedDB through JavaScript FFI. The
+// in-memory adapter lets the tests run under Node.js.
+
+supported_targets = "js"

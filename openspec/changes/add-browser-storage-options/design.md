@@ -53,7 +53,7 @@ Alternative: a separate worker file. Rejected: callers would have to serve it at
 
 ### D4. The IndexedDB store keeps one record per file
 
-New package `moonrockz/okf/idb`, js only. `IdbStore::open(database? : DatabaseName = DatabaseName::default(), object_store? : ObjectStoreName = ObjectStoreName::default()) -> IdbStore raise StoreError` opens or creates the database at version 1 and creates the object store with out-of-line keys. Each record has the key `<store path>` and the value `{kind: "text" | "bytes", data, modified}`, where `modified` is milliseconds from `Date.now()`.
+New package `moonrockz/okf/idb`, js only. `IdbStore::open(database? : DatabaseName = DatabaseName::default(), object_store? : ObjectStoreName = ObjectStoreName::default()) -> IdbStore raise StoreError` opens or creates the database and creates the object store with out-of-line keys. A database that exists without the object store is opened again at its next version, which creates the store. Each record has the key `<store path>` and the value `{kind: "text" | "bytes", data, modified}`, where `modified` is milliseconds from `Date.now()`.
 
 - `list(dir)` reads the keys in the key range `[dir + "/", dir + "/￿")` (all keys for the root), takes the next path segment of each key, and marks a segment as a directory when the key continues after it. An empty result for a non-root directory raises `NotFound`.
 - `read_text`, `read_bytes` and `modified` read one record; a missing record raises `NotFound`. `read_text` decodes a bytes record as UTF-8, and `read_bytes` encodes a text record, as `MemoryStore` does.
@@ -66,9 +66,9 @@ Alternative: one record per directory with child lists. Rejected: every write wo
 
 ### D5. Tests in three engines
 
-- The stand-in handle (`memory_directory_handle`) gets a third argument, `with_writable : Bool`. Without `createWritable`, the store must use the worker; under Node.js there is no worker, so the stand-in also gets a `sync_writer` hook that the store uses in place of the worker. This tests the `Auto` selection and the worker protocol logic on every run.
+- The stand-in handle (`memory_directory_handle`) gets the options `with_writable` and `picked`. Without `createWritable`, the store must use the worker; under Node.js there is no worker, so the stand-in has a sync writer that the store uses in place of the worker, except for a `picked` stand-in, which stands for a directory that the user selected. `fail_sync_writes` makes the sync writer fail for a file name, and `stand_in_writes` names the writer of each write. This tests the `Auto` selection, the worker scope and the worker protocol logic on every run.
 - `tests/okf-browser` runs four checks: the browser store with `Writable` (where it exists), the browser store with `SyncAccessWorker`, the browser store with `Auto`, and the IndexedDB store. Each check uses its own directory or database name.
-- `playwright.config.cjs` adds the `webkit` and `firefox` projects. `--install` installs `chromium webkit firefox` with their system libraries. A check that needs `createWritable` is skipped, not failed, in an engine that does not have it, and the report names the skip.
+- `playwright.config.cjs` adds the `webkit` and `firefox` projects. The test opens each page in a persistent context with a fresh profile, because WebKit in Playwright gives the origin private file system only to a persistent context. A fifth check opens two IndexedDB databases and checks that they share no file, and the test checks that the page loads no file except the page and its script. `--install` installs `chromium webkit firefox` with their system libraries. A check that needs `createWritable` is skipped, not failed, in an engine that does not have it, and the report names the skip.
 
 ### D6. Domain types for the new values
 
