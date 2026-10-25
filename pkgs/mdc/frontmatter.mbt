@@ -14,27 +14,38 @@ pub extend Frontmatter with @debug.Debug::{to_repr}
 /// Empty and comment-only payloads become empty mappings. Reject invalid YAML,
 /// multiple documents and non-mappings. Error positions are one-based and
 /// relative to this payload; `parse` translates them to document positions.
-pub fn Frontmatter::Frontmatter(raw : String) -> Frontmatter raise ParseError {
+pub fn Frontmatter::Frontmatter(
+  raw : String,
+) -> Frontmatter raise FrontmatterError {
   let values = @yaml.Yaml::load_from_string(raw[:]) catch {
     @yaml.YamlError(mark~, info~) =>
-      raise InvalidFrontmatter(
-        line=mark.line,
-        column=mark.col + 1,
-        message=info,
-      )
+      raise InvalidYaml(at=yaml_position(mark.line, mark.col + 1), message=info)
   }
-  let value = if values.is_empty() {
-    @yaml.Yaml::Map({})
-  } else if values.length() == 1 && values[0] is Map(_) {
-    values[0]
-  } else {
-    raise InvalidFrontmatter(
-      line=1,
-      column=1,
-      message="frontmatter must be a YAML mapping",
-    )
+  let value = match values {
+    [] => @yaml.Yaml::Map({})
+    [Map(_) as value] => value
+    [_] => raise NotAMapping
+    _ => raise MultipleDocuments(count=values.length())
   }
   { raw, value, }
+}
+
+///|
+/// The position that the YAML parser reports. The parser counts lines from 1;
+/// a value below 1 becomes 1.
+fn yaml_position(line : Int32, column : Int32) -> TextPosition {
+  {
+    line: if line < 1 {
+      1
+    } else {
+      line
+    },
+    column: if column < 1 {
+      1
+    } else {
+      column
+    },
+  }
 }
 
 ///|

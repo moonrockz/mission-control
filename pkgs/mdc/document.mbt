@@ -1,7 +1,7 @@
 ///|
-/// An immutable MDC document. Cmark locations are relative to `body()`.
-/// Add `body_offset()` to cmark string offsets and `body_line() - 1` to line numbers
-/// to locate Markdown in the original input. Offsets count UTF-16 code units.
+/// An immutable MDC document. Cmark locations are relative to `body()`;
+/// `source_range` translates them to the original input. Offsets count UTF-16
+/// code units.
 struct Document {
   frontmatter : Frontmatter?
   markdown : @cmark.Doc
@@ -34,6 +34,41 @@ pub fn Document::body_line(self : Document) -> Int32 {
 }
 
 ///|
+/// The range in the original input of a cmark location in the body, or `None`
+/// for a location that cmark did not record.
+pub fn Document::source_range(
+  self : Document,
+  loc : @cmark_base.TextLoc,
+) -> SourceRange? {
+  guard !loc.is_none() else { return None }
+  let position = (line : @cmark_base.LinePos, ccode : Int32) => {
+    // A first body line that is also the first source line starts after the
+    // byte order mark, when there is one.
+    let shift = if self.body_line == 1 && line.0 == 1 {
+      self.body_offset
+    } else {
+      0
+    }
+    let p : TextPosition = {
+      line: self.body_line + line.0 - 1,
+      column: ccode - line.1 + 1 + shift,
+    }
+    p
+  }
+  let start = position(loc.first_line, loc.first_ccode)
+  let start_offset = self.body_offset + loc.first_ccode
+  if loc.is_empty() {
+    return Some({ start, end: start, start_offset, end_offset: start_offset, })
+  }
+  Some({
+    start,
+    end: position(loc.last_line, loc.last_ccode),
+    start_offset,
+    end_offset: self.body_offset + loc.last_ccode + 1,
+  })
+}
+
+///|
 /// An owned cmark copy for rendering or transformation. Its mutable maps and
 /// sequences share no storage with the document or its traversal views.
 pub fn Document::to_cmark(self : Document) -> @cmark.Doc {
@@ -47,8 +82,11 @@ pub fn Document::root(self : Document) -> Node {
 
 ///|
 pub(all) suberror ParseError {
+  /// The frontmatter has no closing delimiter line.
   UnterminatedFrontmatter
-  InvalidFrontmatter(line~ : Int32, column~ : Int32, message~ : String)
+  /// The frontmatter payload is not one YAML mapping. An `InvalidYaml`
+  /// position is a position in the document.
+  InvalidFrontmatter(FrontmatterError)
 } derive(Debug)
 
 ///|
@@ -116,9 +154,12 @@ pub fn Document::Document(
     let frontmatter = Frontmatter::Frontmatter(
       source[after_first:end].to_owned(),
     ) catch {
-      InvalidFrontmatter(line~, column~, message~) =>
-        raise InvalidFrontmatter(line=line + 1, column~, message~)
-      error => raise error
+      // The payload starts on the second line of the document.
+      InvalidYaml(at~, message~) =>
+        raise InvalidFrontmatter(
+          InvalidYaml(at={ ..at, line: at.line + 1, }, message~),
+        )
+      error => raise InvalidFrontmatter(error)
     }
     Some(frontmatter)
   } else {

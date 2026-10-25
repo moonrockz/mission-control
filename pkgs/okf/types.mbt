@@ -14,8 +14,6 @@ pub(all) suberror ValueError {
   InvalidRuleName(String)
   /// A search limit outside 1 to `max_search_limit`.
   InvalidSearchLimit(Int32)
-  /// A heading level outside 1 to 6.
-  InvalidHeadingLevel(Int32)
   /// A date that is not a real calendar date in the form `YYYY-MM-DD`.
   InvalidDate(String)
   /// A text that is not an ISO 8601 instant or a `YYYY-MM-DD` date.
@@ -402,39 +400,6 @@ pub fn SearchLimit::to_int(self : SearchLimit) -> Int32 {
 }
 
 ///|
-/// A heading level from 1 to 6.
-struct HeadingLevel {
-  value : Int32
-} derive(Eq, Hash, Compare, Debug)
-
-///|
-pub fn HeadingLevel::HeadingLevel(
-  value : Int32,
-) -> HeadingLevel raise ValueError {
-  if value < 1 || value > 6 {
-    raise InvalidHeadingLevel(value)
-  }
-  { value, }
-}
-
-///|
-/// A level that a Markdown parser gave. CommonMark levels are 1 to 6; a value
-/// outside that range is clamped.
-fn HeadingLevel::of_parser(level : Int32) -> HeadingLevel {
-  { value: if level < 1 { 1 } else if level > 6 { 6 } else { level }, }
-}
-
-///|
-pub fn HeadingLevel::to_int(self : HeadingLevel) -> Int32 {
-  self.value
-}
-
-///|
-pub impl Show for HeadingLevel with fn output(self, logger) {
-  logger.write_object(self.value)
-}
-
-///|
 /// A calendar date in the form `YYYY-MM-DD`, as log headings and log edits use.
 struct LogDate {
   text : String
@@ -614,18 +579,6 @@ pub extend SearchLimit with Hash::{hash, hash_combine}
 pub extend SearchLimit with @debug.Debug::{to_repr}
 
 ///|
-pub extend HeadingLevel with Eq::{not_equal, equal}
-
-///|
-pub extend HeadingLevel with Hash::{hash, hash_combine}
-
-///|
-pub extend HeadingLevel with Compare::{op_lt, op_le, op_ge, compare, op_gt}
-
-///|
-pub extend HeadingLevel with @debug.Debug::{to_repr}
-
-///|
 pub extend LogDate with Eq::{not_equal, equal}
 
 ///|
@@ -645,6 +598,3 @@ pub extend OkfVersion with Eq::{not_equal, equal}
 
 ///|
 pub extend OkfVersion with @debug.Debug::{to_repr}
-
-///|
-pub extend HeadingLevel with Show::{to_string, output}

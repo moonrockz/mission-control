@@ -220,7 +220,7 @@ pub fn Knowledge::find_document(
 ///|
 /// One heading of a document outline.
 pub struct Heading {
-  level : HeadingLevel
+  level : @mdc.HeadingLevel
   text : String
   slug : String
   line : Int32
@@ -272,12 +272,7 @@ pub fn Document::outline(self : Document) -> Array[Heading] {
                 base
               }
             }
-            out.push({
-              level: HeadingLevel::of_parser(level),
-              text,
-              slug,
-              line: self.file_line(line_of_loc(view.location())),
-            })
+            out.push({ level, text, slug, line: self.line_of(view.location()), })
             return SkipChildren
           }
           CodeBlock => return SkipChildren
@@ -323,7 +318,7 @@ pub fn Document::code_blocks(self : Document) -> Array[CodeBlock] {
             out.push({
               language,
               code: code.join("\n"),
-              line: self.file_line(line_of_loc(view.location())),
+              line: self.line_of(view.location()),
             })
           }
           _ => ()

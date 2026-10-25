@@ -55,7 +55,7 @@ rule cannot exist. Parse raw text once, where it enters, and then pass the type.
 | `ConceptType` | Not blank; equal without letter case |
 | `FieldKey` | A plain frontmatter key that edits can write |
 | `RuleName` | Lower-case kebab case |
-| `SearchLimit`, `HeadingLevel` | 1 to 1000; 1 to 6 |
+| `SearchLimit` | 1 to 1000 |
 | `LogDate` | A real calendar date, `YYYY-MM-DD` |
 | `RegisterName`, `StateName`, `RecordId`, `IdWidth` | Not blank; an ID width is 1 to 9 |
 

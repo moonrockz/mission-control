@@ -53,24 +53,14 @@ pub fn from_mdc(document : @mdc.Document) -> Specification {
         Paragraph => {
           let text = normalize(paragraph_text(cursor.node()))
           if is_candidate(text) {
-            let loc = view.location()
-            let span = if loc.is_none() {
-              None
-            } else {
-              Some(SourceSpan::{
-                start: document.body_offset() + loc.first_ccode,
-                end: document.body_offset() + loc.last_ccode + 1,
-                line: document.body_line() + loc.first_line.0 - 1,
-                column: loc.first_ccode -
-                loc.first_line.1 +
-                1 +
-                (if document.body_line() == 1 && loc.first_line.0 == 1 {
-                  document.body_offset()
-                } else {
-                  0
-                }),
+            let span = document
+              .source_range(view.location())
+              .map(range => SourceSpan::{
+                start: range.start_offset(),
+                end: range.end_offset(),
+                line: range.start().line(),
+                column: range.start().column(),
               })
-            }
             collect_candidate(
               text,
               Markdown(path=cursor.path(), span~),

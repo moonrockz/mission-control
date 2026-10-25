@@ -107,16 +107,6 @@ test "search limits run from 1 to the maximum" {
 }
 
 ///|
-test "heading levels run from 1 to 6" {
-  assert_eq(@okf.HeadingLevel(1).to_int(), 1)
-  assert_eq(@okf.HeadingLevel(6).to_int(), 6)
-  for value in [0, 7] {
-    assert_eq(
-      outcome(() => @okf.HeadingLevel(value) |> ignore),
-      @debug.to_string(@okf.ValueError::InvalidHeadingLevel(value)),
-    )
-  }
-}
 
 ///|
 test "log dates are real calendar dates" {

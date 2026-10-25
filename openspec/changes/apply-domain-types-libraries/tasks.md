@@ -6,8 +6,8 @@ Each group is one story-sized slice. Each group names its beads issue ID once on
 
 Beads: none yet.
 
-- [ ] 1.1 Add `HeadingLevel` and use it in `BlockKind::Heading`, with tests for each level and for `of_int` outside 1 to 6 (design D2); verify the mdc tests, `tests/mdc-acceptance` and `tests/mdc-laws`
-- [ ] 1.2 Add `FrontmatterError`, `TextPosition`, `SourceRange` and `Document::source_range` (design D3), and move `moonrockz/ears` and `moonrockz/okf` to them; verify unit tests from the `mdc/positions` scenarios and all suites that use mdc
+- [x] 1.1 Add `HeadingLevel` and use it in `BlockKind::Heading`, with tests for each level and for `of_int` outside 1 to 6 (design D2); verify the mdc tests, `tests/mdc-acceptance` and `tests/mdc-laws`
+- [x] 1.2 Add `FrontmatterError`, `TextPosition`, `SourceRange` and `Document::source_range` (design D3), and move `moonrockz/ears` and `moonrockz/okf` to them; verify unit tests from the `mdc/positions` scenarios and all suites that use mdc
 
 ## 2. moonrockz/ears
 

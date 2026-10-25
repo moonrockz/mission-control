@@ -184,9 +184,18 @@ pub fn Metadata::Metadata(
   first_line~ : Int32 = 2,
 ) -> Metadata raise MetadataError {
   let frontmatter = @mdc.Frontmatter::Frontmatter(raw) catch {
-    InvalidFrontmatter(line~, column~, message~) =>
-      raise InvalidYaml(line=line + first_line - 1, column~, message~)
-    UnterminatedFrontmatter => raise Unterminated
+    InvalidYaml(at~, message~) =>
+      raise InvalidYaml(
+        line=at.line() + first_line - 1,
+        column=at.column(),
+        message~,
+      )
+    NotAMapping | MultipleDocuments(_) =>
+      raise InvalidYaml(
+        line=first_line,
+        column=1,
+        message="frontmatter must be a YAML mapping",
+      )
   }
   let entries = scan_entries(raw)
   let pairs = []

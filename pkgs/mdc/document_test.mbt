@@ -16,7 +16,7 @@ test "plain Markdown uses cmark without frontmatter" {
       Continue(acc)
     }),
   )
-  assert_eq(headings, [1])
+  assert_eq(headings, [@mdc.HeadingLevel::H1])
 }
 
 ///|
@@ -103,9 +103,8 @@ test "invalid YAML reports original source coordinates" {
     let _ = @mdc.parse("---\nname: ]\n---\nbody")
     fail("accepted invalid YAML")
   } catch {
-    @mdc.InvalidFrontmatter(line~, column~, message~) => {
-      assert_eq(line, 2)
-      assert_eq(column, 7)
+    @mdc.InvalidFrontmatter(InvalidYaml(at~, message~)) => {
+      assert_eq((at.line(), at.column()), (2, 7))
       assert_false(message.is_empty())
     }
     _ => fail("wrong error")
@@ -128,7 +127,7 @@ test "frontmatter must be a mapping" {
       let _ = @mdc.parse("---\n\{payload}\n---\n")
       fail("accepted non-mapping YAML")
     } catch {
-      @mdc.InvalidFrontmatter(line=2, column=1, ..) => ()
+      @mdc.InvalidFrontmatter(NotAMapping) => ()
       _ => fail("wrong error")
     }
   }

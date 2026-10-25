@@ -23,7 +23,7 @@ pub enum BlockKind {
   BlockQuote
   Blocks
   CodeBlock
-  Heading(level~ : Int32)
+  Heading(level~ : HeadingLevel)
   HtmlBlock
   LinkRefDefinition
   List
@@ -69,7 +69,10 @@ pub fn BlockView::kind(self : BlockView) -> BlockKind {
     BlockQuote(_) => BlockQuote
     Blocks(_) => Blocks
     CodeBlock(_) => CodeBlock
-    Heading({ v, .. }) => Heading(level=v.level)
+    // Cmark gives levels from 1 to 6: 1 to 6 for ATX headings, 1 or 2 for
+    // setext headings.
+    Heading({ v, .. }) =>
+      Heading(level=HeadingLevel::of_int(v.level).unwrap_or(H6))
     HtmlBlock(_) => HtmlBlock
     LinkRefDefinition(_) => LinkRefDefinition
     List(_) => List

@@ -29,10 +29,13 @@ derives the mapping from it. `raw()` returns the exact original text, and
 `value()` returns a deep copy of the YAML mapping. Mutating that copy leaves the frontmatter
 unchanged. The document parser uses this same constructor.
 
-`parse` raises `ParseError` for an unterminated header, invalid YAML or a payload
-that is not a mapping. `InvalidFrontmatter` contains a message and one-based
-line and column numbers in the original input. `Frontmatter::Frontmatter` reports
-positions relative to its payload. An empty or comment-only header is an empty
+`Frontmatter::Frontmatter` raises `FrontmatterError`: `InvalidYaml(at~, message~)`
+for invalid YAML, `NotAMapping` for one document that is not a mapping, and
+`MultipleDocuments(count~)` for more than one document. The `InvalidYaml`
+position is relative to the payload. `parse` raises `ParseError`:
+`UnterminatedFrontmatter` for a header without a closing line, and
+`InvalidFrontmatter(FrontmatterError)`, whose `InvalidYaml` position is a
+position in the original input. An empty or comment-only header is an empty
 mapping.
 
 Frontmatter must start on the first line with `---`. Either `---` or `...` closes
@@ -45,10 +48,11 @@ requires a closing delimiter even when the intended content is a thematic break.
 `strict=true`, `layout=true`, `locs=true` and `file=""`. Use `strict=false` for
 cmark extensions such as tables, task lists, strikethrough and footnotes.
 
-Cmark locations refer to `doc.body()`. Add `doc.body_offset()` to string offsets
-and `doc.body_line() - 1` to line numbers to recover original source positions.
-String offsets use UTF-16 code units, as MoonBit strings do. The BOM contributes
-one code unit to the offset when present. Cmark layout nodes, including blank
+Cmark locations refer to `doc.body()`. `doc.source_range(view.location())`
+gives the `SourceRange` in the original input: the `TextPosition` (line and
+column, both from 1) of the first and last characters, and the start and end
+offsets. Offsets and columns use UTF-16 code units, as MoonBit strings do. The
+BOM contributes one code unit when present. Cmark layout nodes, including blank
 lines, remain in the AST.
 
 ## Traversal
@@ -57,7 +61,7 @@ All traversal APIs visit the document, frontmatter when present, then Markdown
 blocks and inlines in depth-first document order. Frontmatter is a leaf with a
 parsed YAML mapping. Markdown nodes expose opaque `BlockView` and `InlineView`
 values. Their `kind()` methods return algebraic data types containing immutable
-inspection data, such as heading levels and text. `location()` returns the
+inspection data, such as heading levels (`HeadingLevel`, `H1` to `H6`) and text. `location()` returns the
 source location. Link definitions and code blocks are leaves; link and image
 text, table cells and footnote definition
 bodies are children. Resolved references are not followed a second time.
