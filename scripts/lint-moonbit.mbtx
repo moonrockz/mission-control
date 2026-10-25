@@ -7,7 +7,33 @@ import {
   "moonbitlang/async@0.22.5/process",
   "moonbitlang/async@0.22.5/stdio",
   "moonbitlang/x@0.5.5/sys",
+  "moonbitlang/core/env",
 }
+
+///|
+/// The exit codes of the task scripts: 0 for success, 1 for a failure and 2
+/// for a usage error. A script that succeeds ends `main` normally. Each script
+/// keeps this copy, and `scripts/test-scripts.mbtx` checks that the copies are
+/// equal.
+enum ExitCode {
+  Failure
+  Usage
+}
+
+///|
+/// Ends the script with this exit code.
+fn ExitCode::exit(self : ExitCode) -> Unit {
+  @sys.exit(
+    match self {
+      Failure => 1
+      Usage => 2
+    },
+  )
+}
+// End of the exit codes.
+
+///|
+let usage : String = "Usage: mise run lint:moonbit"
 
 ///|
 async fn moon(args : Array[String]) -> Int {
@@ -16,17 +42,22 @@ async fn moon(args : Array[String]) -> Int {
 
 ///|
 async fn main {
+  guard @env.args().length() <= 1 else {
+    eprintln(usage)
+    ExitCode::Usage.exit()
+    return
+  }
   println("🔍 Checking MoonBit formatting...")
   let fmt = moon(["fmt", "--check"])
   if fmt != 0 {
     println("❌ Formatting issues found. Run 'mise run format' to fix.")
-    @sys.exit(if fmt > 0 { fmt } else { 1 })
+    ExitCode::Failure.exit()
   }
   println("🔍 Checking MoonBit code...")
   let check = moon(["check", "--deny-warn"])
   if check != 0 {
     println("❌ moon check reported problems.")
-    @sys.exit(if check > 0 { check } else { 1 })
+    ExitCode::Failure.exit()
   }
   println("✅ MoonBit lint complete")
 }

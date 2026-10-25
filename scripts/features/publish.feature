@@ -44,3 +44,18 @@ Feature: Publish to mooncakes.io
 
   Scenario: The two copies of the publish list agree
     Then the publish list is the one in release.mbtx
+
+  Scenario: The two copies of the failure classes agree
+    Then the failure classes are the ones in release.mbtx
+
+  Scenario Outline: Classify a failed command
+    Given moon publish exits with 1 and prints "<output>"
+    Then the failure class is "<class>"
+
+    Examples:
+      | output                                      | class             |
+      | 409 Conflict: is duplicated with an existing version | already published |
+      | HTTP 403 rate limit exceeded                | refused           |
+      | HTTP 409 timeout                            | conflict          |
+      | HTTP 502 Bad Gateway                        | transient         |
+      | Check failed                                | other             |

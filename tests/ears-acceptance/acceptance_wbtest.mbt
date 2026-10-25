@@ -98,7 +98,7 @@ impl @moonspec.World for EarsWorld with fn configure(self, setup) {
     guard spec.diagnostics().get(0) is Some(diagnostic) else {
       fail("no diagnostic")
     }
-    @expect.expect(diagnostic.error()).to_equal(@ears.MissingShall)
+    @expect.expect(diagnostic.error() is @ears.MissingShall(_)).to_be_true()
   })
   setup.then1("the YAML payload remains {string}", (expected : String) => {
     guard self.parsed().document() is Some(doc) else { fail("no document") }

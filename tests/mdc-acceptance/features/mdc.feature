@@ -69,7 +69,19 @@ Feature: Markdown documents with frontmatter
       ---
       """
     When the source is parsed
-    Then invalid frontmatter is reported at line 2 and column 1
+    Then the frontmatter is reported as not a mapping
+
+  Scenario: Metadata must be one YAML document
+    Given the MDC source:
+      """
+      ---
+      a: 1
+      --- !doc
+      b: 2
+      ---
+      """
+    When the source is parsed
+    Then the frontmatter is reported as 2 YAML documents
 
   Scenario: Invalid YAML points into the original source
     Given the MDC source:

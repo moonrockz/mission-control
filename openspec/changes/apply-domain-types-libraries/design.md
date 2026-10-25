@@ -23,11 +23,11 @@ All breaking changes to `moonrockz/mdc` and `moonrockz/ears` land in one release
 
 ### D2. `HeadingLevel` in mdc
 
-`pub enum HeadingLevel { H1; H2; H3; H4; H5; H6 }` with `to_int()` and `HeadingLevel::of_int(n) -> HeadingLevel?`. `moonrockz/okf` then uses the mdc type directly and drops its own (`apply-domain-types-okf` D3).
+`pub(all) enum HeadingLevel { H1; H2; H3; H4; H5; H6 }` (every case is a valid level, so callers can build levels) with `to_int()` and `HeadingLevel::of_int(n) -> HeadingLevel?`. `moonrockz/okf` then uses the mdc type directly and drops its own (`apply-domain-types-okf` D3).
 
 ### D3. `FrontmatterError` and positions
 
-`Frontmatter::Frontmatter` raises `FrontmatterError { InvalidYaml(at~ : TextPosition, message~ : String); NotAMapping; MultipleDocuments(count~ : Int) }`. `Document::Document` keeps `ParseError` and wraps the frontmatter error in a case, plus `UnterminatedFrontmatter`. `TextPosition::TextPosition(line~, column~) raise PositionError` and `SourceRange` are new; `Document::source_range(loc) -> SourceRange` replaces the caller arithmetic.
+`Frontmatter::Frontmatter` raises `FrontmatterError { InvalidYaml(at~ : TextPosition, message~ : String); NotAMapping; MultipleDocuments(count~ : Int) }`. `Document::Document` keeps `ParseError` and wraps the frontmatter error in a case, plus `UnterminatedFrontmatter`. `TextPosition::TextPosition(line~, column~) raise PositionError` and `SourceRange` are new; `Document::source_range(loc) -> SourceRange?` replaces the caller arithmetic; it gives `None` for a location that cmark did not record or that is not in the body.
 
 ### D4. EARS keywords with dialects
 

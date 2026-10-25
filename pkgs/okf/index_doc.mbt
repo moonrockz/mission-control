@@ -14,7 +14,7 @@ pub(all) enum IndexHeading {
   /// The lines before the first heading.
   Preamble
   /// A heading line with its text and level.
-  Titled(String, HeadingLevel)
+  Titled(String, @mdc.HeadingLevel)
 } derive(Eq, Debug)
 
 ///|
@@ -66,7 +66,7 @@ pub fn IndexModel::section(
 
 ///|
 /// Parses an ATX heading line, `## Text`.
-fn parse_heading_line(line : String) -> (HeadingLevel, String)? {
+fn parse_heading_line(line : String) -> (@mdc.HeadingLevel, String)? {
   let trimmed = line.trim_start(chars=" ").to_owned()
   if line.length() - trimmed.length() > 3 {
     return None
@@ -75,7 +75,7 @@ fn parse_heading_line(line : String) -> (HeadingLevel, String)? {
   while level < trimmed.length() && trimmed[level] == '#' {
     level += 1
   }
-  if level == 0 || level > 6 {
+  guard @mdc.HeadingLevel::of_int(level) is Some(heading_level) else {
     return None
   }
   if level < trimmed.length() && trimmed[level] != ' ' && trimmed[level] != '\t' {
@@ -84,8 +84,7 @@ fn parse_heading_line(line : String) -> (HeadingLevel, String)? {
   let text = trimmed[level:].trim(chars=" \t").to_owned()
   // A closing sequence of `#` characters is not part of the text.
   let text = text.trim_end(chars="#").trim_end(chars=" \t").to_owned()
-  // The loop above keeps the level from 1 to 6.
-  Some(({ value: level, }, text))
+  Some((heading_level, text))
 }
 
 ///|

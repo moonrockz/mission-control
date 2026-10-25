@@ -12,6 +12,28 @@ import {
 }
 
 ///|
+/// The exit codes of the task scripts: 0 for success, 1 for a failure and 2
+/// for a usage error. A script that succeeds ends `main` normally. Each script
+/// keeps this copy, and `scripts/test-scripts.mbtx` checks that the copies are
+/// equal.
+enum ExitCode {
+  Failure
+  Usage
+}
+
+///|
+/// Ends the script with this exit code.
+fn ExitCode::exit(self : ExitCode) -> Unit {
+  @sys.exit(
+    match self {
+      Failure => 1
+      Usage => 2
+    },
+  )
+}
+// End of the exit codes.
+
+///|
 /// Release tooling. A release is a pull request that sets one version across the workspace, with
 /// `scripts/versions.mbtx`, and adds its section to CHANGELOG.md. The root `moon.mod` is the source of
 /// truth for the version.
@@ -51,7 +73,10 @@ fn choose_version(exit_code : Int, stdout : String) -> String {
 }
 
 ///|
-/// A `major.minor.patch` version.
+/// A `major.minor.patch` version: each part is 1 to 9 digits with no leading
+/// zero. `scripts/release.mbtx` and `scripts/versions.mbtx` keep the same
+/// copy, and a scenario of `features/versions.feature` checks that the copies
+/// are equal.
 struct Version {
   major : Int
   minor : Int
@@ -62,6 +87,36 @@ struct Version {
 impl Show for Version with fn output(self, logger) {
   logger.write_string("\{self.major}.\{self.minor}.\{self.patch}")
 }
+
+///|
+/// One part of a version: 1 to 9 digits with no leading zero.
+fn version_part(text : StringView) -> Int? {
+  guard text.length() > 0 &&
+    text.length() <= 9 &&
+    !(text.length() > 1 && text.has_prefix("0")) else {
+    return None
+  }
+  let mut n = 0
+  for c in text {
+    guard c >= '0' && c <= '9' else { return None }
+    n = n * 10 + (c.to_int() - '0'.to_int())
+  }
+  Some(n)
+}
+
+///|
+/// Reads `N.N.N`, or gives `None` for any other text.
+fn Version::parse(text : StringView) -> Version? {
+  match text.split(".").collect() {
+    [major, minor, patch] =>
+      match (version_part(major), version_part(minor), version_part(patch)) {
+        (Some(major), Some(minor), Some(patch)) => Some({ major, minor, patch })
+        _ => None
+      }
+    _ => None
+  }
+}
+// End of the version.
 
 ///|
 fn parse_number(text : StringView) -> Int? {
@@ -84,17 +139,9 @@ fn parse_version(text : String) -> Result[Version, String] {
   } else {
     trimmed
   }
-  let parts = bare.split(".").collect()
-  if parts.any(p => p.length() > 1 && p.has_prefix("0")) {
-    return Err("not a version: \{text}")
-  }
-  match parts {
-    [major, minor, patch] =>
-      match (parse_number(major), parse_number(minor), parse_number(patch)) {
-        (Some(major), Some(minor), Some(patch)) => Ok({ major, minor, patch })
-        _ => Err("not a version: \{text}")
-      }
-    _ => Err("not a version: \{text}")
+  match Version::parse(bare) {
+    Some(v) => Ok(v)
+    None => Err("not a version: \{text}")
   }
 }
 
@@ -292,48 +339,175 @@ enum Plan {
 } derive(Eq, Debug)
 
 ///|
+/// Raised when the inputs of a Release run name a value that the script does
+/// not know.
+suberror InputError {
+  /// A GitHub event other than `pull_request`, `push` or `workflow_dispatch`.
+  UnknownEvent(String)
+  /// A ref type other than `branch` or `tag`.
+  UnknownRefType(String)
+  /// A `dry_run` input other than `true`, `false` or empty.
+  UnknownDryRun(String)
+  /// A tag that is not `v` and a version, such as `vfoo`.
+  NotAVersionTag(String)
+}
+
+///|
+fn InputError::message(self : InputError) -> String {
+  match self {
+    UnknownEvent(event) =>
+      "the event `\{event}` is not pull_request, push or workflow_dispatch"
+    UnknownRefType(ref_type) =>
+      "the ref type `\{ref_type}` is not branch or tag"
+    UnknownDryRun(text) => "the dry_run input `\{text}` is not true or false"
+    NotAVersionTag(name) => "the tag `\{name}` is not v and a version"
+  }
+}
+
+///|
+/// What started a Release run.
+enum RunTrigger {
+  /// A pull request run. It only checks.
+  PullRequest
+  /// A manual run with the `dry_run` input. It only checks.
+  DryRun
+  /// A push, or a manual run without `dry_run`. It can release.
+  Push
+} derive(Eq, Debug)
+
+///|
+/// Reads the GitHub event and the `dry_run` input: `true`, `false`, or empty
+/// when the run has no such input.
+fn RunTrigger::parse(
+  event : String,
+  dry_run : String,
+) -> RunTrigger raise InputError {
+  let dry = match dry_run {
+    "true" => true
+    "false" | "" => false
+    _ => raise UnknownDryRun(dry_run)
+  }
+  match event {
+    "pull_request" => PullRequest
+    "push" | "workflow_dispatch" => if dry { DryRun } else { Push }
+    _ => raise UnknownEvent(event)
+  }
+}
+
+///|
+/// The ref of a Release run: a branch with its name, or a version tag such
+/// as `v0.0.2`.
+enum GitRef {
+  Branch(String)
+  Tag(Version)
+} derive(Eq, Debug)
+
+///|
+/// Reads the GitHub ref type and ref name. A tag must be `v` and a version.
+fn GitRef::parse(ref_type : String, ref_name : String) -> GitRef raise InputError {
+  match ref_type {
+    "branch" => Branch(ref_name)
+    "tag" =>
+      match ref_name.strip_prefix("v").bind(Version::parse) {
+        Some(version) => Tag(version)
+        None => raise NotAVersionTag(ref_name)
+      }
+    _ => raise UnknownRefType(ref_type)
+  }
+}
+
+///|
+fn GitRef::name(self : GitRef) -> String {
+  match self {
+    Branch(name) => name
+    Tag(version) => "v\{version}"
+  }
+}
+
+///|
+/// Why a Release run cannot release.
+suberror PlanError {
+  /// The tag names another version than moon.mod.
+  TagMismatch(tag~ : Version, version~ : Version)
+  /// The commit is not on main.
+  NotOnMain(String)
+  /// CHANGELOG.md has no section for the version.
+  NoChangelogSection(Version)
+  /// The changelog section still has the highlights placeholder.
+  HighlightsPlaceholder(Version)
+}
+
+///|
+fn PlanError::message(self : PlanError) -> String {
+  match self {
+    TagMismatch(tag~, version~) =>
+      "tag v\{tag} does not match moon.mod version \{version} (v\{version})"
+    NotOnMain(name) => "\{name} is not on main"
+    NoChangelogSection(version) =>
+      "CHANGELOG.md has no section for \{version}; release with `mise run release:prepare`"
+    HighlightsPlaceholder(version) =>
+      "the CHANGELOG.md section for \{version} still has the highlights placeholder; write the highlights on release/v\{version}, then merge"
+  }
+}
+
+///|
+/// The state of the CHANGELOG.md section of a version.
+enum ChangelogState {
+  /// The changelog has no section for the version.
+  NoSection
+  /// The section still has the highlights placeholder.
+  Placeholder
+  /// The section has its highlights.
+  Ready
+} derive(Eq, Debug)
+
+///|
+/// The state of the changelog section, from the section text when there is one.
+fn ChangelogState::of_section(section : String?) -> ChangelogState {
+  match section {
+    None => NoSection
+    Some(text) => if has_highlights(text) { Ready } else { Placeholder }
+  }
+}
+
+///|
+/// The facts that a Release run reads from git, GitHub and CHANGELOG.md.
+struct ReleaseFacts {
+  /// The commit is on main.
+  on_main : Bool
+  /// The GitHub release of the version exists with every asset.
+  released : Bool
+  changelog : ChangelogState
+}
+
+///|
 /// Decide whether a Release run releases. A pull request run and a run with `dry_run` only check:
 /// they never release, whatever the tags and the changelog say. Any other run must be on main. A tag
 /// push must name the version in moon.mod. The version is released when its GitHub release does not
 /// exist: a tag that a failed run left behind does not block a re-run. A release needs its section in
 /// CHANGELOG.md, with the highlights written.
 fn plan(
-  event : String,
-  ref_type : String,
-  ref_name : String,
-  on_main : Bool,
-  dry_run : Bool,
+  trigger : RunTrigger,
+  git_ref : GitRef,
   version : Version,
-  released : Bool,
-  has_section : Bool,
-  highlights~ : Bool,
-) -> Result[Plan, String] {
-  if event == "pull_request" || dry_run {
-    return Ok(DryRun(version))
+  facts : ReleaseFacts,
+) -> Result[Plan, PlanError] {
+  guard trigger is Push else { return Ok(DryRun(version)) }
+  match git_ref {
+    Tag(tag) if tag != version => return Err(TagMismatch(tag~, version~))
+    _ => ()
   }
-  let tag = "v\{version}"
-  if ref_type == "tag" && ref_name != tag {
-    return Err(
-      "tag \{ref_name} does not match moon.mod version \{version} (\{tag})",
-    )
+  if !facts.on_main {
+    return Err(NotOnMain(git_ref.name()))
   }
-  if !on_main {
-    return Err("\{ref_name} is not on main")
+  if facts.released {
+    return Ok(Skip("v\{version} is already released"))
   }
-  if released {
-    return Ok(Skip("\{tag} is already released"))
+  match facts.changelog {
+    NoSection => Err(NoChangelogSection(version))
+    Placeholder => Err(HighlightsPlaceholder(version))
+    Ready => Ok(Release(version))
   }
-  if !has_section {
-    return Err(
-      "CHANGELOG.md has no section for \{version}; release with `mise run release:prepare`",
-    )
-  }
-  if !highlights {
-    return Err(
-      "the CHANGELOG.md section for \{version} still has the highlights placeholder; write the highlights on release/v\{version}, then merge",
-    )
-  }
-  Ok(Release(version))
 }
 
 ///|
@@ -392,7 +566,10 @@ fn github_steps(
 ///|
 /// True when `word` occurs in `text` as whole words: the characters around it
 /// are not letters or digits. So `401` matches `HTTP 401` but not `4013ab`,
-/// and `eof` matches `unexpected EOF` but not `thereof`.
+/// and `eof` matches `unexpected EOF` but not `thereof`. `scripts/publish.mbtx`
+/// and `scripts/release.mbtx` keep the same copy of this function and of the
+/// failure classes below, and a scenario of `features/publish.feature` checks
+/// that the copies are equal.
 fn has_word(text : String, word : String) -> Bool {
   let is_word_char = (c : UInt16) => (c >= 48 && c <= 57) ||
     (c >= 65 && c <= 90) ||
@@ -417,24 +594,61 @@ fn has_word(text : String, word : String) -> Bool {
 }
 
 ///|
-/// A failed network command is worth a retry only when the failure is probably temporary. A refusal
-/// (401, 403) or a conflict (409) is not, and it wins over the transient words.
-fn is_transient(exit_code : Int, output : String) -> Bool {
-  if exit_code == 0 {
-    return false
-  }
+/// How a failed command failed.
+enum Failure {
+  /// The version already exists on mooncakes.io.
+  AlreadyPublished
+  /// The server refused the credentials (401, 403).
+  Refused
+  /// The request conflicts with the state of the server (409).
+  Conflict
+  /// A temporary failure that a retry can fix.
+  Transient
+  /// Any other failure.
+  Other
+} derive(Eq, Debug)
+
+///|
+/// The words of each failure class, in the order that `classify_failure`
+/// tries them: the first class with a match wins, so a refusal or a conflict
+/// wins over the transient words. A word of the first list matches as whole
+/// words, so `15020` and `thereof` do not count. A phrase of the second list
+/// matches anywhere, so `TimeoutError` and Rust's `UnexpectedEof` count.
+let failure_table : Array[(Failure, Array[String], Array[String])] = [
+  (AlreadyPublished, [], ["is duplicated with an existing version"]),
+  (Refused, ["401", "403"], []),
+  (Conflict, ["409"], []),
+  (
+    Transient,
+    ["eof", "502", "503", "504"],
+    [
+      "timed out", "timeout", "connection reset", "connection refused", "temporary failure",
+      "rate limit", "prebuilt wasm asset does not exist", "unexpectedeof",
+    ],
+  ),
+]
+
+///|
+/// The class of a command that failed with this output.
+fn classify_failure(output : String) -> Failure {
   let text = output.to_lower()
-  for word in ["401", "403", "409"] {
-    if has_word(text, word) {
-      return false
+  for row in failure_table {
+    let (failure, words, phrases) = row
+    if words.any(w => has_word(text, w)) || phrases.any(p => text.contains(p)) {
+      return failure
     }
   }
-  // Status codes and `eof` match as whole words, so `15020` and `thereof` do
-  // not count. Phrases match anywhere, so `TimeoutError` and Rust's
-  // `UnexpectedEof` still count.
-  ["eof", "502", "503", "504"].any(word => has_word(text, word)) ||
-  ["timed out", "timeout", "connection reset", "connection refused", "temporary failure", "rate limit", "unexpectedeof"].any(word => text.contains(word))
+  Other
 }
+
+///|
+/// A failed network command is worth a retry only when the failure is
+/// transient.
+fn is_transient(exit_code : Int, output : String) -> Bool {
+  exit_code != 0 && classify_failure(output) is Transient
+}
+// End of the failures.
+
 
 ///|
 /// Read the exit code of `git merge-base --is-ancestor HEAD origin/main`. Only code 1 means "not on
@@ -457,7 +671,7 @@ fn ancestor_answer(
 ///|
 /// The output tells that the server refused the credentials.
 fn is_refusal(output : String) -> Bool {
-  has_word(output, "401") || has_word(output, "403")
+  classify_failure(output) is Refused
 }
 
 ///|
@@ -780,7 +994,7 @@ fn mooncakes_version(text : String) -> Version? {
 ///|
 fn fail_with(message : String) -> Unit {
   eprintln("❌ \{message}")
-  @sys.exit(1)
+  ExitCode::Failure.exit()
 }
 
 ///|
@@ -1011,16 +1225,25 @@ async fn run_plan() -> Unit {
   let event = @env.get_env_var("GITHUB_EVENT_NAME").unwrap_or("")
   let ref_type = @env.get_env_var("GITHUB_REF_TYPE").unwrap_or("")
   let ref_name = @env.get_env_var("GITHUB_REF_NAME").unwrap_or("")
-  let dry_run = @env.get_env_var("DRY_RUN").unwrap_or("") == "true"
+  let dry_run = @env.get_env_var("DRY_RUN").unwrap_or("")
+  let (trigger, git_ref) = try
+    (RunTrigger::parse(event, dry_run), GitRef::parse(ref_type, ref_name))
+  catch {
+    e => {
+      fail_with(e.message())
+      return
+    }
+  }
   let changelog = if @fs.exists(changelog_path) {
     @fs.read_file(changelog_path).text()
   } else {
     ""
   }
-  let section = changelog_section(changelog, version)
-  let highlights = section.map(has_highlights).unwrap_or(true)
+  let changelog = ChangelogState::of_section(
+    changelog_section(changelog, version),
+  )
   // A run that only checks needs no facts from the remote.
-  let checks_only = event == "pull_request" || dry_run
+  let checks_only = !(trigger is Push)
   let mut on_main = false
   let mut released = false
   if !checks_only {
@@ -1045,19 +1268,8 @@ async fn run_plan() -> Unit {
     let (exists, assets, draft) = inspect_release("v\{version}")
     released = release_complete(exists, draft, assets)
   }
-  match
-    plan(
-      event,
-      ref_type,
-      ref_name,
-      on_main,
-      dry_run,
-      version,
-      released,
-      section is Some(_),
-      highlights~,
-    ) {
-    Err(message) => fail_with(message)
+  match plan(trigger, git_ref, version, { on_main, released, changelog }) {
+    Err(error) => fail_with(error.message())
     Ok(p) => {
       match p {
         Release(v) => println("Release \{v}")
@@ -1371,7 +1583,7 @@ async fn status() -> Unit {
     println("info: \{run.trim()}")
   }
   if findings.iter().any(f => f is Problem(_)) {
-    @sys.exit(1)
+    ExitCode::Failure.exit()
   }
 }
 
@@ -1391,7 +1603,7 @@ async fn main {
     ["status"] => status()
     _ => {
       eprintln(usage)
-      @sys.exit(2)
+      ExitCode::Usage.exit()
     }
   }
 }
@@ -1667,6 +1879,19 @@ impl @moonspec.World for ReleaseWorld with fn configure(self, setup) {
       self.ref_name = ref_name
     },
   )
+  setup.then2("the dry run input {string} gives {string}", fn(
+    text : String,
+    expected : String,
+  ) raise {
+    let actual = try RunTrigger::parse("workflow_dispatch", text) catch {
+      e => "error: " + e.message()
+    } noraise {
+      PullRequest => "pull request"
+      DryRun => "dry run"
+      Push => "push"
+    }
+    @expect.expect(actual).to_equal(expected)
+  })
   setup.given1("the commit is on main: {string}", fn(answer : String) {
     self.on_main = yes(answer)
   })
@@ -1707,17 +1932,30 @@ impl @moonspec.World for ReleaseWorld with fn configure(self, setup) {
     version : String,
     expected : String,
   ) raise {
-    let r = plan(
-      self.event,
-      self.ref_type,
-      self.ref_name,
-      self.on_main,
-      self.dry_run,
-      version_of(version),
-      self.released,
-      self.has_section,
-      highlights=self.highlights,
-    )
+    let changelog : ChangelogState = if !self.has_section {
+      NoSection
+    } else if self.highlights {
+      Ready
+    } else {
+      Placeholder
+    }
+    let version = version_of(version)
+    let facts : ReleaseFacts = {
+      on_main: self.on_main,
+      released: self.released,
+      changelog,
+    }
+    let r = try {
+      let trigger = RunTrigger::parse(
+        self.event,
+        if self.dry_run { "true" } else { "" },
+      )
+      plan(trigger, GitRef::parse(self.ref_type, self.ref_name), version, facts).map_err(
+        e => e.message(),
+      )
+    } catch {
+      e => Err(e.message())
+    }
     @expect.expect(plan_name(r)).to_equal(expected)
   })
   setup.then3("the outputs for a {string} of {string} are:", fn(

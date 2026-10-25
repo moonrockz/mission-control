@@ -174,8 +174,14 @@ fn footnote_label(
 }
 
 ///|
-fn line_of_loc(loc : @cmark_base.TextLoc) -> Int32 {
-  loc.first_line.0
+/// The file line of a cmark location in the parsed body. The body is parsed
+/// with locations, so every node has one; a node without one gets the first
+/// body line.
+fn Document::line_of(self : Document, loc : @cmark_base.TextLoc) -> Int32 {
+  match self.markdown.bind(md => md.source_range(loc)) {
+    Some(range) => self.file_line(range.start().line())
+    None => self.header.body_line
+  }
 }
 
 ///|
@@ -197,9 +203,7 @@ pub fn Document::links(self : Document) -> Array[Link] {
                     links.push({
                       text: plain_text(node.v.text),
                       destination: dest,
-                      origin: Body(
-                        line=self.file_line(line_of_loc(view.location())),
-                      ),
+                      origin: Body(line=self.line_of(view.location())),
                       kind: classify_destination(dest),
                     })
                   None => ()
@@ -217,9 +221,7 @@ pub fn Document::links(self : Document) -> Array[Link] {
                 links.push({
                   text: node.v.link.v,
                   destination: dest,
-                  origin: Body(
-                    line=self.file_line(line_of_loc(view.location())),
-                  ),
+                  origin: Body(line=self.line_of(view.location())),
                   kind: classify_destination(dest),
                 })
               }
@@ -255,10 +257,7 @@ pub fn Document::citations(self : Document) -> Array[Citation] {
           Link(node) =>
             match footnote_label(node.v, defs) {
               Some(label) =>
-                out.push({
-                  label,
-                  line: self.file_line(line_of_loc(view.location())),
-                })
+                out.push({ label, line: self.line_of(view.location()), })
               None => ()
             }
           _ => ()

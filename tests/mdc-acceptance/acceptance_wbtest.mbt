@@ -175,16 +175,28 @@ impl @moonspec.World for MdcWorld with fn configure(self, setup) {
     "invalid frontmatter is reported at line {int} and column {int}",
     (expected_line : Int32, expected_column : Int32) => {
       guard self.state
-        is Rejected(@mdc.InvalidFrontmatter(line~, column~, message~)) else {
+        is Rejected(@mdc.InvalidFrontmatter(InvalidYaml(at~, message~))) else {
         fail("expected an invalid-frontmatter error")
       }
       @expect.expect_all(s => {
-        s.expect(line).to_equal(expected_line)
-        s.expect(column).to_equal(expected_column)
+        s.expect(at.line()).to_equal(expected_line)
+        s.expect(at.column()).to_equal(expected_column)
         s.expect(message).not().to_be_empty()
       })
     },
   )
+  setup.then0("the frontmatter is reported as not a mapping", () => {
+    @expect.expect(self.state is Rejected(@mdc.InvalidFrontmatter(NotAMapping))).to_be_true()
+  })
+  setup.then1("the frontmatter is reported as {int} YAML documents", (
+    expected : Int32,
+  ) => {
+    guard self.state
+      is Rejected(@mdc.InvalidFrontmatter(MultipleDocuments(count~))) else {
+      fail("expected a multiple-documents error")
+    }
+    @expect.expect(count).to_equal(expected)
+  })
   setup.when0("the exported metadata and Markdown are changed", () => {
     let (_, doc) = self.parsed()
     guard doc.frontmatter() is Some(header) else { fail("no frontmatter") }

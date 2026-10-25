@@ -41,15 +41,21 @@ test "smart constructor accepts empty and comment-only payloads" {
 
 ///|
 test "smart constructor rejects non-mappings and multiple YAML documents" {
-  for raw in ["text", "- a\n- b", "null", "42", "a: 1\n---\nb: 2\n"] {
+  for raw in ["text", "- a\n- b", "null", "42"] {
     try {
       let _ = @mdc.Frontmatter::Frontmatter(raw)
       fail("accepted an invalid payload")
     } catch {
-      @mdc.InvalidFrontmatter(line=1, column=1, ..) => ()
+      @mdc.NotAMapping => ()
       _ => fail("wrong error")
     }
   }
+  let two = try @mdc.Frontmatter::Frontmatter("a: 1\n---\nb: 2") catch {
+    e => Some(e)
+  } noraise {
+    _ => None
+  }
+  assert_eq(two, Some(MultipleDocuments(count=2)))
 }
 
 ///|
@@ -58,7 +64,7 @@ test "smart constructor reports positions within its payload" {
     let _ = @mdc.Frontmatter::Frontmatter("name: Goal\nsteps: ]\n")
     fail("accepted invalid YAML")
   } catch {
-    @mdc.InvalidFrontmatter(line=2, column=8, ..) => ()
+    @mdc.InvalidYaml(at~, ..) => assert_eq(at.to_string(), "2:8")
     _ => fail("wrong error")
   }
 }

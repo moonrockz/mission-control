@@ -133,7 +133,7 @@ mission-control/
 
 ## Release
 
-All modules share one version. The root `moon.mod` is the source of truth. `mise run validate:versions` fails when a module, a sibling import or a `version()` string has another version.
+All modules share one version. The root `moon.mod` is the source of truth. `mise run validate:versions` fails when a module, a sibling import or the contract version text (`current_version` in `pkgs/contracts`) has another version.
 
 `mise run release:prepare [X.Y.Z]` computes the next version with git-cliff, sets the version, prepends a section to `CHANGELOG.md`, commits `chore(release): vX.Y.Z` on `release/vX.Y.Z`, pushes it and opens a draft pull request. `--local` stops before the push. Replace the highlights comment, push, then run `mise run release:refresh`. Merge that pull request. The Release workflow publishes the modules to mooncakes.io and creates the GitHub release. A pull request run and a manual run with `dry_run` do not publish.
 

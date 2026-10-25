@@ -22,7 +22,7 @@ pub fn app() -> Val[Html] {
   model.map(model => {
     div <| [
       h1("Mission Control"),
-      p(@contracts.version()),
+      p(@contracts.version().to_string()),
       p("\{model}"),
       button(on_click=emit(Inc), "+"),
       button(on_click=emit(Dec), "-"),

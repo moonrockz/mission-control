@@ -2,7 +2,7 @@
 test "the shell document mounts the web UI" {
   let html = document()
   assert_true(html.contains("id=\"app\""))
-  assert_true(html.contains(@contracts.version()))
+  assert_true(html.contains(@contracts.version().to_string()))
 }
 
 ///|

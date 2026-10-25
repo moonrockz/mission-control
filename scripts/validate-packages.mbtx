@@ -14,7 +14,33 @@ import {
   "moonbitlang/async@0.22.5",
   "moonbitlang/async@0.22.5/fs",
   "moonbitlang/x@0.5.5/sys",
+  "moonbitlang/core/env",
 }
+
+///|
+/// The exit codes of the task scripts: 0 for success, 1 for a failure and 2
+/// for a usage error. A script that succeeds ends `main` normally. Each script
+/// keeps this copy, and `scripts/test-scripts.mbtx` checks that the copies are
+/// equal.
+enum ExitCode {
+  Failure
+  Usage
+}
+
+///|
+/// Ends the script with this exit code.
+fn ExitCode::exit(self : ExitCode) -> Unit {
+  @sys.exit(
+    match self {
+      Failure => 1
+      Usage => 2
+    },
+  )
+}
+// End of the exit codes.
+
+///|
+let usage : String = "Usage: mise run validate:packages"
 
 ///|
 /// Directories whose children are workspace members.
@@ -58,6 +84,11 @@ async fn has_package(dir : String) -> Bool {
 
 ///|
 async fn main {
+  guard @env.args().length() <= 1 else {
+    eprintln(usage)
+    ExitCode::Usage.exit()
+    return
+  }
   println("🔍 Verifying package structure...")
   let mut errors = 0
   let error = fn(message : String) {
@@ -103,6 +134,6 @@ async fn main {
     println("✅ All package configurations valid")
   } else {
     println("❌ Found \{errors} configuration error(s)")
-    @sys.exit(1)
+    ExitCode::Failure.exit()
   }
 }
