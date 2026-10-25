@@ -1,5 +1,6 @@
 import {
   "moonrockz/mdc",
+  "moonbit-community/yaml",
   "moonbitlang/core/debug",
 }
 
@@ -7,4 +8,5 @@ import {
   "moonrockz/ears",
   "moonrockz/mdc",
   "moonrockz/expect",
+  "moonbitlang/core/debug",
 } for "test"

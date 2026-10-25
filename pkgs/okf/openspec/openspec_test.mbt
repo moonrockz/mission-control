@@ -60,7 +60,7 @@ fn tree() -> @okf.DocumentSet raise {
 
 ///|
 fn profiles() -> Array[&@okf.Profile] {
-  [@openspec.OpenSpecProfile::{ }]
+  [@openspec.OpenSpecProfile()]
 }
 
 ///|
@@ -636,4 +636,180 @@ test "task numbers are normalized, and tasks before a heading have no group head
     (3, "- [ ] 2.1 Second"),
   ])
   assert_eq(groups.map(g => g.heading), [None, Some("2. Later")])
+}
+
+///|
+/// A tree with one capability whose requirement has the text `text`.
+fn ears_tree(text : String, lexicon? : String) -> @okf.DocumentSet raise {
+  let spec = "# a Specification\n\n## Purpose\n\nA thing.\n\n## Requirements\n\n### Requirement: Listing\n\{text}\n\n#### Scenario: List\n- **WHEN** a caller lists\n- **THEN** the store lists\n"
+  let files = [("openspec/specs/a/spec.md", spec)]
+  match lexicon {
+    Some(l) => files.push(("openspec/ears.yaml", l))
+    None => ()
+  }
+  @okf.DocumentSet::of_texts(files)
+}
+
+///|
+fn ears_findings(
+  set : @okf.DocumentSet,
+  profile : @openspec.OpenSpecProfile,
+) -> Array[(String, String, Int32?)] raise {
+  let profiles : Array[&@okf.Profile] = [profile]
+  let b = @okf.load_bundle(set, root=@okf.StoreDir("openspec"), profiles~)
+  @okf.validate(
+    @okf.Knowledge([b]),
+    [],
+    @okf.FixedClock(@okf.Instant::of_millis(0L)),
+    profiles~,
+  )
+  .findings()
+  .map(f => (f.rule.to_string(), f.subject.path_text().unwrap_or(""), f.line))
+  .iter()
+  .collect()
+}
+
+///|
+test "the view gives the EARS sentences of each requirement" {
+  let set = ears_tree("The store SHALL list files. It SHALL sort them by path.")
+  let profile = @openspec.OpenSpecProfile::of_tree(
+    set,
+    @okf.StoreDir("openspec"),
+  )
+  let b = @okf.load_bundle(set, root=@okf.StoreDir("openspec"), profiles=[
+    profile,
+  ])
+  let r = @openspec.view(b, profile~).specs[0].requirements[0]
+  assert_eq(r.sentences.length(), 2)
+  assert_eq(r.sentence_diagnostics.length(), 0)
+  assert_eq(r.sentences[1].requirement().resolved_system(), Some("store"))
+  assert_eq(r.text_lines.iter().collect(), [10])
+}
+
+///|
+test "a project lexicon file and a lexicon in code add words" {
+  let text = "Mission Control SHALL publish one version."
+  let with_file = ears_tree(text, lexicon="systems: [Mission Control]\n")
+  let profile = @openspec.OpenSpecProfile::of_tree(
+    with_file,
+    @okf.StoreDir("openspec"),
+  )
+  assert_eq(ears_findings(with_file, profile), [])
+  let without = ears_tree(text)
+  assert_eq(
+    ears_findings(
+      without,
+      @openspec.OpenSpecProfile::of_tree(without, @okf.StoreDir("openspec")),
+    ).map(f => f.0),
+    ["openspec-requirement-not-ears"],
+  )
+  let in_code = @openspec.OpenSpecProfile(
+    lexicon=@ears.Lexicon(systems=[@ears.Phrase("Mission Control")]),
+  )
+  assert_eq(ears_findings(without, in_code), [])
+}
+
+///|
+test "an invalid lexicon file is reported, and requirements still parse" {
+  let set = ears_tree(
+    "The store SHALL list files. It SHALL sort them by path.",
+    lexicon="systems: [\n",
+  )
+  let profile = @openspec.OpenSpecProfile::of_tree(
+    set,
+    @okf.StoreDir("openspec"),
+  )
+  assert_true(profile.lexicon_error() is Some(InvalidLexiconFile(..)))
+  let findings = ears_findings(set, profile)
+  assert_eq(findings.map(f => (f.0, f.1)), [
+    ("openspec-lexicon-invalid", "/ears.yaml"),
+  ])
+  let b = @okf.load_bundle(set, root=@okf.StoreDir("openspec"), profiles=[
+    profile,
+  ])
+  assert_eq(
+    @openspec.view(b, profile~).specs[0].requirements[0].sentences.length(),
+    2,
+  )
+}
+
+///|
+test "a sentence that is not EARS is reported with its line" {
+  let set = ears_tree(
+    "The store SHALL list files.\nFast responses are important.",
+  )
+  let profile = @openspec.OpenSpecProfile::of_tree(
+    set,
+    @okf.StoreDir("openspec"),
+  )
+  assert_eq(ears_findings(set, profile), [
+    ("openspec-requirement-not-ears", "/specs/a/spec.md", Some(11)),
+  ])
+}
+
+///|
+test "finding lines follow the file after a fenced block, and list markers are read" {
+  let text = "The store SHALL list files.\n\n```text\na\nb\n```\n\nFast responses are important.\n\n- The store SHALL sort them.\n\n**The store** SHALL keep them."
+  let set = ears_tree(text)
+  let profile = @openspec.OpenSpecProfile::of_tree(
+    set,
+    @okf.StoreDir("openspec"),
+  )
+  let findings = ears_findings(set, profile)
+  assert_eq(findings.map(f => (f.0, f.2)), [
+    ("openspec-requirement-not-ears", Some(17)),
+  ])
+}
+
+///|
+test "an invalid lexicon file under a root that no bundle has is still reported" {
+  let set = ears_tree("The store SHALL list files.", lexicon="systems: [\n")
+  let profile = @openspec.OpenSpecProfile::of_tree(
+    set,
+    @okf.StoreDir("openspec"),
+  )
+  let profiles : Array[&@okf.Profile] = [profile]
+  let b = @okf.load_bundle(set, root=@okf.StoreDir("openspec/specs"), profiles~)
+  let findings = @okf.validate(
+    @okf.Knowledge([b]),
+    [],
+    @okf.FixedClock(@okf.Instant::of_millis(0L)),
+    profiles~,
+  ).findings()
+  assert_true(
+    findings
+    .iter()
+    .any(f => {
+      f.rule.to_string() == "openspec-lexicon-invalid" &&
+      f.subject.path_text() == Some("openspec/ears.yaml")
+    }),
+  )
+}
+
+///|
+test "native Requirement concepts are checked as EARS at their own path and line" {
+  let set = @okf.DocumentSet::of_texts([
+    ("kb/index.md", "---\nokf_version: \"0.2\"\n---\n"),
+    ("kb/specs/a.md", "---\ntype: Specification\ncapability: a\n---\n# a\n"),
+    (
+      "kb/reqs/r1.md", "---\ntype: Requirement\ncapability: a\nrequirement: Works\n---\nIt SHALL work.\nFast responses are important.\n",
+    ),
+  ])
+  let profiles : Array[&@okf.Profile] = [@openspec.OpenSpecProfile()]
+  let b = @okf.load_bundle(set, root=@okf.StoreDir("kb"), profiles~)
+  let findings = @okf.validate(
+    @okf.Knowledge([b]),
+    [],
+    @okf.FixedClock(@okf.Instant::of_millis(0L)),
+    profiles~,
+  ).findings()
+  let ears = findings
+    .iter()
+    .filter(f => f.rule.to_string() == "openspec-requirement-not-ears")
+    .map(f => (f.subject.path_text(), f.line))
+    .collect()
+  assert_eq(ears, [
+    (Some("/reqs/r1.md"), Some(6)),
+    (Some("/reqs/r1.md"), Some(7)),
+  ])
 }

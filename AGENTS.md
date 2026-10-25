@@ -121,6 +121,7 @@ skill. Report these as problems:
 - The Copilot coding agent runs `.github/workflows/copilot-setup-steps.yml`, which installs the pinned toolchain with the shared setup action.
 - Do not edit the generated skill files. To upgrade OpenSpec, change its version in `.config/mise/config.toml` and run `mise install`. Then run `openspec update`, which regenerates the files for every agent.
 - Run `openspec validate --all --strict` before you push a change to `openspec/`.
+- Write each requirement sentence in EARS form, such as `WHEN <trigger>, the <system> SHALL <response>`. The OKF OpenSpec profile checks this (`openspec-requirement-not-ears`) in `tests/okf-openspec-acceptance`. When a requirement names its subject without a determiner, such as `Text comparison SHALL ...`, add the system noun to `openspec/ears.yaml`.
 
 ## Product layout
 

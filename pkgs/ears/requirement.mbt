@@ -95,15 +95,44 @@ pub impl Show for SentencePosition with fn output(self, logger) {
 }
 
 ///|
+/// The modal verb of a requirement, such as `shall` or `must`, and whether
+/// `not` follows it.
+pub struct Modal {
+  verb : Word
+  negated : Bool
+} derive(Eq, Debug)
+
+///|
+/// The subject of a requirement.
+pub enum Subject {
+  /// A determiner, such as `the` or `each`, and the system after it.
+  Determined(opener~ : Word, system~ : String)
+  /// A system noun of a dialect, such as a product name.
+  Noun(String)
+  /// A pronoun, such as `it`. Block parsing resolves it to the system of an
+  /// earlier sentence.
+  Pronoun(opener~ : Word, resolved~ : String?)
+} derive(Eq, Debug)
+
+///|
 /// A validated EARS sentence. Only the parser can construct a requirement.
 /// Free-text clauses retain their case and punctuation, with whitespace folded.
 struct Requirement {
+  lead_in : String?
   feature : String?
   preconditions : ReadOnlyArray[String]
   trigger : Trigger?
-  system : String
+  subject : Subject
+  modal : Modal
   response : String
 } derive(Eq, Debug)
+
+///|
+/// The lead-in phrase before the clauses, such as `Otherwise` or
+/// `For each document`, as written.
+pub fn Requirement::lead_in(self : Requirement) -> String? {
+  self.lead_in
+}
 
 ///|
 pub fn Requirement::feature(self : Requirement) -> String? {
@@ -121,8 +150,43 @@ pub fn Requirement::trigger(self : Requirement) -> Trigger? {
 }
 
 ///|
-pub fn Requirement::system(self : Requirement) -> String {
-  self.system
+pub fn Requirement::subject(self : Requirement) -> Subject {
+  self.subject
+}
+
+///|
+/// The subject opener as written: the determiner or the pronoun. A system
+/// noun has none.
+pub fn Requirement::opener(self : Requirement) -> Word? {
+  match self.subject {
+    Determined(opener~, ..) | Pronoun(opener~, ..) => Some(opener)
+    Noun(_) => None
+  }
+}
+
+///|
+/// The system: the words after the determiner, the system noun, or the
+/// system that a pronoun was resolved to. An unresolved pronoun has none.
+pub fn Requirement::system(self : Requirement) -> String? {
+  match self.subject {
+    Determined(system~, ..) => Some(system)
+    Noun(system) => Some(system)
+    Pronoun(resolved~, ..) => resolved
+  }
+}
+
+///|
+/// The system that block parsing resolved a pronoun subject to.
+pub fn Requirement::resolved_system(self : Requirement) -> String? {
+  match self.subject {
+    Pronoun(resolved~, ..) => resolved
+    Determined(..) | Noun(_) => None
+  }
+}
+
+///|
+pub fn Requirement::modal(self : Requirement) -> Modal {
+  self.modal
 }
 
 ///|
@@ -152,9 +216,28 @@ pub fn Requirement::pattern(self : Requirement) -> Pattern {
 }
 
 ///|
-/// Render canonical keyword case and spacing. Response punctuation is retained.
+/// A word in lower case, or with a capital first letter at the start of a
+/// sentence.
+fn canonical(word : String, at_start : Bool) -> String {
+  let lower = word.to_lower()
+  if at_start && lower.length() > 0 {
+    lower[0:1].to_owned().to_upper() + lower[1:].to_owned()
+  } else {
+    lower
+  }
+}
+
+///|
+/// Render canonical keyword case and spacing: the lead-in and the clauses as
+/// written, then the subject opener and the modal verb in lower case, with a
+/// capital first letter at the start. Response punctuation is retained.
+/// Parsing the text with the same dialects gives an equal requirement.
 pub fn Requirement::to_string(self : Requirement) -> String {
   let clauses = []
+  match self.lead_in {
+    Some(lead_in) => clauses.push(lead_in)
+    None => ()
+  }
   if self.feature is Some(feature) {
     clauses.push("\{Where} " + feature)
   }
@@ -166,14 +249,18 @@ pub fn Requirement::to_string(self : Requirement) -> String {
     Some(Unwanted(event)) => clauses.push("\{If} " + event)
     None => ()
   }
-  let system = if self.trigger is Some(Unwanted(_)) {
-    "then the "
-  } else if clauses.is_empty() {
-    "The "
-  } else {
-    "the "
+  let unwanted = self.trigger is Some(Unwanted(_))
+  let at_start = clauses.is_empty()
+  let subject = match self.subject {
+    Determined(opener~, system~) =>
+      canonical(opener.to_string(), at_start && !unwanted) + " " + system
+    Noun(system) => system
+    Pronoun(opener~, ..) => canonical(opener.to_string(), at_start && !unwanted)
   }
-  clauses.push(system + self.system + " shall " + self.response)
+  let modal = self.modal.verb.lower() +
+    (if self.modal.negated { " not" } else { "" })
+  let head = if unwanted { "then " } else { "" }
+  clauses.push(head + subject + " " + modal + " " + self.response)
   clauses.join(", ")
 }
 
@@ -198,6 +285,9 @@ pub(all) suberror ParseError {
   MissingThen(at~ : SentencePosition)
   /// The clause at the position is out of order.
   InvalidClauseOrder(at~ : SentencePosition)
+  /// In a requirement block, the pronoun subject at the position has no
+  /// earlier sentence with a system to refer to.
+  UnresolvedPronoun(pronoun~ : Word, at~ : SentencePosition)
 } derive(Eq, Debug)
 
 ///|
@@ -211,7 +301,8 @@ pub fn ParseError::position(self : ParseError) -> SentencePosition? {
     | EmptyClause(at~, ..)
     | MissingSeparator(at~)
     | MissingThen(at~)
-    | InvalidClauseOrder(at~) => Some(at)
+    | InvalidClauseOrder(at~)
+    | UnresolvedPronoun(at~, ..) => Some(at)
   }
 }
 
@@ -271,3 +362,15 @@ pub extend SentencePosition with @debug.Debug::{to_repr}
 
 ///|
 pub extend SentencePosition with Show::{to_string, output}
+
+///|
+pub extend Modal with Eq::{equal, not_equal}
+
+///|
+pub extend Modal with @debug.Debug::{to_repr}
+
+///|
+pub extend Subject with Eq::{equal, not_equal}
+
+///|
+pub extend Subject with @debug.Debug::{to_repr}

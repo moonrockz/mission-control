@@ -9,12 +9,20 @@ pub struct Scenario {
 } derive(Eq, Debug)
 
 ///|
-/// One OpenSpec requirement: `### Requirement: name`, its text and its scenarios.
+/// One OpenSpec requirement: `### Requirement: name`, its text and its
+/// scenarios, and the EARS sentences of its text.
 pub struct Requirement {
   name : RequirementName
   text : String
   scenarios : ReadOnlyArray[Scenario]
   line : Int32
+  /// The file line of each line of the text, in order.
+  text_lines : ReadOnlyArray[Int32]
+  /// The EARS requirements of the text, one for each sentence that parses.
+  sentences : ReadOnlyArray[@ears.Occurrence]
+  /// The sentences of the text that do not parse as EARS. Their spans are
+  /// relative to the text.
+  sentence_diagnostics : ReadOnlyArray[@ears.Diagnostic]
 } derive(Eq, Debug)
 
 ///|
@@ -113,6 +121,29 @@ fn[T] frozen(items : Array[T]) -> ReadOnlyArray[T] {
 }
 
 ///|
+/// A requirement line as EARS reads it: without a list marker at the start
+/// and without `**` and `__` emphasis marks.
+fn ears_line(line : String) -> String {
+  let t = line.trim_start(chars=" \t").to_owned()
+  let indent = line.length() - t.length()
+  let marker = if t.has_prefix("- ") || t.has_prefix("* ") || t.has_prefix("+ ") {
+    2
+  } else {
+    let mut d = 0
+    while d < t.length() && t.code_unit_at(d) >= 48 && t.code_unit_at(d) <= 57 {
+      d += 1
+    }
+    if d > 0 && t[d:].has_prefix(". ") {
+      d + 2
+    } else {
+      0
+    }
+  }
+  let rest = line[indent + marker:].to_owned()
+  rest.replace_all(old="**", new="").replace_all(old="__", new="")
+}
+
+///|
 fn heading(line : String) -> (Int32, String)? {
   let t = line.trim_start(chars=" ").to_owned()
   let mut level = 0
@@ -198,6 +229,8 @@ priv struct RequirementBuilder {
   text : Array[String]
   scenarios : Array[Scenario]
   line : Int32
+  /// The file line of each line of `text`.
+  lines : Array[Int32]
 }
 
 ///|
@@ -236,7 +269,13 @@ fn DeltaBuilder::build(self : DeltaBuilder) -> DeltaSection {
 pub fn parse_spec(
   capability : CapabilityPath,
   lines : ArrayView[(Int32, String)],
+  dialects? : ArrayView[&@ears.Dialect],
 ) -> SpecModel {
+  let default_dialects : Array[&@ears.Dialect] = [@ears.openspec_dialect()]
+  let dialects = match dialects {
+    Some(d) => d
+    None => default_dialects[:]
+  }
   let requirements : Array[Requirement] = []
   let unnamed : Array[Int32] = []
   let deltas : Array[DeltaBuilder] = []
@@ -264,11 +303,27 @@ pub fn parse_spec(
     flush_scenario()
     match current_req {
       Some(r) => {
+        let text = r.text.join("\n").trim(chars="\n ").to_owned()
+        // The lines that `text` keeps: blank lines at either end go.
+        let blank = (s : String) => s.iter().all(c => c == ' ')
+        let mut first = 0
+        let mut last = r.text.length()
+        while first < last && blank(r.text[first]) {
+          first += 1
+        }
+        while last > first && blank(r.text[last - 1]) {
+          last -= 1
+        }
+        let kept = r.text[first:last].iter().map(ears_line).collect()
+        let ears = @ears.parse_block(kept.join("\n"), dialects~)
         let req : Requirement = {
           name: r.name,
-          text: r.text.join("\n").trim(chars="\n ").to_owned(),
+          text,
           scenarios: frozen(r.scenarios),
           line: r.line,
+          text_lines: frozen(r.lines[first:last].to_owned()),
+          sentences: ears.requirements(),
+          sentence_diagnostics: ears.diagnostics(),
         }
         match current_delta {
           Some(d) => d.requirements.push(req)
@@ -312,7 +367,13 @@ pub fn parse_spec(
         flush_req()
         match heading_requirement(text) {
           Some(name) =>
-            current_req = Some({ name, text: [], scenarios: [], line: number, })
+            current_req = Some({
+              name,
+              text: [],
+              scenarios: [],
+              line: number,
+              lines: [],
+            })
           None => unnamed.push(number)
         }
       }
@@ -376,7 +437,10 @@ pub fn parse_spec(
             }
           None =>
             match current_req {
-              Some(r) => r.text.push(line)
+              Some(r) => {
+                r.text.push(line)
+                r.lines.push(number)
+              }
               None => ()
             }
         }

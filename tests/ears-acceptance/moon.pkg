@@ -4,6 +4,7 @@ import {
   "moonrockz/mdc",
   "moonrockz/moonspec",
   "moonrockz/expect",
+  "moonbitlang/core/debug",
 } for "wbtest"
 
 supported_targets = "js+native"

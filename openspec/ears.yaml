@@ -1,0 +1,18 @@
+# Project words for the EARS check of the OpenSpec profile (moonrockz/okf/openspec).
+# The OpenSpec dialect already gives SHALL and MUST, the usual determiners,
+# "it" and "they", and the lead-in "otherwise". Add a system noun here when a
+# requirement names its subject without a determiner.
+name: mission-control
+systems:
+  - Automatic selection
+  - Derived metadata
+  - export
+  - IDs
+  - Index metadata
+  - Keyword matching
+  - Native and OpenSpec-tree forms
+  - OpenSpec export
+  - OpenSpec import
+  - Text comparison
+lead_ins:
+  - for each

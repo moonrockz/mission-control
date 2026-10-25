@@ -24,15 +24,21 @@ fn all_requirements(model : SpecModel) -> Array[Requirement] {
 
 ///|
 /// The model of a spec document, when its capability is a valid name.
-fn model_of(doc : @okf.Document) -> SpecModel? {
-  capability_of(doc).map(cap => parse_spec(cap, doc.prose_lines()))
+fn model_of(
+  doc : @okf.Document,
+  dialects : ArrayView[&@ears.Dialect],
+) -> SpecModel? {
+  capability_of(doc).map(cap => parse_spec(cap, doc.prose_lines(), dialects~))
 }
 
 ///|
-fn check_no_scenario(ctx : @okf.ValidationContext) -> Array[@okf.Issue] {
+fn check_no_scenario(
+  ctx : @okf.ValidationContext,
+  dialects : ArrayView[&@ears.Dialect],
+) -> Array[@okf.Issue] {
   let out = []
   for pair in spec_docs(ctx) {
-    guard model_of(pair.1) is Some(model) else { continue }
+    guard model_of(pair.1, dialects) is Some(model) else { continue }
     for r in all_requirements(model) {
       if r.scenarios.is_empty() {
         out.push(
@@ -50,10 +56,13 @@ fn check_no_scenario(ctx : @okf.ValidationContext) -> Array[@okf.Issue] {
 }
 
 ///|
-fn check_no_shall(ctx : @okf.ValidationContext) -> Array[@okf.Issue] {
+fn check_no_shall(
+  ctx : @okf.ValidationContext,
+  dialects : ArrayView[&@ears.Dialect],
+) -> Array[@okf.Issue] {
   let out = []
   for pair in spec_docs(ctx) {
-    guard model_of(pair.1) is Some(model) else { continue }
+    guard model_of(pair.1, dialects) is Some(model) else { continue }
     for r in all_requirements(model) {
       if !r.text.contains("SHALL") && !r.text.contains("MUST") {
         out.push(
@@ -98,11 +107,14 @@ fn check_scenario_headings(ctx : @okf.ValidationContext) -> Array[@okf.Issue] {
 
 ///|
 /// The main spec of each capability.
-fn main_specs(ctx : @okf.ValidationContext) -> Map[CapabilityPath, SpecModel] {
+fn main_specs(
+  ctx : @okf.ValidationContext,
+  dialects : ArrayView[&@ears.Dialect],
+) -> Map[CapabilityPath, SpecModel] {
   let out : Map[CapabilityPath, SpecModel] = Map([])
   for pair in spec_docs(ctx) {
     if type_of(pair.1) is Some(Specification) {
-      match model_of(pair.1) {
+      match model_of(pair.1, dialects) {
         Some(m) => out[m.capability] = m
         None => ()
       }
@@ -112,12 +124,15 @@ fn main_specs(ctx : @okf.ValidationContext) -> Map[CapabilityPath, SpecModel] {
 }
 
 ///|
-fn check_modified_unknown(ctx : @okf.ValidationContext) -> Array[@okf.Issue] {
-  let mains = main_specs(ctx)
+fn check_modified_unknown(
+  ctx : @okf.ValidationContext,
+  dialects : ArrayView[&@ears.Dialect],
+) -> Array[@okf.Issue] {
+  let mains = main_specs(ctx, dialects)
   let out = []
   for pair in spec_docs(ctx) {
     guard type_of(pair.1) is Some(SpecDelta) else { continue }
-    guard model_of(pair.1) is Some(m) else { continue }
+    guard model_of(pair.1, dialects) is Some(m) else { continue }
     guard mains.get(m.capability) is Some(main) else { continue }
     for d in m.deltas {
       if d.op is (Modified | Removed) {
@@ -140,12 +155,15 @@ fn check_modified_unknown(ctx : @okf.ValidationContext) -> Array[@okf.Issue] {
 }
 
 ///|
-fn check_unknown_capability(ctx : @okf.ValidationContext) -> Array[@okf.Issue] {
-  let mains = main_specs(ctx)
+fn check_unknown_capability(
+  ctx : @okf.ValidationContext,
+  dialects : ArrayView[&@ears.Dialect],
+) -> Array[@okf.Issue] {
+  let mains = main_specs(ctx, dialects)
   let out = []
   for pair in spec_docs(ctx) {
     guard type_of(pair.1) is Some(SpecDelta) else { continue }
-    guard model_of(pair.1) is Some(m) else { continue }
+    guard model_of(pair.1, dialects) is Some(m) else { continue }
     if !mains.contains(m.capability) &&
       m.deltas.iter().any(d => !(d.op is Added)) {
       out.push(
@@ -161,10 +179,13 @@ fn check_unknown_capability(ctx : @okf.ValidationContext) -> Array[@okf.Issue] {
 }
 
 ///|
-fn check_incomplete_renames(ctx : @okf.ValidationContext) -> Array[@okf.Issue] {
+fn check_incomplete_renames(
+  ctx : @okf.ValidationContext,
+  dialects : ArrayView[&@ears.Dialect],
+) -> Array[@okf.Issue] {
   let out = []
   for pair in spec_docs(ctx) {
-    guard model_of(pair.1) is Some(m) else { continue }
+    guard model_of(pair.1, dialects) is Some(m) else { continue }
     for d in m.deltas {
       for r in d.incomplete_renames {
         let issue = match r {
@@ -205,7 +226,10 @@ fn name_keys(t : OpenSpecType) -> Array[String] {
 }
 
 ///|
-fn check_invalid_names(ctx : @okf.ValidationContext) -> Array[@okf.Issue] {
+fn check_invalid_names(
+  ctx : @okf.ValidationContext,
+  dialects : ArrayView[&@ears.Dialect],
+) -> Array[@okf.Issue] {
   let out = []
   for pair in ctx.knowledge.concepts() {
     let (bundle, doc) = pair
@@ -239,7 +263,7 @@ fn check_invalid_names(ctx : @okf.ValidationContext) -> Array[@okf.Issue] {
     }
   }
   for pair in spec_docs(ctx) {
-    guard model_of(pair.1) is Some(model) else { continue }
+    guard model_of(pair.1, dialects) is Some(model) else { continue }
     for line in model.unnamed_requirements {
       out.push(
         @okf.Issue::at(
@@ -260,25 +284,46 @@ fn check_invalid_names(ctx : @okf.ValidationContext) -> Array[@okf.Issue] {
 fn rule(
   name : String,
   check : (@okf.ValidationContext) -> Array[@okf.Issue],
+  severity~ : @okf.Severity = Error,
 ) -> @okf.Rule {
   let name = @okf.RuleName(name) catch {
     _ => abort("an OpenSpec rule name is not kebab case: \{name}")
   }
-  @okf.Rule(name, Error, check)
+  @okf.Rule(name, severity, check)
 }
 
 ///|
 /// The OpenSpec checks: the three that `openspec validate --strict` runs, the
-/// two that OpenSpec runs only when it archives a change, and two for content
-/// that the view leaves out: incomplete renames and invalid names.
-pub fn openspec_checks() -> @okf.RuleSet {
+/// two that OpenSpec runs only when it archives a change, two for content
+/// that the view leaves out (incomplete renames and invalid names), and two
+/// for EARS: a requirement sentence that is not EARS (a warning) and a lexicon
+/// file that does not parse. Requirement texts are parsed with the dialects of
+/// `profile`.
+pub fn openspec_checks(
+  profile~ : OpenSpecProfile = OpenSpecProfile(),
+) -> @okf.RuleSet {
+  let dialects = profile.dialects()
   @okf.RuleSet("openspec", [
-    rule("openspec-requirement-no-scenario", check_no_scenario),
-    rule("openspec-requirement-no-shall", check_no_shall),
+    rule("openspec-requirement-no-scenario", ctx => {
+      check_no_scenario(ctx, dialects)
+    }),
+    rule("openspec-requirement-no-shall", ctx => check_no_shall(ctx, dialects)),
     rule("openspec-scenario-heading", check_scenario_headings),
-    rule("openspec-modified-unknown", check_modified_unknown),
-    rule("openspec-delta-unknown-capability", check_unknown_capability),
-    rule("openspec-rename-incomplete", check_incomplete_renames),
-    rule("openspec-invalid-name", check_invalid_names),
+    rule("openspec-modified-unknown", ctx => {
+      check_modified_unknown(ctx, dialects)
+    }),
+    rule("openspec-delta-unknown-capability", ctx => {
+      check_unknown_capability(ctx, dialects)
+    }),
+    rule("openspec-rename-incomplete", ctx => {
+      check_incomplete_renames(ctx, dialects)
+    }),
+    rule("openspec-invalid-name", ctx => check_invalid_names(ctx, dialects)),
+    rule(
+      "openspec-requirement-not-ears",
+      ctx => check_not_ears(ctx, dialects),
+      severity=Warning,
+    ),
+    rule("openspec-lexicon-invalid", ctx => check_lexicon(ctx, profile)),
   ])
 }
