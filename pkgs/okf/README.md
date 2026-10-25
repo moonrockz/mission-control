@@ -149,12 +149,19 @@ The browser store writes with one of three methods (`writes=`):
 
 - `Writable` uses `FileSystemFileHandle.createWritable()` on the page.
 - `SyncAccessWorker` sends each write to a dedicated worker that writes with
-  `createSyncAccessHandle()`. It replaces the whole file in one session and
-  closes the handle when a step fails. The worker code is part of the package,
-  so a page serves no extra file. One worker serves every store of the page.
-  The worker opens the origin private file system by itself, so this method
-  needs a store from `origin_private`. A store over a directory that the user
-  selected refuses it with `InvalidPath`.
+  `createSyncAccessHandle()`. The worker writes one file at a time, replaces
+  the whole file in one session (truncate, write, flush, close), and closes the
+  handle before it answers. When a step fails, it closes the handle and
+  removes a file that it created. A failure after the truncate, such as a
+  quota error during the write, can leave an existing file empty or partly
+  written; `createWritable()` does not have this limit. The worker code is part
+  of the package, so a page serves no extra file. One worker serves every store
+  of the page. A worker that fails or does not answer within two minutes is
+  stopped, and the next write starts a new one.
+- The worker opens the origin private file system by itself, so worker writes
+  need a store in that file system: a store from `origin_private`, or a store
+  over `origin_private_root()` or a directory below it. A store over a
+  directory that the user selected refuses worker writes with `InvalidPath`.
 - `Auto`, the default, uses `createWritable()` when the browser has it, and the
   worker otherwise. The store chooses once, at its first write.
 
@@ -162,12 +169,15 @@ Safari 15.2 to 18 has no `createWritable()`, so `Auto` writes through the worker
 there. Safari 26 has `createWritable()`; one report says that Safari 26.5 keeps a
 temporary copy of each file that it writes, so `SyncAccessWorker` is a choice
 there too. A page with a Content Security Policy needs `worker-src blob:` for the
-worker. Reads, listings and deletes always run on the page.
+worker; without it, a worker write fails with a store error that names
+`worker-src blob:`. Reads, listings and deletes always run on the page.
 
 `@idb.IdbStore` keeps each file in one record of an IndexedDB object store,
-under its store path. A directory exists while a file is under it. Each write
-and delete is one transaction, so a failed write, for example over the storage
-quota, keeps the earlier content. A browser can evict IndexedDB and origin
+under its store path. A directory exists while a file is under it, and a file
+cannot have the path of a directory or be under another file. Each write and
+delete is one transaction, so a failed write, for example over the storage
+quota, keeps the earlier content. When another connection upgrades or deletes
+the database, the store opens its connection again at the next call. A browser can evict IndexedDB and origin
 private data under storage pressure; for data that must stay, the application
 can call `navigator.storage.persist()`. The library does not call it, because
 the browser can show a prompt. `IdbStore::in_memory()` runs the same logic over

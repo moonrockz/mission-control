@@ -34,72 +34,113 @@ extern "js" fn CallResult::number(self : CallResult) -> Double =
   #| (r) => r.value
 
 ///|
+extern "js" fn CallResult::key_count(self : CallResult) -> Int32 =
+  #| (r) => r.value.length
+
+///|
+extern "js" fn CallResult::key_at(self : CallResult, i : Int32) -> String =
+  #| (r, i) => r.value[i]
+
+///|
 extern "js" fn CallResult::adapter(self : CallResult) -> Adapter =
   #| (r) => r.value
 
 ///|
 /// Opens or creates the database and its object store, and gives the
 /// IndexedDB adapter. A database that lacks the object store is opened again
-/// at the next version, which creates it.
+/// at the next version, which creates it. When another connection upgrades
+/// or deletes the database, the adapter closes its connection and opens it
+/// again at the next call. A blocked open fails, and a connection that opens
+/// after the block is closed at once.
 extern "js" fn open_indexed_db(
   database : String,
   object_store : String,
 ) -> @js_async.Promise[CallResult] =
-  #| (database, store) => new Promise((resolve) => {
-  #|   const failed = (e) => resolve({ ok: false, code: (e && e.name) || "Error", message: String((e && e.message) || e) });
-  #|   const adapter = (db) => {
-  #|     const tx = (mode, act) => new Promise((done, fail) => {
-  #|       const t = db.transaction(store, mode);
-  #|       const req = act(t.objectStore(store));
-  #|       let result;
-  #|       if (req) req.onsuccess = () => { result = req.result; };
-  #|       t.oncomplete = () => done(result);
-  #|       t.onerror = () => fail(t.error);
-  #|       t.onabort = () => fail(t.error || { name: "AbortError", message: "the transaction was aborted" });
-  #|     });
-  #|     return {
-  #|       get: (key) => tx("readonly", (os) => os.get(key)),
-  #|       put: (key, value) => tx("readwrite", (os) => os.put(value, key)),
-  #|       delete: (key) => tx("readwrite", (os) => os.delete(key)),
-  #|       keys: (lower, upper) => tx("readonly", (os) =>
-  #|         os.getAllKeys(lower === null ? undefined : IDBKeyRange.bound(lower, upper, false, true))),
-  #|     };
-  #|   };
-  #|   const open = (version) => {
-  #|     let req;
-  #|     try {
-  #|       req = version === undefined ? globalThis.indexedDB.open(database) : globalThis.indexedDB.open(database, version);
-  #|     } catch (e) {
-  #|       failed(e);
-  #|       return;
-  #|     }
-  #|     req.onupgradeneeded = () => {
-  #|       const db = req.result;
-  #|       if (!db.objectStoreNames.contains(store)) db.createObjectStore(store);
-  #|     };
-  #|     req.onblocked = () => failed({ name: "BlockedError", message: "another connection blocks the database" });
-  #|     req.onerror = () => failed(req.error);
-  #|     req.onsuccess = () => {
-  #|       const db = req.result;
-  #|       if (!db.objectStoreNames.contains(store)) {
-  #|         const next = db.version + 1;
-  #|         db.close();
-  #|         open(next);
+  #| (database, store) => {
+  #|   let db = null;
+  #|   const connect = () => new Promise((done, fail) => {
+  #|     const open = (version) => {
+  #|       let req;
+  #|       try {
+  #|         req = version === undefined ? globalThis.indexedDB.open(database) : globalThis.indexedDB.open(database, version);
+  #|       } catch (e) {
+  #|         fail(e);
   #|         return;
   #|       }
-  #|       db.onversionchange = () => db.close();
-  #|       resolve({ ok: true, value: adapter(db) });
+  #|       let blocked = false;
+  #|       req.onupgradeneeded = () => {
+  #|         const d = req.result;
+  #|         if (!d.objectStoreNames.contains(store)) d.createObjectStore(store);
+  #|       };
+  #|       req.onblocked = () => {
+  #|         blocked = true;
+  #|         fail({ name: "BlockedError", message: "another connection blocks the database " + database });
+  #|       };
+  #|       req.onerror = () => fail(req.error);
+  #|       req.onsuccess = () => {
+  #|         const d = req.result;
+  #|         if (blocked) { d.close(); return; }
+  #|         if (!d.objectStoreNames.contains(store)) {
+  #|           const next = d.version + 1;
+  #|           d.close();
+  #|           open(next);
+  #|           return;
+  #|         }
+  #|         const forget = () => { if (db === d) db = null; };
+  #|         d.onversionchange = () => { d.close(); forget(); };
+  #|         d.onclose = forget;
+  #|         db = d;
+  #|         done(d);
+  #|       };
   #|     };
+  #|     open(undefined);
+  #|   });
+  #|   const run = (d, mode, act) => new Promise((done, fail) => {
+  #|     let t;
+  #|     try {
+  #|       t = d.transaction(store, mode);
+  #|     } catch (e) {
+  #|       fail(e);
+  #|       return;
+  #|     }
+  #|     const req = act(t.objectStore(store));
+  #|     let result;
+  #|     if (req) req.onsuccess = () => { result = req.result; };
+  #|     t.oncomplete = () => done(result);
+  #|     t.onerror = () => fail(t.error);
+  #|     t.onabort = () => fail(t.error || { name: "AbortError", message: "the transaction was aborted" });
+  #|   });
+  #|   const tx = async (mode, act) => {
+  #|     if (db === null) await connect();
+  #|     try {
+  #|       return await run(db, mode, act);
+  #|     } catch (e) {
+  #|       // A connection that closed since the last call: open it again once.
+  #|       if (!(e && e.name === "InvalidStateError")) throw e;
+  #|       db = null;
+  #|       await connect();
+  #|       return await run(db, mode, act);
+  #|     }
   #|   };
-  #|   open(undefined);
-  #| })
+  #|   const adapter = {
+  #|     get: (key) => tx("readonly", (os) => os.get(key)),
+  #|     put: (key, value) => tx("readwrite", (os) => os.put(value, key)),
+  #|     delete: (key) => tx("readwrite", (os) => os.delete(key)),
+  #|     keys: (lower, upper) => tx("readonly", (os) =>
+  #|       os.getAllKeys(lower === null ? undefined : IDBKeyRange.bound(lower, upper, false, true))),
+  #|   };
+  #|   return connect().then(
+  #|     () => ({ ok: true, value: adapter }),
+  #|     (e) => ({ ok: false, code: (e && e.name) || "Error", message: String((e && e.message) || e) }),
+  #|   );
+  #| }
 
 ///|
-/// An adapter over a map in memory. A write that would make the stored data
-/// larger than `quota` bytes fails with `QuotaExceededError` and changes
-/// nothing; a negative quota is no limit.
-extern "js" fn memory_adapter(quota : Int32) -> Adapter =
-  #| (quota) => {
+/// An adapter over a map in memory. With `limited`, a write that would make
+/// the stored data larger than `quota` bytes fails with `QuotaExceededError`
+/// and changes nothing.
+extern "js" fn memory_adapter(limited : Bool, quota : Int32) -> Adapter =
+  #| (limited, quota) => {
   #|   const map = new Map();
   #|   const size = (r) => r.kind === "text" ? r.data.length * 2 : r.data.byteLength;
   #|   return {
@@ -107,7 +148,7 @@ extern "js" fn memory_adapter(quota : Int32) -> Adapter =
   #|     put: async (key, value) => {
   #|       let total = size(value);
   #|       for (const [k, v] of map) if (k !== key) total += size(v);
-  #|       if (quota >= 0 && total > quota) {
+  #|       if (limited && total > quota) {
   #|         const e = new Error("the write needs " + total + " bytes and the quota is " + quota);
   #|         e.name = "QuotaExceededError";
   #|         throw e;
@@ -134,12 +175,20 @@ extern "js" fn idb_call(
 ) -> @js_async.Promise[CallResult] =
   #| (adapter, op, key, text, bytes, lower, upper) => (async () => {
   #|   const missing = () => { const e = new Error(key); e.name = "NotFoundError"; throw e; };
+  #|   const mismatch = (message) => { const e = new Error(message); e.name = "TypeMismatchError"; throw e; };
+  #|   // A file cannot have the path of a directory, nor be under another file.
+  #|   const placeable = async () => {
+  #|     if ((await adapter.keys(key + "/", key + "0")).length > 0) mismatch(key + " is a directory");
+  #|     const parts = key.split("/");
+  #|     for (let i = 1; i < parts.length; i++) {
+  #|       const above = parts.slice(0, i).join("/");
+  #|       if ((await adapter.get(above)) !== undefined) mismatch(above + " is a file");
+  #|     }
+  #|   };
   #|   try {
   #|     switch (op) {
-  #|       case "keys": {
-  #|         const keys = await adapter.keys(lower === "" ? null : lower, upper);
-  #|         return { ok: true, value: keys.join("\u0000") };
-  #|       }
+  #|       case "keys":
+  #|         return { ok: true, value: await adapter.keys(lower === "" ? null : lower, upper) };
   #|       case "readText": {
   #|         const r = await adapter.get(key);
   #|         if (r === undefined) missing();
@@ -156,9 +205,11 @@ extern "js" fn idb_call(
   #|         return { ok: true, value: r.modified };
   #|       }
   #|       case "writeText":
+  #|         await placeable();
   #|         await adapter.put(key, { kind: "text", data: text, modified: Date.now() });
   #|         return { ok: true, value: null };
   #|       case "writeBytes":
+  #|         await placeable();
   #|         await adapter.put(key, { kind: "bytes", data: new Uint8Array(bytes), modified: Date.now() });
   #|         return { ok: true, value: null };
   #|       case "delete":
@@ -202,7 +253,9 @@ fn store_error(
   result : CallResult,
 ) -> @provider.StoreError {
   match result.code() {
-    "NotFoundError" => NotFound(at)
+    // As in the browser store: a path that is a directory, or that is under
+    // a file, does not exist as a file.
+    "NotFoundError" | "TypeMismatchError" => NotFound(at)
     _ => Failed(at, result.message())
   }
 }
@@ -250,10 +303,14 @@ pub async fn IdbStore::open(
 
 ///|
 /// A store over a map in memory, with the same listing and error logic, for
-/// tests outside a browser. `quota_bytes` limits the stored data, as a browser
-/// quota does; without it there is no limit.
-pub fn IdbStore::in_memory(quota_bytes? : Int32) -> IdbStore {
-  { adapter: memory_adapter(quota_bytes.unwrap_or(-1)), }
+/// tests outside a browser. `quota` limits the stored data, as a browser quota
+/// does; without it there is no limit.
+pub fn IdbStore::in_memory(quota? : QuotaBytes) -> IdbStore {
+  let adapter = match quota {
+    Some(q) => memory_adapter(true, q.to_int())
+    None => memory_adapter(false, 0)
+  }
+  { adapter, }
 }
 
 ///|
@@ -275,30 +332,28 @@ async fn IdbStore::call(
 
 ///|
 pub impl @provider.DocumentStore for IdbStore with fn list(self, dir) {
-  // The keys under `dir`: from `dir/` up to, but not including, `dir/￿`.
-  let prefix = if dir.is_root() { "" } else { dir.to_string() + "/" }
-  let (lower, upper) = if dir.is_root() {
-    ("", "")
+  // The keys under `dir`: from `dir/` up to, but not including, `dir0`, as
+  // `0` is the character after `/`.
+  let (prefix, lower, upper) = if dir.is_root() {
+    ("", "", "")
   } else {
-    (prefix, prefix + "\u{FFFF}")
+    let d = dir.to_string()
+    (d + "/", d + "/", d + "0")
   }
-  let encoded = self.call(Keys, DirectoryAt(dir), lower~, upper~).text()
+  let result = self.call(Keys, DirectoryAt(dir), lower~, upper~)
   let out : Array[@provider.StoreEntry] = []
   let seen : Map[String, Bool] = Map([])
-  if encoded.length() > 0 {
-    for key in encoded.split("\u0000") {
-      let rest = key[prefix.length():].to_owned()
-      let (segment, kind) : (String, @provider.EntryKind) = match
-        rest.find("/") {
-        Some(i) => (rest[:i].to_owned(), Directory)
-        None => (rest, File)
-      }
-      guard !seen.contains(segment) else { continue }
-      seen[segment] = true
-      // A key segment that is not one valid entry name is not part of the store.
-      let name = @okf.EntryName(segment) catch { _ => continue }
-      out.push({ name, kind, })
+  for i in 0..<result.key_count() {
+    let rest = result.key_at(i)[prefix.length():].to_owned()
+    let (segment, kind) : (String, @provider.EntryKind) = match rest.find("/") {
+      Some(at) => (rest[:at].to_owned(), Directory)
+      None => (rest, File)
     }
+    guard !seen.contains(segment) else { continue }
+    seen[segment] = true
+    // A key segment that is not one valid entry name is not part of the store.
+    let name = @okf.EntryName(segment) catch { _ => continue }
+    out.push({ name, kind, })
   }
   if out.is_empty() && !dir.is_root() {
     raise NotFound(DirectoryAt(dir))

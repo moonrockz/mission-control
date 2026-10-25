@@ -9,13 +9,13 @@ test "IndexedDB names are not empty" {
   } noraise {
     _ => None
   }
-  assert_eq(database, Some(Empty(field="database")))
+  assert_eq(database, Some(EmptyDatabaseName))
   let store = try @idb.ObjectStoreName("") catch {
     e => Some(e)
   } noraise {
     _ => None
   }
-  assert_eq(store, Some(Empty(field="object store")))
+  assert_eq(store, Some(EmptyObjectStoreName))
 }
 
 ///|
@@ -61,7 +61,7 @@ async test "separate stores do not share files" {
 
 ///|
 async test "a write over the quota fails for its path and keeps the earlier content" {
-  let store = @idb.IdbStore::in_memory(quota_bytes=40)
+  let store = @idb.IdbStore::in_memory(quota=@idb.QuotaBytes(40))
   let path = @okf.StorePath("a.md")
   store.write_text(path, "# Small")
   let failed = try
@@ -86,4 +86,45 @@ async test "a bundle loads after writes" {
   store.write_text(@okf.StorePath("kb/a.md"), "---\ntype: Note\n---\n# A\n")
   let bundle = @provider.load_bundle(store, root=@okf.StoreDir("kb"))
   assert_eq(bundle.documents().length(), 2)
+}
+
+///|
+test "quotas are not negative" {
+  assert_eq(@idb.QuotaBytes(0).to_int(), 0)
+  let refused = try @idb.QuotaBytes(-1) catch {
+    e => Some(e)
+  } noraise {
+    _ => None
+  }
+  assert_eq(refused, Some(NegativeQuota(-1)))
+}
+
+///|
+async test "listings keep names with a NUL or a high character, and names that share a prefix" {
+  let store = @idb.IdbStore::in_memory()
+  store.write_text(@okf.StorePath("kb/a\u{0}.md"), "x")
+  store.write_text(@okf.StorePath("kb/\u{FFFF}z.md"), "y")
+  store.write_text(@okf.StorePath("kb0/b.md"), "z")
+  let names = store.list(@okf.StoreDir("kb")).map(e => e.name.to_string())
+  assert_eq(names, ["a\u{0}.md", "\u{FFFF}z.md"])
+}
+
+///|
+async test "a file cannot take the path of a directory or sit under a file" {
+  let store = @idb.IdbStore::in_memory()
+  store.write_text(@okf.StorePath("kb/a"), "# A")
+  store.write_text(@okf.StorePath("kb/d/x.md"), "# X")
+  let under_file = @okf.StorePath("kb/a/b.md")
+  let over_dir = @okf.StorePath("kb/d")
+  for path in [under_file, over_dir] {
+    let refused : @provider.StoreError? = try
+      store.write_text(path, "x")
+    catch {
+      e => Some(e)
+    } noraise {
+      _ => None
+    }
+    assert_eq(refused, Some(@provider.NotFound(FileAt(path))))
+  }
+  assert_eq(store.read_text(@okf.StorePath("kb/d/x.md")), "# X")
 }

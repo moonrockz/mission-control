@@ -18,6 +18,9 @@ test("the browser stores meet the store contract", async ({ playwright, browserN
     // The worker starts from code in the page script, so the page loads no
     // other file from the server.
     const served = [];
+    // The store starts at most one worker for the page.
+    const workers = [];
+    page.on("worker", worker => workers.push(worker.url()));
     page.on("request", request => {
       const url = new URL(request.url());
       if (url.protocol.startsWith("http")) served.push(url.pathname);
@@ -37,10 +40,22 @@ test("the browser stores meet the store contract", async ({ playwright, browserN
         console.log(`${testInfo.project.name}: ${name} ${result}`);
       }
     }
-    expect(Object.keys(results)).toEqual(["writable", "worker", "auto", "idb", "idb-separate"]);
+    expect(Object.keys(results)).toEqual([
+      "writable", "worker", "auto", "idb", "idb-separate", "root-worker", "worker-sequence", "idb-reopen",
+    ]);
     expect(results.writable, "the createWritable() check").toMatch(/^(ok|skipped: )/);
     const { writable, ...rest } = results;
-    expect(rest).toEqual({ worker: "ok", auto: "ok", idb: "ok", "idb-separate": "ok" });
+    expect(rest).toEqual({
+      worker: "ok",
+      auto: "ok",
+      idb: "ok",
+      "idb-separate": "ok",
+      "root-worker": "ok",
+      "worker-sequence": "ok",
+      "idb-reopen": "ok",
+    });
+    expect(workers.length, "workers that the page started").toBe(1);
+    expect(workers[0]).toMatch(/^blob:/);
   } finally {
     await context.close();
   }

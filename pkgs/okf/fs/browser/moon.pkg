@@ -6,12 +6,9 @@ import {
 }
 
 import {
-  "moonrockz/okf",
-  "moonrockz/okf/fs/browser",
   "moonrockz/okf/conformance",
-  "moonrockz/okf/provider",
   "moonbitlang/async",
-} for "test"
+} for "wbtest"
 
 // Browsers only: the store calls the File System Access API through JavaScript FFI.
 

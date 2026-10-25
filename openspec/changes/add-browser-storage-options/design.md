@@ -37,17 +37,17 @@ Alternative: a separate `SafariStore` type. Rejected: it would duplicate reads, 
 
 A store that can use the worker needs the path of its root below the origin private file system root. `BrowserStore::origin_private(path? : @okf.StoreDir = @okf.StoreDir::root(), writes?)` opens the root with `navigator.storage.getDirectory()`, walks `path` with `getDirectoryHandle(..., {create: true})`, and records the path. The worker receives the path segments of each write, opens the origin private root itself, and walks the same segments.
 
-A store created from a caller's handle has no known path. With `SyncAccessWorker`, its first write raises `InvalidPath` with a message that names the origin private file system. With `Auto`, it uses `createWritable()` when it exists; a picked handle exists only in browsers that have `showDirectoryPicker()`, and those browsers have `createWritable()`.
+A store created from a caller's handle finds its path at the first worker write with `FileSystemDirectoryHandle.resolve()` from the origin private file system root, so `BrowserStore(origin_private_root())` also writes through the worker in Safari 18. A handle that the user picked is not in that file system; worker writes to it raise `InvalidPath` with a message that names the origin private file system. With `Auto`, such a store uses `createWritable()`; a picked handle exists only in browsers that have `showDirectoryPicker()`, and those browsers have `createWritable()`.
 
 Alternative: send the handle to the worker with `postMessage`. Rejected for now: support for serializable handles differs between engines, and the path approach works everywhere.
 
 ### D3. One packaged worker per page
 
-The worker code is a JavaScript string in the browser package. The first worker write creates it with `new Worker(URL.createObjectURL(new Blob([code], {type: "text/javascript"})))` and keeps it in a module-level variable, so all stores of the page share one worker. Requests carry an ID; the worker answers with the same settled result objects as the main-thread calls, so `settle` and the error mapping do not change.
+The worker code is a JavaScript string in the browser package. The first worker write creates it with `new Worker(URL.createObjectURL(new Blob([code], {type: "text/javascript"})))` and keeps it in a page-wide map keyed by the worker code, so all stores of the page share one worker, and two versions of the library on one page do not. Requests carry an ID; the worker answers with the same settled result objects as the main-thread calls, so `settle` and the error mapping do not change. A worker that fails to start, reports an error, sends a message that cannot be read, or does not answer within two minutes is terminated and removed from the map; its pending writes fail, and the next write starts a new worker.
 
-The worker writes a file in one session: `getFileHandle(name, {create: true})`, `createSyncAccessHandle()`, `truncate(0)`, `write(bytes, {at: 0})`, `flush()` and `close()`. Text is encoded with `TextEncoder`. A `finally` block closes the handle when any step fails.
+The worker handles one request at a time, in order. It writes a file in one session: `getFileHandle(name, {create: true})`, `createSyncAccessHandle()`, `truncate(0)`, `write(bytes, {at: 0})`, `flush()` and `close()`, and it closes the handle before it answers, so the page can delete or read the file at once. Text is encoded with `TextEncoder`. When a step fails, the worker closes the handle and removes the file when the write created it. A failure after `truncate(0)` can leave an existing file empty or partly written; the README states this limit.
 
-A page with a strict Content Security Policy that forbids `blob:` workers cannot use the worker. The store then reports the `SecurityError` as a store error; the README states the `worker-src blob:` requirement.
+A page with a strict Content Security Policy that forbids `blob:` workers cannot use the worker. The store then reports a store error that names `worker-src blob:`, and the README states the requirement.
 
 Alternative: a separate worker file. Rejected: callers would have to serve it at a known URL, which breaks bundlers and static hosting.
 
@@ -66,7 +66,7 @@ Alternative: one record per directory with child lists. Rejected: every write wo
 
 ### D5. Tests in three engines
 
-- The stand-in handle (`memory_directory_handle`) gets the options `with_writable` and `picked`. Without `createWritable`, the store must use the worker; under Node.js there is no worker, so the stand-in has a sync writer that the store uses in place of the worker, except for a `picked` stand-in, which stands for a directory that the user selected. `fail_sync_writes` makes the sync writer fail for a file name, and `stand_in_writes` names the writer of each write. This tests the `Auto` selection, the worker scope and the worker protocol logic on every run.
+- The stand-in handle (`memory_directory_handle`, private to the package tests) takes an `Access` (read-write or read-only) and a `StandInKind` (`Modern`, `NoWritable` or `Picked`), so a test cannot build a state that no browser has. Without `createWritable`, the store must use the worker; under Node.js there is no worker, so the stand-in has a sync writer that the store uses in place of the worker, except for a `picked` stand-in, which stands for a directory that the user selected. `fail_sync_writes` makes the sync writer fail for a file name, and `stand_in_writes` names the writer of each write. This tests the `Auto` selection, the worker scope and the worker protocol logic on every run.
 - `tests/okf-browser` runs four checks: the browser store with `Writable` (where it exists), the browser store with `SyncAccessWorker`, the browser store with `Auto`, and the IndexedDB store. Each check uses its own directory or database name.
 - `playwright.config.cjs` adds the `webkit` and `firefox` projects. The test opens each page in a persistent context with a fresh profile, because WebKit in Playwright gives the origin private file system only to a persistent context. A fifth check opens two IndexedDB databases and checks that they share no file, and the test checks that the page loads no file except the page and its script. `--install` installs `chromium webkit firefox` with their system libraries. A check that needs `createWritable` is skipped, not failed, in an engine that does not have it, and the report names the skip.
 
@@ -75,7 +75,8 @@ Alternative: one record per directory with child lists. Rejected: every write wo
 Following the Domain types section of `AGENTS.md`:
 
 - `@okf.StoreDir` is a directory path below a store root, with the same rules as `StorePath` (no escape, `/` and `\` as separators) but allowed to be the root. Its constructor `StoreDir::StoreDir(text) -> StoreDir raise PathError` parses once; `StoreDir::root()` cannot fail. It replaces the raw `ArrayView[String]` directory arguments where the browser store needs one. (A later change can use it in `DocumentStore::list`.)
-- `DatabaseName` and `ObjectStoreName` are non-empty names. Their constructors raise `IdbNameError::Empty`; `default()` gives `okf` and `files` and cannot fail.
+- `DatabaseName` and `ObjectStoreName` are non-empty names. Their constructors raise `IdbNameError::EmptyDatabaseName` or `EmptyObjectStoreName`; `default()` gives `okf` and `files` and cannot fail.
+- `QuotaBytes` is a storage quota of zero or more bytes for the in-memory adapter; its constructor raises `QuotaError::NegativeQuota`.
 - `WriteMethod` is an enum, not a string option.
 - The worker protocol keeps its operation as an enum on the MoonBit side and converts it to its JavaScript tag at the FFI boundary only.
 - Each constructor has tests on each side of each rule.

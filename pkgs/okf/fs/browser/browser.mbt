@@ -33,6 +33,10 @@ extern "js" fn CallResult::number(self : CallResult) -> Double =
   #| (r) => r.value
 
 ///|
+extern "js" fn CallResult::found(self : CallResult) -> Bool =
+  #| (r) => !!r.found
+
+///|
 extern "js" fn CallResult::handle(self : CallResult) -> DirectoryHandle =
   #| (r) => r.value
 
@@ -140,50 +144,83 @@ extern "js" fn has_sync_writer(root : DirectoryHandle) -> Bool =
   #| (root) => !!(root && typeof root.okfSyncWriter === "function")
 
 ///|
-/// The code of the dedicated worker. It opens the origin private file system
-/// root itself, walks the segments, and replaces the whole file in one sync
-/// access handle session. It closes the handle in every case, and it removes a
-/// file that it created when the write fails.
+/// The path of `root` below the origin private file system root, when `root`
+/// is in that file system (`FileSystemDirectoryHandle.resolve`).
+extern "js" fn origin_private_path(
+  root : DirectoryHandle,
+) -> @js_async.Promise[CallResult] =
+  #| (root) => (async () => {
+  #|   try {
+  #|     const opfs = await globalThis.navigator.storage.getDirectory();
+  #|     const parts = await opfs.resolve(root);
+  #|     return parts === null ? { ok: true, found: false } : { ok: true, found: true, value: parts.join("/") };
+  #|   } catch (e) {
+  #|     return { ok: true, found: false };
+  #|   }
+  #| })()
+
+///|
+/// The code of the dedicated worker. It handles one write at a time. It opens
+/// the origin private file system root itself, walks the segments, and
+/// replaces the whole file in one sync access handle session: truncate, write,
+/// flush and close. It closes the handle before it answers, so the page can
+/// use the file at once. When a step fails, it closes the handle and removes a
+/// file that it created.
 let worker_code : String =
-  #|self.onmessage = async (event) => {
-  #|  const { id, segments, name, kind, text, bytes } = event.data;
+  #|let queue = Promise.resolve();
+  #|const write = async ({ id, segments, name, kind, text, bytes }) => {
   #|  let dir = null;
   #|  let handle = null;
   #|  let existed = true;
   #|  try {
   #|    dir = await navigator.storage.getDirectory();
   #|    for (const s of segments) dir = await dir.getDirectoryHandle(s, { create: true });
-  #|    try { await dir.getFileHandle(name); } catch (e) { existed = false; }
+  #|    try {
+  #|      await dir.getFileHandle(name);
+  #|    } catch (e) {
+  #|      if (e && e.name === "NotFoundError") existed = false; else throw e;
+  #|    }
   #|    const fh = await dir.getFileHandle(name, { create: true });
   #|    handle = await fh.createSyncAccessHandle();
   #|    const data = kind === "text" ? new TextEncoder().encode(text) : bytes;
+  #|    await handle.truncate(0);
   #|    await handle.write(data, { at: 0 });
-  #|    await handle.truncate(data.byteLength);
   #|    await handle.flush();
+  #|    const done = handle;
+  #|    handle = null;
+  #|    await done.close();
   #|    self.postMessage({ id, ok: true, value: null });
   #|  } catch (e) {
-  #|    if (handle) { try { await handle.close(); } catch (_) {} handle = null; }
+  #|    if (handle) { try { await handle.close(); } catch (_) {} }
   #|    if (!existed && dir) { try { await dir.removeEntry(name); } catch (_) {} }
   #|    self.postMessage({ id, ok: false, code: (e && e.name) || "", message: String((e && e.message) || e) });
-  #|  } finally {
-  #|    if (handle) { try { await handle.close(); } catch (_) {} }
   #|  }
   #|};
+  #|self.onmessage = (event) => { queue = queue.then(() => write(event.data)); };
+
+///|
+/// How long the page waits for one worker write, in milliseconds. A worker
+/// that the browser stops sends no event, so a write that takes longer fails,
+/// and the next write starts a new worker.
+let worker_timeout_ms : Int32 = 120000
 
 ///|
 /// Writes one file through the packaged worker, or through the sync writer of
-/// a stand-in handle. The page starts one worker, from a `blob:` URL, at the
-/// first worker write, and every store reuses it.
+/// a stand-in handle. The page starts the worker from a `blob:` URL at the
+/// first worker write and reuses it. The worker is kept per worker code, so
+/// two versions of this library on one page do not share a worker. A worker
+/// that fails is stopped and forgotten, so the next write starts a new one.
 extern "js" fn sync_write(
   root : DirectoryHandle,
   code : String,
+  timeout_ms : Int32,
   segments : String,
   name : String,
   kind : String,
   text : String,
   bytes : Bytes,
 ) -> @js_async.Promise[CallResult] =
-  #| (root, code, segments, name, kind, text, bytes) => new Promise((resolve) => {
+  #| (root, code, timeoutMs, segments, name, kind, text, bytes) => new Promise((resolve) => {
   #|   const segs = segments === "" ? [] : segments.split("/");
   #|   const failed = (e) => resolve({ ok: false, code: (e && e.name) || "", message: String((e && e.message) || e) });
   #|   if (root && typeof root.okfSyncWriter === "function") {
@@ -191,27 +228,51 @@ extern "js" fn sync_write(
   #|       .then(() => resolve({ ok: true, value: null }), failed);
   #|     return;
   #|   }
-  #|   try {
-  #|     const g = globalThis;
-  #|     if (!g.okfSyncWorker) {
-  #|       const url = URL.createObjectURL(new Blob([code], { type: "text/javascript" }));
-  #|       const worker = new Worker(url);
-  #|       const state = { worker, pending: new Map(), next: 0 };
-  #|       worker.onmessage = (event) => {
-  #|         const done = state.pending.get(event.data.id);
-  #|         if (done) { state.pending.delete(event.data.id); done(event.data); }
-  #|       };
-  #|       worker.onerror = (event) => {
-  #|         for (const done of state.pending.values()) done({ ok: false, code: "Error", message: String(event.message || event) });
-  #|         state.pending.clear();
-  #|       };
-  #|       g.okfSyncWorker = state;
+  #|   const csp = "a page with a Content Security Policy needs worker-src blob: for the write worker";
+  #|   const g = globalThis;
+  #|   const workers = g.okfSyncWorkers || (g.okfSyncWorkers = new Map());
+  #|   let state = workers.get(code);
+  #|   if (!state) {
+  #|     let url = null;
+  #|     try {
+  #|       url = URL.createObjectURL(new Blob([code], { type: "text/javascript" }));
+  #|       state = { worker: new Worker(url), url, pending: new Map(), next: 0 };
+  #|     } catch (e) {
+  #|       if (url) URL.revokeObjectURL(url);
+  #|       resolve({ ok: false, code: (e && e.name) || "SecurityError", message: "cannot start the write worker: " + String((e && e.message) || e) + "; " + csp });
+  #|       return;
   #|     }
-  #|     const state = g.okfSyncWorker;
-  #|     const id = ++state.next;
-  #|     state.pending.set(id, resolve);
-  #|     state.worker.postMessage({ id, segments: segs, name, kind, text, bytes });
+  #|     const current = state;
+  #|     const stop = (message) => {
+  #|       for (const done of current.pending.values()) done({ ok: false, code: "WorkerError", message });
+  #|       current.pending.clear();
+  #|       current.worker.terminate();
+  #|       URL.revokeObjectURL(current.url);
+  #|       if (workers.get(code) === current) workers.delete(code);
+  #|     };
+  #|     current.stop = stop;
+  #|     current.worker.onmessage = (event) => {
+  #|       const done = current.pending.get(event.data.id);
+  #|       if (done) { current.pending.delete(event.data.id); done(event.data); }
+  #|     };
+  #|     current.worker.onerror = (event) => {
+  #|       if (event && event.preventDefault) event.preventDefault();
+  #|       stop("the write worker failed or did not start (" + String((event && event.message) || "no detail") + "); " + csp);
+  #|     };
+  #|     current.worker.onmessageerror = () => stop("the write worker sent a message that cannot be read");
+  #|     workers.set(code, current);
+  #|   }
+  #|   const current = state;
+  #|   const id = ++current.next;
+  #|   const timer = setTimeout(() => {
+  #|     if (current.pending.has(id)) current.stop("the write worker did not answer within " + timeoutMs + " ms");
+  #|   }, timeoutMs);
+  #|   current.pending.set(id, (result) => { clearTimeout(timer); resolve(result); });
+  #|   try {
+  #|     current.worker.postMessage({ id, segments: segs, name, kind, text, bytes });
   #|   } catch (e) {
+  #|     current.pending.delete(id);
+  #|     clearTimeout(timer);
   #|     failed(e);
   #|   }
   #| })
@@ -314,20 +375,22 @@ fn Op::tag(self : Op) -> String {
 ///|
 /// A document store over a directory handle of the File System Access API.
 /// The caller supplies the handle: the origin private file system root, or a
-/// directory that the user selected. `origin_private` makes a store whose
-/// writes can also go through the worker.
+/// directory that the user selected. `origin_private` makes a store on a
+/// directory below the origin private file system root.
 struct BrowserStore {
   root : DirectoryHandle
   writes : WriteMethod
+  /// The directory that the worker opens, when the store knows it.
   worker_root : WorkerRoot?
   /// The writer that the store chose at its first write.
   mut writer : Writer?
 }
 
 ///|
-/// A store over `root`. With `writes=SyncAccessWorker`, every write raises
-/// `InvalidPath`, because the worker cannot open a handle that the page got
-/// from the user; use `origin_private` for worker writes.
+/// A store over `root`. For worker writes, the store finds the path of `root`
+/// below the origin private file system root at its first write. A directory
+/// that the user selected is not in that file system, so worker writes to it
+/// raise `InvalidPath`.
 pub fn BrowserStore::BrowserStore(
   root : DirectoryHandle,
   writes~ : WriteMethod = Auto,
@@ -375,11 +438,33 @@ async fn BrowserStore::call(
 
 ///|
 /// Why a store refuses worker writes.
-let worker_needs_origin_private : String = "the SyncAccessWorker write method needs a store on the origin private file system; create the store with BrowserStore::origin_private"
+let worker_needs_origin_private : String = "worker writes need a directory in the origin private file system, and this handle is not in it; use createWritable() or a store from BrowserStore::origin_private"
+
+///|
+/// The writer that writes through the worker: the known worker directory, or
+/// the path of the root below the origin private file system root.
+async fn BrowserStore::worker_writer(
+  self : BrowserStore,
+  path : @okf.StorePath,
+) -> Writer raise @provider.StoreError {
+  match self.worker_root {
+    Some(root) => return UseWorker(root)
+    None => ()
+  }
+  let at = @provider.StoreLocation::FileAt(path)
+  let found = settle(at, origin_private_path(self.root))
+  guard found.found() else {
+    raise InvalidPath("\{path}: \{worker_needs_origin_private}")
+  }
+  let dir = @okf.StoreDir(found.text()) catch {
+    _ => raise InvalidPath("\{path}: \{worker_needs_origin_private}")
+  }
+  UseWorker(OriginPrivate(dir))
+}
 
 ///|
 /// The writer for the next write. The store chooses it once.
-fn BrowserStore::writer_for(
+async fn BrowserStore::writer_for(
   self : BrowserStore,
   path : @okf.StorePath,
 ) -> Writer raise @provider.StoreError {
@@ -387,19 +472,15 @@ fn BrowserStore::writer_for(
     Some(writer) => return writer
     None => ()
   }
-  fn worker() -> Writer raise @provider.StoreError {
-    match self.worker_root {
-      Some(root) => UseWorker(root)
-      None =>
-        raise @provider.StoreError::InvalidPath(
-          "\{path}: \{worker_needs_origin_private}",
-        )
-    }
-  }
   let writer = match self.writes {
     Writable => UseWritable
-    SyncAccessWorker => worker()
-    Auto => if has_create_writable(self.root) { UseWritable } else { worker() }
+    SyncAccessWorker => self.worker_writer(path)
+    Auto =>
+      if has_create_writable(self.root) {
+        UseWritable
+      } else {
+        self.worker_writer(path)
+      }
   }
   self.writer = Some(writer)
   writer
@@ -446,6 +527,7 @@ async fn BrowserStore::write(
         sync_write(
           self.root,
           worker_code,
+          worker_timeout_ms,
           segments.join("/"),
           path.name(),
           kind,
@@ -530,130 +612,6 @@ pub extend BrowserStore with @provider.DocumentStore::{
   read_text,
   write_text,
 }
-
-///|
-/// An in-memory stand-in for a `FileSystemDirectoryHandle`, for tests outside
-/// a browser. With `writable=false`, writes and deletes fail with
-/// `NotAllowedError`, as a read-only handle does. With `with_writable=false`,
-/// file handles have no `createWritable()`, as in Safari 18. The handle has a
-/// sync writer that takes the place of the worker, except with `picked=true`,
-/// which stands for a handle that the user picked and the worker cannot open.
-pub fn memory_directory_handle(
-  writable : Bool,
-  with_writable~ : Bool = true,
-  picked~ : Bool = false,
-) -> DirectoryHandle {
-  memory_handle(writable, with_writable, picked)
-}
-
-///|
-/// The writers that a stand-in handle saw, in order: `writable` for a
-/// `createWritable()` write and `sync` for a sync writer write.
-pub extern "js" fn stand_in_writes(handle : DirectoryHandle) -> String =
-  #| (handle) => handle.okfLog.join(",")
-
-///|
-/// Makes the sync writer of a stand-in handle fail for files named `name`, as
-/// a browser does when it cannot open a sync access handle.
-pub extern "js" fn fail_sync_writes(
-  handle : DirectoryHandle,
-  name : String,
-) -> Unit =
-  #| (handle, name) => { handle.okfFailSync.add(name); }
-
-///|
-extern "js" fn memory_handle(
-  writable : Bool,
-  with_writable : Bool,
-  picked : Bool,
-) -> DirectoryHandle =
-  #| (writable, withWritable, picked) => {
-  #|   const log = [];
-  #|   const fail = (name, message) => { const e = new Error(message); e.name = name; throw e; };
-  #|   const makeFile = (name) => ({ kind: "file", name, data: new Uint8Array(), lastModified: Date.now() });
-  #|   const fileHandle = (node) => ({
-  #|     kind: "file", name: node.name,
-  #|     async getFile() {
-  #|       const data = node.data;
-  #|       return {
-  #|         lastModified: node.lastModified,
-  #|         async text() { return new TextDecoder().decode(data); },
-  #|         async arrayBuffer() { return data.slice().buffer; },
-  #|       };
-  #|     },
-  #|     ...(withWritable ? {
-  #|       async createWritable() {
-  #|         if (!writable) fail("NotAllowedError", "read-only handle");
-  #|         let pending = new Uint8Array();
-  #|         return {
-  #|           async write(chunk) {
-  #|             pending = typeof chunk === "string" ? new TextEncoder().encode(chunk) : new Uint8Array(chunk);
-  #|           },
-  #|           async close() { node.data = pending; node.lastModified = Date.now(); log.push("writable"); },
-  #|         };
-  #|       },
-  #|     } : {}),
-  #|   });
-  #|   const dirHandle = (node) => ({
-  #|     kind: "directory", name: node.name,
-  #|     async getDirectoryHandle(name, opts) {
-  #|       let child = node.children.get(name);
-  #|       if (!child) {
-  #|         if (!(opts && opts.create)) fail("NotFoundError", name);
-  #|         if (!writable) fail("NotAllowedError", "read-only handle");
-  #|         child = { kind: "directory", name, children: new Map() };
-  #|         node.children.set(name, child);
-  #|       }
-  #|       if (child.kind !== "directory") fail("TypeMismatchError", name);
-  #|       return dirHandle(child);
-  #|     },
-  #|     async getFileHandle(name, opts) {
-  #|       let child = node.children.get(name);
-  #|       if (!child) {
-  #|         if (!(opts && opts.create)) fail("NotFoundError", name);
-  #|         if (!writable) fail("NotAllowedError", "read-only handle");
-  #|         child = makeFile(name);
-  #|         node.children.set(name, child);
-  #|       }
-  #|       if (child.kind !== "file") fail("TypeMismatchError", name);
-  #|       return fileHandle(child);
-  #|     },
-  #|     async removeEntry(name) {
-  #|       if (!node.children.has(name)) fail("NotFoundError", name);
-  #|       if (!writable) fail("NotAllowedError", "read-only handle");
-  #|       node.children.delete(name);
-  #|     },
-  #|     async *entries() {
-  #|       for (const [name, child] of node.children) {
-  #|         yield [name, child.kind === "directory" ? dirHandle(child) : fileHandle(child)];
-  #|       }
-  #|     },
-  #|   });
-  #|   const rootNode = { kind: "directory", name: "", children: new Map() };
-  #|   const root = dirHandle(rootNode);
-  #|   root.okfHasWritable = withWritable;
-  #|   root.okfFailSync = new Set();
-  #|   root.okfLog = log;
-  #|   if (!picked) {
-  #|     // The worker protocol on the stand-in: walk, open, replace, close.
-  #|     root.okfSyncWriter = async (segments, name, data) => {
-  #|       let dir = root;
-  #|       for (const s of segments) dir = await dir.getDirectoryHandle(s, { create: true });
-  #|       const parent = segments.reduce((n, s) => n.children.get(s), rootNode);
-  #|       const existed = parent.children.has(name);
-  #|       await dir.getFileHandle(name, { create: true });
-  #|       const node = parent.children.get(name);
-  #|       if (root.okfFailSync.has(name)) {
-  #|         if (!existed) parent.children.delete(name);
-  #|         fail("InvalidStateError", "cannot open a sync access handle for " + name);
-  #|       }
-  #|       node.data = new Uint8Array(data);
-  #|       node.lastModified = Date.now();
-  #|       log.push("sync");
-  #|     };
-  #|   }
-  #|   return root;
-  #| }
 
 ///|
 pub extend WriteMethod with Eq::{not_equal, equal}
