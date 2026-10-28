@@ -68,8 +68,9 @@ pub fn parse_command(args : ArrayView[String]) -> Command raise ExtensionError {
 }
 
 ///|
-pub fn version() -> String {
-  @contracts.version().to_string()
+/// The validated workspace version used by the extension bundle.
+pub fn version() -> @contracts.Version {
+  @contracts.version()
 }
 
 ///|
@@ -187,7 +188,7 @@ pub fn lock_text() -> String {
     "format": 1,
     "extension": "html-design",
     "module": "moonrockz/openspec-ext",
-    "version": version(),
+    "version": version().to_string(),
     "files": Json(hashes),
   }
   lock.stringify(indent=2) + "\n"

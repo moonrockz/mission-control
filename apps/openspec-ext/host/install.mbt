@@ -90,7 +90,7 @@ pub async fn install(repository : @extension.RepositoryPath) -> Unit {
       )
     }
   }
-  @fs.mkdir("\{root}/scripts", recursive=true, allow_exist=true)
+  @fs.mkdir("\{root}/scripts/features", recursive=true, allow_exist=true)
   @fs.mkdir(
     "\{root}/openspec/schemas/html-design/templates",
     recursive=true,

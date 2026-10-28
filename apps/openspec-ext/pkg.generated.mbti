@@ -1,6 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "moonrockz/openspec-ext"
 
+import {
+  "moonrockz/mission-control-contracts",
+}
+
 // Values
 pub fn can_replace(BundleFile, String?, FileDigest?) -> Bool
 
@@ -18,7 +22,7 @@ pub fn parse_command(ArrayView[String]) -> Command raise ExtensionError
 
 pub fn usage() -> String
 
-pub fn version() -> String
+pub fn version() -> @mission-control-contracts.Version
 
 // Errors
 pub suberror ExtensionError {
@@ -42,6 +46,7 @@ pub(all) enum BundleFile {
   Notice
   License
   Workflow
+  WorkflowFeature
 }
 pub fn BundleFile::content(Self) -> String
 pub fn BundleFile::path(Self) -> String

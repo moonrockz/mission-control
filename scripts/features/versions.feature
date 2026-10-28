@@ -187,3 +187,14 @@ Feature: One version across the workspace
 
   Scenario: The version type is the one in release.mbtx
     Then the version type is the one in release.mbtx
+
+  Scenario: Version changes keep the extension ownership lock in step
+    Given a file "openspec/extensions.lock.json" with the text:
+      """
+      {"version": "0.1.0", "files": {"schema.yaml": "12345"}}
+      """
+    When I set the versions of the files to "0.1.1"
+    Then the result is:
+      """
+      {"version": "0.1.1", "files": {"schema.yaml": "12345"}}
+      """

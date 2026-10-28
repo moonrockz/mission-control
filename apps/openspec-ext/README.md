@@ -78,3 +78,9 @@ The pure bundle builds on all four MoonBit targets. Host I/O and the command
 support wasm and native because `moonbitlang/async` does not supply JS or wasm-gc
 filesystem and process support. Existing release binaries remain the
 `mission-control` CLI; the extension command ships as its own mooncakes module.
+
+The bundled script runs its Gherkin feature with `moon test scripts/openspec-ext.mbtx`.
+It checks valid and edited snapshots, malformed configuration and lock data, and
+setup isolation. Its filesystem test also verifies temporary configuration cleanup.
+The workspace version setter updates the extension lock version alongside module
+and contract versions, so normal release preparation keeps validation in step.
