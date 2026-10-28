@@ -84,3 +84,7 @@ It checks valid and edited snapshots, malformed configuration and lock data, and
 setup isolation. Its filesystem test also verifies temporary configuration cleanup.
 The workspace version setter updates the extension lock version alongside module
 and contract versions, so normal release preparation keeps validation in step.
+
+The shared script pins `moonbitlang/async@0.22.4`, the baseline supported by
+the consuming repositories. Its legacy import syntax also supports Moon 0.10.15.
+The packaged host uses the module dependencies declared in `moon.mod`.

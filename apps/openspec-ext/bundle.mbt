@@ -782,10 +782,10 @@ pub fn BundleFile::content(self : BundleFile) -> String {
       (
         #|///|
         #|import {
-        #|  "moonbitlang/async@0.22.5",
-        #|  "moonbitlang/async@0.22.5/fs",
-        #|  "moonbitlang/async@0.22.5/process",
-        #|  "moonbitlang/async@0.22.5/stdio",
+        #|  "moonbitlang/async@0.22.4",
+        #|  "moonbitlang/async@0.22.4/fs",
+        #|  "moonbitlang/async@0.22.4/process",
+        #|  "moonbitlang/async@0.22.4/stdio",
         #|  "moonbitlang/x@0.5.5/crypto",
         #|  "moonbitlang/x@0.5.5/sys",
         #|  "moonbitlang/core/env",
@@ -1058,9 +1058,9 @@ pub fn BundleFile::content(self : BundleFile) -> String {
         #|
         #|///|
         #|async test "setup isolates its config and removes it after the process returns" {
-        #|  let mut seen_home = ""
+        #|  let mut seen_home : String? = None
         #|  setup_with(async fn(home, environment) {
-        #|    seen_home = home
+        #|    seen_home = Some(home)
         #|    let preferences = @json.parse(
         #|      @fs.read_file("\{home}/openspec/config.json").text(),
         #|    )
@@ -1071,8 +1071,11 @@ pub fn BundleFile::content(self : BundleFile) -> String {
         #|    })
         #|    0
         #|  })
-        #|  @expect.expect(seen_home.is_empty()).to_be_false()
-        #|  @expect.expect(@fs.exists(seen_home)).to_be_false()
+        #|  let home = match seen_home {
+        #|    Some(home) => home
+        #|    None => fail("setup did not invoke the process callback")
+        #|  }
+        #|  @expect.expect(@fs.exists(home)).to_be_false()
         #|}
         #|
       )
