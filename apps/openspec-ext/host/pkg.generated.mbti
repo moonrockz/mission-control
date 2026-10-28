@@ -1,0 +1,31 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonrockz/openspec-ext/host"
+
+import {
+  "moonrockz/openspec-ext",
+}
+
+// Values
+pub async fn check(@openspec-ext.RepositoryPath) -> Unit
+
+pub async fn install(@openspec-ext.RepositoryPath) -> Unit
+
+pub async fn setup(@openspec-ext.RepositoryPath) -> Unit
+
+// Errors
+pub suberror InstallError {
+  Conflict(String)
+  InvalidLock(String)
+  SetupFailed(Int)
+}
+#deprecated
+pub fn InstallError::output(Self, &Logger) -> Unit
+#deprecated
+pub fn InstallError::to_string(Self) -> String
+pub impl Show for InstallError
+
+// Types and methods
+
+// Type aliases
+
+// Traits

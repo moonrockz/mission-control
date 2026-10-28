@@ -1,0 +1,12 @@
+import {
+  "moonbitlang/async",
+  "moonbitlang/core/json",
+  "moonbitlang/async/fs",
+  "moonrockz/openspec-ext" @extension,
+  "moonrockz/openspec-ext/host",
+  "moonrockz/moonspec",
+  "moonrockz/expect",
+} for "wbtest"
+// The acceptance suite exercises filesystem installation using async/fs, unavailable on JS and wasm-gc.
+
+supported_targets = "wasm+native"

@@ -1,0 +1,10 @@
+import {
+  "moonrockz/openspec-ext" @extension,
+  "moonbitlang/async/fs",
+  "moonbitlang/async/process",
+  "moonbitlang/async/stdio",
+  "moonbitlang/core/json",
+}
+// async filesystem and process support is unavailable on JS and wasm-gc. The pure bundle is portable.
+
+supported_targets = "wasm+native"

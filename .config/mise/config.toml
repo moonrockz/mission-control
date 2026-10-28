@@ -95,7 +95,7 @@ run = "moonx scripts/lint-yaml.mbtx"
 
 [tasks.validate]
 description = "Run all validation checks"
-depends = ["validate:packages", "validate:versions"]
+depends = ["validate:packages", "validate:versions", "openspec:check"]
 
 [tasks."validate:packages"]
 description = "Verify the workspace package structure against moon.work"
@@ -187,3 +187,15 @@ run = "moonx scripts/publish.mbtx"
 [tasks."release:verify-cli"]
 description = "Run the published moonx CLI with bounded retries for registry asset availability (args: X.Y.Z)"
 run = "moonx scripts/publish.mbtx verify-cli"
+
+[tasks."openspec:install"]
+description = "Install the shared html-design extension in this repository"
+run = "moon run apps/openspec-ext/cmd -- install ."
+
+[tasks."openspec:check"]
+description = "Check the shared OpenSpec bundle and ownership lock"
+run = "moon run apps/openspec-ext/cmd -- check ."
+
+[tasks."openspec:setup"]
+description = "Install html-design and regenerate core agent skills"
+run = "moon run apps/openspec-ext/cmd -- setup ."

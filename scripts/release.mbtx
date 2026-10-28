@@ -281,6 +281,7 @@ let publish_list : Array[(String, String)] = [
   ("pkgs/ears", "moonrockz/ears"),
   ("pkgs/okf", "moonrockz/okf"),
   ("apps/cli", "moonrockz/mission-control-cli"),
+  ("apps/openspec-ext", "moonrockz/openspec-ext"),
   ("apps/web", "moonrockz/mission-control-web"),
   ("apps/desktop", "moonrockz/mission-control-desktop"),
 ]

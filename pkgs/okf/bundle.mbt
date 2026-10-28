@@ -32,7 +32,8 @@ pub fn load_bundle(
       .exact_view(start=root.segments().length())
       .to_owned()
     let path = BundlePath::of_segments(rel)
-    if !is_markdown_name(path.name()) {
+    if !is_markdown_name(path.name()) ||
+      profiles.iter().any(p => p.treats_as_asset(path)) {
       assets.push(path)
       continue
     }

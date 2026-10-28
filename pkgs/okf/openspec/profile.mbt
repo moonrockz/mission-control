@@ -452,6 +452,7 @@ pub extend Kind with @debug.Debug::{to_repr}
 ///|
 pub extend OpenSpecProfile with @moonrockz/okf.Profile::{
   name,
+  treats_as_asset,
   options,
   relations,
   registers,
@@ -462,4 +463,10 @@ pub extend OpenSpecProfile with @moonrockz/okf.Profile::{
   bundle_keys,
   derive_metadata,
   rule_sets,
+}
+
+///|
+/// Schema templates are configuration assets, even when their extension is Markdown.
+pub impl @okf.Profile for OpenSpecProfile with fn treats_as_asset(_, path) {
+  path.segments().get(0) == Some("schemas")
 }

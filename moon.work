@@ -5,6 +5,7 @@ members = [
   "./pkgs/ears",
   "./pkgs/okf",
   "./apps/cli",
+  "./apps/openspec-ext",
   "./apps/web",
   "./apps/desktop",
   "./tests",
