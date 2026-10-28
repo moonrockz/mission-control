@@ -29,6 +29,8 @@ pub(open) trait Profile {
   fn vocabulary(Self) -> Array[KeyDefinition] raise ValueError = _
   /// Root index frontmatter keys that turn on profile behavior for a bundle.
   fn bundle_keys(Self) -> Array[KeyDefinition] raise ValueError = _
+  /// Keep a Markdown file as an opaque asset. Any profile returning true wins.
+  fn treats_as_asset(Self, BundlePath) -> Bool = _
   /// Metadata for a document without frontmatter, from its path and body.
   fn derive_metadata(Self, Document) -> Fields? = _
   /// Typed views of concepts of one type.
@@ -46,6 +48,11 @@ pub(open) trait Profile {
   fn relations(Self, Bundle, Document) -> Array[Link] = _
   /// Rule severities that this profile prefers. The caller's config wins.
   fn severities(Self) -> Array[(RuleName, Severity)] raise ValueError = _
+}
+
+///|
+impl Profile with fn treats_as_asset(_, _) {
+  false
 }
 
 ///|

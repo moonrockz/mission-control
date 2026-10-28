@@ -130,3 +130,48 @@ test "importing and exporting this repository's tree keeps every file" {
   }
   assert_eq(keep(exported), keep(original))
 }
+
+///|
+test "custom Markdown schema templates remain assets through import and export" {
+  let template = "---\nnot: a concept\n---\n# Template\n"
+  let definition = "name: html-design\nversion: 1\n"
+  let original = @okf.DocumentSet([
+    @okf.FileEntry::{
+      path: @okf.StorePath("openspec/schemas/html-design/templates/proposal.md"),
+      content: Text(template),
+    },
+    @okf.FileEntry::{
+      path: @okf.StorePath("openspec/schemas/html-design/schema.yaml"),
+      content: Text(definition),
+    },
+  ])
+  let profile : &@okf.Profile = @openspec.OpenSpecProfile()
+  let bundle = @okf.load_bundle(original, root=@okf.StoreDir("openspec"), profiles=[
+    profile,
+  ])
+  assert_eq(bundle.documents().length(), 0)
+  assert_eq(bundle.assets().length(), 2)
+  let imported = @openspec.import_openspec(
+    original,
+    @okf.StoreDir("openspec"),
+    @okf.StoreDir("kb"),
+    @okf.LogDate("2026-10-28"),
+  ).apply_to(@okf.DocumentSet([]))
+  let exported = @openspec.export_openspec(
+    imported,
+    @okf.StoreDir("kb"),
+    @okf.StoreDir("out"),
+  ).apply_to(@okf.DocumentSet([]))
+  assert_eq(
+    exported
+    .get(@okf.StorePath("out/schemas/html-design/templates/proposal.md"))
+    .map(e => e.content.text()),
+    Some(template),
+  )
+  assert_eq(
+    exported
+    .get(@okf.StorePath("out/schemas/html-design/schema.yaml"))
+    .map(e => e.content.text()),
+    Some(definition),
+  )
+}

@@ -123,6 +123,15 @@ skill. Report these as problems:
 - Run `openspec validate --all --strict` before you push a change to `openspec/`.
 - Write each requirement sentence in EARS form, such as `WHEN <trigger>, the <system> SHALL <response>`. The OKF OpenSpec profile checks this (`openspec-requirement-not-ears`) in `tests/okf-openspec-acceptance`. When a requirement names its subject without a determiner, such as `Text comparison SHALL ...`, add the system noun to `openspec/ears.yaml`.
 
+## Shared OpenSpec extension
+
+- `apps/openspec-ext` owns the portable html-design schema and templates. Edit `bundle.mbt`, then run
+  `mise run openspec:install`; do not edit managed files under `openspec/schemas/html-design/`.
+- `mise run openspec:check` verifies the extension lock and snapshot. `mise run openspec:setup`
+  regenerates skills with isolated global preferences. See `apps/openspec-ext/README.md`.
+- New designs are standalone `design.html` with inline CSS. Existing spec-driven changes keep `design.md`.
+- Repository tracking policy belongs in this file and project config, not the shared bundle.
+
 ## Product layout
 
 - `pkgs/contracts` (`moonrockz/mission-control-contracts`) holds the commands the CLI, the web UI and the desktop shell share. `version()` gives the workspace version as a `Version` value.
@@ -138,7 +147,7 @@ skill. Report these as problems:
 
 ## Release process
 
-Mission Control publishes to mooncakes.io and GitHub Releases, and records every release in `CHANGELOG.md`. The published modules are `moonrockz/mission-control-contracts`, `moonrockz/mdc`, `moonrockz/ears`, `moonrockz/okf`, `moonrockz/mission-control-cli`, `moonrockz/mission-control-web` and `moonrockz/mission-control-desktop`.
+Mission Control publishes to mooncakes.io and GitHub Releases, and records every release in `CHANGELOG.md`. The published modules are `moonrockz/mission-control-contracts`, `moonrockz/mdc`, `moonrockz/ears`, `moonrockz/okf`, `moonrockz/mission-control-cli`, `moonrockz/mission-control-web` and `moonrockz/mission-control-desktop`. The next release also includes `moonrockz/openspec-ext`.
 
 - `mise run release:status` checks that main, the tags, the GitHub release and mooncakes.io agree. Each problem it prints names the command that fixes it.
 - All modules share one version. The root `moon.mod` is the source of truth. `mise run validate:versions` fails when a module, a sibling import or the contract version text (`current_version` in `pkgs/contracts`) has another version. `moonx scripts/versions.mbtx set X.Y.Z` rewrites them. The first release is `0.0.1`.

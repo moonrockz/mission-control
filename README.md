@@ -10,6 +10,7 @@ A MoonBit monorepo for Mission Control: shared contracts, a command-line applica
 | `pkgs/mdc` | `moonrockz/mdc` | Markdown with YAML frontmatter, cursors, visitors, folds and reduction |
 | `pkgs/ears` | `moonrockz/ears` | Typed EARS requirements, plain-text parsing and Markdown/MDC extraction |
 | `pkgs/okf` | `moonrockz/okf` | Open Knowledge Format bundles: model, links, indexes, queries, validation, edits, stores and profiles |
+| `apps/openspec-ext` | `moonrockz/openspec-ext` | Shared OpenSpec schemas, safe installation, drift checks and agent setup |
 | `apps/cli` | `moonrockz/mission-control-cli` | The `mission-control` command |
 | `apps/web` | `moonrockz/mission-control-web` | Web UI written with [Rabbita](https://github.com/moonbit-community/rabbita) |
 | `apps/desktop` | `moonrockz/mission-control-desktop` | Desktop shell: Proton command descriptors and the HTML document the window loads |
@@ -130,6 +131,14 @@ mission-control/
 ├── moon.mod                   # workspace root module
 └── moon.work                  # workspace members
 ```
+
+## Shared OpenSpec setup
+
+[OpenSpec extensions](apps/openspec-ext/README.md) owns the portable `html-design`
+bundle. Run `mise run openspec:check` to check the repository snapshot,
+`mise run openspec:install` to update it, and `mise run openspec:setup` to
+regenerate the core agent skills. Use the source commands in that guide to
+set up another repository. The new extension module awaits its first release.
 
 ## Release
 

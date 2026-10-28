@@ -1,0 +1,84 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonrockz/openspec-ext"
+
+import {
+  "moonrockz/mission-control-contracts",
+}
+
+// Values
+pub fn can_replace(BundleFile, String?, FileDigest?) -> Bool
+
+pub fn configure(String) -> String raise ExtensionError
+
+pub fn digest(String) -> FileDigest
+
+pub fn files() -> Array[BundleFile]
+
+pub fn initial_config() -> String
+
+pub fn lock_text() -> String
+
+pub fn parse_command(ArrayView[String]) -> Command raise ExtensionError
+
+pub fn usage() -> String
+
+pub fn version() -> @mission-control-contracts.Version
+
+// Errors
+pub suberror ExtensionError {
+  InvalidArguments(String)
+  InvalidConfig(String)
+  InvalidDigest(String)
+}
+#deprecated
+pub fn ExtensionError::output(Self, &Logger) -> Unit
+#deprecated
+pub fn ExtensionError::to_string(Self) -> String
+pub impl Show for ExtensionError
+
+// Types and methods
+pub(all) enum BundleFile {
+  Schema
+  Proposal
+  Spec
+  Design
+  Tasks
+  Notice
+  License
+  Workflow
+  WorkflowFeature
+}
+pub fn BundleFile::content(Self) -> String
+pub fn BundleFile::path(Self) -> String
+
+pub enum Command {
+  Help
+  Version
+  Repository(Operation, RepositoryPath)
+}
+
+pub struct FileDigest {
+  value : String
+} derive(Eq)
+pub fn FileDigest::FileDigest(String) -> Self raise ExtensionError
+#deprecated
+pub fn FileDigest::equal(Self, Self) -> Bool
+#deprecated
+pub fn FileDigest::not_equal(Self, Self) -> Bool
+pub fn FileDigest::text(Self) -> String
+
+pub enum Operation {
+  Install
+  Check
+  Setup
+}
+
+pub struct RepositoryPath {
+  value : String
+}
+pub fn RepositoryPath::RepositoryPath(String) -> Self raise ExtensionError
+pub fn RepositoryPath::text(Self) -> String
+
+// Type aliases
+
+// Traits

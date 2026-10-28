@@ -217,7 +217,8 @@ pub fn export_openspec(
   source_root : @okf.StoreDir,
   target_root : @okf.StoreDir,
 ) -> @edit.EditPlan raise ConvertError {
-  let bundle = @okf.load_bundle(set, root=source_root)
+  let profile : &@okf.Profile = OpenSpecProfile()
+  let bundle = @okf.load_bundle(set, root=source_root, profiles=[profile])
   let changes = []
   let requirements = of_type(bundle, RequirementConcept)
   let scenarios = of_type(bundle, ScenarioConcept)

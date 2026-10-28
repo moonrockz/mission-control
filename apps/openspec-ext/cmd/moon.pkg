@@ -1,0 +1,12 @@
+pkgtype(kind: "executable")
+
+import {
+  "moonbitlang/async",
+  "moonrockz/openspec-ext" @extension,
+  "moonrockz/openspec-ext/host",
+  "moonbitlang/core/env",
+  "moonbitlang/x/sys",
+}
+// Host I/O uses async/fs and async/process, which do not implement JS or wasm-gc.
+
+supported_targets = "wasm+native"

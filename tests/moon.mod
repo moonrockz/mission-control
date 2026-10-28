@@ -8,6 +8,7 @@ import {
   "moonrockz/mdc@0.1.0",
   "moonrockz/ears@0.1.0",
   "moonrockz/okf@0.1.0",
+  "moonrockz/openspec-ext@0.1.0",
   "moonbitlang/x@0.5.5",
   "moonrockz/moonspec@0.11.0",
   "moonrockz/expect@0.6.1",

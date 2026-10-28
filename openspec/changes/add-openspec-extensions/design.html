@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Change name: design</title>
+<meta name="color-scheme" content="light dark">
+<style>
+:root { color-scheme: light dark; --bg: #fafafa; --fg: #18212f; --muted: #526071;
+  --line: #cbd5e1; --panel: #eef2f6; --link: #075caa; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #111827; --fg: #e5e7eb; --muted: #b0bdce;
+    --line: #475569; --panel: #1e293b; --link: #8cc8ff; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 1rem/1.6 system-ui, sans-serif; }
+main { max-width: 70rem; margin: auto; padding: clamp(1rem, 4vw, 3rem); }
+h1, h2, h3 { line-height: 1.25; overflow-wrap: anywhere; }
+h2 { margin-top: 2rem; border-bottom: 1px solid var(--line); padding-bottom: .4rem; }
+a { color: var(--link); }
+a:focus-visible { outline: 3px solid var(--link); outline-offset: 3px; }
+.meta { color: var(--muted); }
+.toc, pre, details { background: var(--panel); border: 1px solid var(--line);
+  border-radius: .4rem; padding: 1rem; }
+code { font-family: ui-monospace, monospace; overflow-wrap: anywhere; }
+pre { overflow-x: auto; } pre code { overflow-wrap: normal; }
+table { border-collapse: collapse; width: 100%; }
+th, td { border: 1px solid var(--line); padding: .6rem; text-align: left;
+  overflow-wrap: anywhere; }
+svg { max-width: 100%; height: auto; }
+@media print { main { max-width: none; padding: 0; } pre, tr { break-inside: avoid; } }
+</style>
+</head>
+<body>
+<main>
+<h1>Shared OpenSpec extensions</h1>
+<p class="meta">2026-10-28 | Bead moonbase-933</p>
+<nav class="toc" aria-label="Contents"><a href="#context">Context</a> | <a href="#decisions">Decisions</a> | <a href="#migration">Migration</a> | <a href="#risks">Risks</a></nav>
+<h2 id="context">Context</h2><p>See proposal.md for motivation and specs/openspec-extensions/spec.md for the contract.</p>
+<h2 id="decisions">Decisions</h2>
+<h3 id="ext-1">EXT-1. A packaged MoonBit tool owns the bundle</h3><p>The pure package holds the schema and templates as raw multiline strings. The host boundary installs them. A cmd package runs through moonx after publication or moon run from source. This avoids runtime paths into a source checkout and works with any target repository.</p>
+<h3 id="ext-2">EXT-2. Project-local snapshots with an ownership lock</h3><p>Consumers commit normal OpenSpec files. A lock records module version and SHA-256 digests. Installs preflight all files, preserve unknown files, refuse changed managed files, and write the lock last. A source checkout is sufficient to update candidates before publication. No unpublished registry pin is required.</p>
+<h3 id="ext-3">EXT-3. Repository policy stays local</h3><p>The shared workflow contains no tracker hierarchy or repository IDs. Project configuration retains context and artifact rules. HTML uses inline CSS and no external resources, so archive does not change asset paths. Existing Markdown changes retain their spec-driven metadata.</p>
+<h3 id="ext-4">EXT-4. Schema templates are assets</h3><p>The OKF profile gains a default asset classification hook. Any active profile can keep a Markdown path opaque. OpenSpec reserves schemas/ for configuration and uses that classification during both import and export. This prevents template prose from becoming knowledge concepts and preserves their exact bytes.</p>
+<h2 id="migration">Migration</h2><p>Save the three prior schema copies locally, move their policy into repository configuration, then install and validate the common bundle. Initialize the five requested repositories and migrate Moon-Lander and Mission Control defaults. Preserve changes, accepted specifications and ongoing work. Publication follows the existing release process; consumer release pins follow actual publication.</p>
+<h2 id="risks">Risks</h2><p>Local schema edits require review before update. Unsupported YAML layouts fail before writes. Interrupted filesystem writes can leave partial output; unchanged owned files can be repaired by rerunning install, and the previous lock remains until success. Concurrent installs in one repository are not supported.</p>
+</main>
+</body>
+</html>

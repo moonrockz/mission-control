@@ -1,0 +1,286 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonrockz/okf/openspec"
+
+import {
+  "moonbitlang/core/debug",
+  "moonrockz/ears",
+  "moonrockz/okf",
+  "moonrockz/okf/edit",
+}
+
+// Values
+pub fn classify(@okf.BundlePath) -> Kind?
+
+pub fn derived_fields(@okf.Document) -> @okf.Fields?
+
+pub fn export_openspec(@okf.DocumentSet, @okf.StoreDir, @okf.StoreDir) -> @edit.EditPlan raise ConvertError
+
+pub fn import_openspec(@okf.DocumentSet, @okf.StoreDir, @okf.StoreDir, @okf.LogDate) -> @edit.EditPlan raise ConvertError
+
+pub fn openspec_checks(profile? : OpenSpecProfile) -> @okf.RuleSet
+
+pub let openspec_types : ReadOnlyArray[OpenSpecType]
+
+pub fn parse_spec(CapabilityPath, ArrayView[(Int, String)], dialects? : ArrayView[&@ears.Dialect]) -> SpecModel
+
+pub fn parse_tasks(ArrayView[(Int, String)]) -> Array[TaskGroup]
+
+pub fn view(@okf.Bundle, profile? : OpenSpecProfile) -> OpenSpecView
+
+// Errors
+pub(all) suberror ConvertError {
+  BadName(NameError)
+  EditFailed(@edit.EditError)
+} derive(Eq, @debug.Debug)
+pub fn ConvertError::equal(Self, Self) -> Bool
+pub fn ConvertError::not_equal(Self, Self) -> Bool
+pub fn ConvertError::to_repr(Self) -> @debug.Repr
+
+pub(all) suberror NameError {
+  InvalidName(key~ : String, value~ : String)
+} derive(Eq, @debug.Debug)
+pub fn NameError::equal(Self, Self) -> Bool
+pub fn NameError::not_equal(Self, Self) -> Bool
+pub fn NameError::to_repr(Self) -> @debug.Repr
+
+// Types and methods
+type CapabilityPath derive(Eq, Hash, @debug.Debug)
+pub fn CapabilityPath::CapabilityPath(String) -> Self raise NameError
+pub fn CapabilityPath::compare(Self, Self) -> Int
+pub fn CapabilityPath::equal(Self, Self) -> Bool
+pub fn CapabilityPath::hash(Self) -> Int
+pub fn CapabilityPath::hash_combine(Self, Hasher) -> Unit
+pub fn CapabilityPath::not_equal(Self, Self) -> Bool
+pub fn CapabilityPath::op_ge(Self, Self) -> Bool
+pub fn CapabilityPath::op_gt(Self, Self) -> Bool
+pub fn CapabilityPath::op_le(Self, Self) -> Bool
+pub fn CapabilityPath::op_lt(Self, Self) -> Bool
+pub fn CapabilityPath::output(Self, &Logger) -> Unit
+pub fn CapabilityPath::to_repr(Self) -> @debug.Repr
+pub fn CapabilityPath::to_string(Self) -> String
+pub impl Compare for CapabilityPath
+pub impl Show for CapabilityPath
+
+pub struct Change {
+  name : ChangeName
+  state : ChangeState
+  proposal : String?
+  design : String?
+  task_groups : ReadOnlyArray[TaskGroup]
+  deltas : ReadOnlyArray[SpecModel]
+} derive(Eq, @debug.Debug)
+pub fn Change::equal(Self, Self) -> Bool
+pub fn Change::not_equal(Self, Self) -> Bool
+pub fn Change::to_repr(Self) -> @debug.Repr
+
+type ChangeName derive(Eq, Hash, @debug.Debug)
+pub fn ChangeName::ChangeName(String) -> Self raise NameError
+pub fn ChangeName::compare(Self, Self) -> Int
+pub fn ChangeName::equal(Self, Self) -> Bool
+pub fn ChangeName::hash(Self) -> Int
+pub fn ChangeName::hash_combine(Self, Hasher) -> Unit
+pub fn ChangeName::not_equal(Self, Self) -> Bool
+pub fn ChangeName::op_ge(Self, Self) -> Bool
+pub fn ChangeName::op_gt(Self, Self) -> Bool
+pub fn ChangeName::op_le(Self, Self) -> Bool
+pub fn ChangeName::op_lt(Self, Self) -> Bool
+pub fn ChangeName::output(Self, &Logger) -> Unit
+pub fn ChangeName::to_repr(Self) -> @debug.Repr
+pub fn ChangeName::to_string(Self) -> String
+pub impl Compare for ChangeName
+pub impl Show for ChangeName
+
+pub(all) enum ChangeState {
+  Active
+  Archived
+} derive(Eq, Hash, @debug.Debug)
+pub fn ChangeState::equal(Self, Self) -> Bool
+pub fn ChangeState::hash(Self) -> Int
+pub fn ChangeState::hash_combine(Self, Hasher) -> Unit
+pub fn ChangeState::not_equal(Self, Self) -> Bool
+pub fn ChangeState::output(Self, &Logger) -> Unit
+pub fn ChangeState::parse(String) -> Self?
+pub fn ChangeState::to_repr(Self) -> @debug.Repr
+pub fn ChangeState::to_string(Self) -> String
+pub impl Show for ChangeState
+
+pub(all) enum DeltaOp {
+  Added
+  Modified
+  Removed
+  Renamed
+} derive(Eq, @debug.Debug)
+pub fn DeltaOp::equal(Self, Self) -> Bool
+pub fn DeltaOp::not_equal(Self, Self) -> Bool
+pub fn DeltaOp::to_repr(Self) -> @debug.Repr
+
+pub struct DeltaSection {
+  op : DeltaOp
+  requirements : ReadOnlyArray[Requirement]
+  renames : ReadOnlyArray[Rename]
+  incomplete_renames : ReadOnlyArray[IncompleteRename]
+} derive(Eq, @debug.Debug)
+pub fn DeltaSection::equal(Self, Self) -> Bool
+pub fn DeltaSection::not_equal(Self, Self) -> Bool
+pub fn DeltaSection::to_repr(Self) -> @debug.Repr
+
+pub(all) enum IncompleteRename {
+  MissingTo(from~ : RequirementName, line~ : Int)
+  MissingFrom(to~ : RequirementName, line~ : Int)
+} derive(Eq, @debug.Debug)
+pub fn IncompleteRename::equal(Self, Self) -> Bool
+pub fn IncompleteRename::not_equal(Self, Self) -> Bool
+pub fn IncompleteRename::to_repr(Self) -> @debug.Repr
+
+pub(all) enum Kind {
+  SpecFile(capability~ : CapabilityPath)
+  ProposalFile(change~ : ChangeName, state~ : ChangeState)
+  DesignFile(change~ : ChangeName, state~ : ChangeState)
+  TasksFile(change~ : ChangeName, state~ : ChangeState)
+  DeltaFile(change~ : ChangeName, state~ : ChangeState, capability~ : CapabilityPath)
+} derive(Eq, @debug.Debug)
+pub fn Kind::equal(Self, Self) -> Bool
+pub fn Kind::not_equal(Self, Self) -> Bool
+pub fn Kind::to_repr(Self) -> @debug.Repr
+
+type OpenSpecProfile
+pub fn OpenSpecProfile::OpenSpecProfile(lexicon? : @ears.Lexicon) -> Self
+pub fn OpenSpecProfile::bundle_keys(Self) -> Array[@okf.KeyDefinition] raise @okf.ValueError
+pub fn OpenSpecProfile::derive_metadata(Self, @okf.Document) -> @okf.Fields?
+pub fn OpenSpecProfile::dialects(Self) -> Array[&@ears.Dialect]
+pub fn OpenSpecProfile::lexicon_error(Self) -> @ears.LexiconError?
+pub fn OpenSpecProfile::name(Self) -> String
+pub fn OpenSpecProfile::of_tree(@okf.DocumentSet, @okf.StoreDir, lexicon? : @ears.Lexicon) -> Self
+pub fn OpenSpecProfile::options(Self) -> @okf.Options?
+pub fn OpenSpecProfile::reference_fields(Self) -> Array[@okf.ReferenceField] raise @okf.ValueError
+pub fn OpenSpecProfile::registers(Self) -> Array[@okf.Register] raise @okf.ValueError
+pub fn OpenSpecProfile::relations(Self, @okf.Bundle, @okf.Document) -> Array[@okf.Link]
+pub fn OpenSpecProfile::rule_sets(Self) -> Array[@okf.RuleSet] raise @okf.ValueError
+pub fn OpenSpecProfile::severities(Self) -> Array[(@okf.RuleName, @okf.Severity)] raise @okf.ValueError
+pub fn OpenSpecProfile::templates(Self) -> Array[@okf.Template] raise @okf.ValueError
+pub fn OpenSpecProfile::treats_as_asset(Self, @okf.BundlePath) -> Bool
+pub fn OpenSpecProfile::vocabulary(Self) -> Array[@okf.KeyDefinition] raise @okf.ValueError
+pub impl @okf.Profile for OpenSpecProfile
+
+pub(all) enum OpenSpecType {
+  Specification
+  ChangeProposal
+  Design
+  TaskList
+  SpecDelta
+  RequirementConcept
+  ScenarioConcept
+} derive(Eq, Hash, @debug.Debug)
+pub fn OpenSpecType::concept_type(Self) -> @okf.ConceptType
+pub fn OpenSpecType::equal(Self, Self) -> Bool
+pub fn OpenSpecType::hash(Self) -> Int
+pub fn OpenSpecType::hash_combine(Self, Hasher) -> Unit
+pub fn OpenSpecType::not_equal(Self, Self) -> Bool
+pub fn OpenSpecType::of_concept_type(@okf.ConceptType) -> Self?
+pub fn OpenSpecType::output(Self, &Logger) -> Unit
+pub fn OpenSpecType::to_repr(Self) -> @debug.Repr
+pub fn OpenSpecType::to_string(Self) -> String
+pub impl Show for OpenSpecType
+
+pub struct OpenSpecView {
+  specs : ReadOnlyArray[SpecModel]
+  changes : ReadOnlyArray[Change]
+} derive(Eq, @debug.Debug)
+pub fn OpenSpecView::equal(Self, Self) -> Bool
+pub fn OpenSpecView::not_equal(Self, Self) -> Bool
+pub fn OpenSpecView::to_repr(Self) -> @debug.Repr
+pub fn OpenSpecView::without_lines(Self) -> Self
+
+pub struct Rename {
+  from : RequirementName
+  to : RequirementName
+  line : Int
+} derive(Eq, @debug.Debug)
+pub fn Rename::equal(Self, Self) -> Bool
+pub fn Rename::not_equal(Self, Self) -> Bool
+pub fn Rename::to_repr(Self) -> @debug.Repr
+
+pub struct Requirement {
+  name : RequirementName
+  text : String
+  scenarios : ReadOnlyArray[Scenario]
+  line : Int
+  text_lines : ReadOnlyArray[Int]
+  sentences : ReadOnlyArray[@ears.Occurrence]
+  sentence_diagnostics : ReadOnlyArray[@ears.Diagnostic]
+} derive(Eq, @debug.Debug)
+pub fn Requirement::equal(Self, Self) -> Bool
+pub fn Requirement::not_equal(Self, Self) -> Bool
+pub fn Requirement::to_repr(Self) -> @debug.Repr
+
+type RequirementName derive(Eq, Hash, @debug.Debug)
+pub fn RequirementName::RequirementName(String) -> Self raise NameError
+pub fn RequirementName::equal(Self, Self) -> Bool
+pub fn RequirementName::hash(Self) -> Int
+pub fn RequirementName::hash_combine(Self, Hasher) -> Unit
+pub fn RequirementName::not_equal(Self, Self) -> Bool
+pub fn RequirementName::output(Self, &Logger) -> Unit
+pub fn RequirementName::to_repr(Self) -> @debug.Repr
+pub fn RequirementName::to_string(Self) -> String
+pub impl Show for RequirementName
+
+pub struct Scenario {
+  name : String
+  when_ : ReadOnlyArray[String]
+  then_ : ReadOnlyArray[String]
+  line : Int
+} derive(Eq, @debug.Debug)
+pub fn Scenario::equal(Self, Self) -> Bool
+pub fn Scenario::not_equal(Self, Self) -> Bool
+pub fn Scenario::to_repr(Self) -> @debug.Repr
+
+pub struct SpecModel {
+  capability : CapabilityPath
+  purpose : String?
+  requirements : ReadOnlyArray[Requirement]
+  deltas : ReadOnlyArray[DeltaSection]
+  unnamed_requirements : ReadOnlyArray[Int]
+} derive(Eq, @debug.Debug)
+pub fn SpecModel::equal(Self, Self) -> Bool
+pub fn SpecModel::not_equal(Self, Self) -> Bool
+pub fn SpecModel::to_repr(Self) -> @debug.Repr
+
+pub struct Task {
+  number : TaskNumber?
+  text : String
+  done : Bool
+  line : Int
+} derive(Eq, @debug.Debug)
+pub fn Task::equal(Self, Self) -> Bool
+pub fn Task::not_equal(Self, Self) -> Bool
+pub fn Task::to_repr(Self) -> @debug.Repr
+
+pub struct TaskGroup {
+  heading : String?
+  tasks : ReadOnlyArray[Task]
+} derive(Eq, @debug.Debug)
+pub fn TaskGroup::equal(Self, Self) -> Bool
+pub fn TaskGroup::not_equal(Self, Self) -> Bool
+pub fn TaskGroup::to_repr(Self) -> @debug.Repr
+
+type TaskNumber derive(Eq, Hash, @debug.Debug)
+pub fn TaskNumber::TaskNumber(String) -> Self raise NameError
+pub fn TaskNumber::compare(Self, Self) -> Int
+pub fn TaskNumber::equal(Self, Self) -> Bool
+pub fn TaskNumber::hash(Self) -> Int
+pub fn TaskNumber::hash_combine(Self, Hasher) -> Unit
+pub fn TaskNumber::not_equal(Self, Self) -> Bool
+pub fn TaskNumber::op_ge(Self, Self) -> Bool
+pub fn TaskNumber::op_gt(Self, Self) -> Bool
+pub fn TaskNumber::op_le(Self, Self) -> Bool
+pub fn TaskNumber::op_lt(Self, Self) -> Bool
+pub fn TaskNumber::output(Self, &Logger) -> Unit
+pub fn TaskNumber::parts(Self) -> ReadOnlyArray[Int]
+pub fn TaskNumber::to_repr(Self) -> @debug.Repr
+pub fn TaskNumber::to_string(Self) -> String
+pub impl Compare for TaskNumber
+pub impl Show for TaskNumber
+
+// Type aliases
+
+// Traits
