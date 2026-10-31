@@ -1,3 +1,14 @@
+----
+import {
+  "moonbitlang/async@0.22.5",
+  "moonbitlang/async@0.22.5/process",
+  "moonbitlang/async@0.22.5/fs",
+  "moonbitlang/async@0.22.5/stdio",
+  "moonbitlang/core/env",
+  "moonbitlang/x@0.5.5/sys",
+}
+----
+
 ///|
 /// Run the tests of every workspace member for one or more targets.
 ///
@@ -7,14 +18,6 @@
 /// `moon test <path>` tests only the package at exactly that path, not its
 /// sub-packages, so packages are discovered from `moon.work` recursively.
 /// Packages declare target restrictions in their `moon.pkg`.
-import {
-  "moonbitlang/async@0.22.5",
-  "moonbitlang/async@0.22.5/process",
-  "moonbitlang/async@0.22.5/fs",
-  "moonbitlang/async@0.22.5/stdio",
-  "moonbitlang/core/env",
-  "moonbitlang/x@0.5.5/sys",
-}
 
 ///|
 /// The exit codes of the task scripts: 0 for success, 1 for a failure and 2

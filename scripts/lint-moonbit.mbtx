@@ -1,7 +1,4 @@
-///|
-/// Check MoonBit formatting and run the type checker across the workspace.
-///
-/// Usage: `mise run lint:moonbit`, or `moonx scripts/lint-moonbit.mbtx`.
+----
 import {
   "moonbitlang/async@0.22.5",
   "moonbitlang/async@0.22.5/process",
@@ -9,6 +6,12 @@ import {
   "moonbitlang/x@0.5.5/sys",
   "moonbitlang/core/env",
 }
+----
+
+///|
+/// Check MoonBit formatting and run the type checker across the workspace.
+///
+/// Usage: `mise run lint:moonbit`, or `moonx scripts/lint-moonbit.mbtx`.
 
 ///|
 /// The exit codes of the task scripts: 0 for success, 1 for a failure and 2

@@ -36,6 +36,13 @@ WHEN a user checks an extension, the tool SHALL report failure for a changed man
 - **WHEN** an installed design template is edited
 - **THEN** check reports drift and preserves the edit
 
+### Requirement: Compile the bundled script without warnings
+WHEN a consumer tests the bundled script with MoonBit 0.10.17+d971670cd or later, the extension tool SHALL supply a script that declares its imports in frontmatter and compiles without warnings.
+
+#### Scenario: Deny warnings on MoonBit 0.10.18
+- **WHEN** a consumer runs `moon test --deny-warn scripts/openspec-ext.mbtx` with MoonBit 0.10.18
+- **THEN** the script compiles without an `unfenced_import` warning and its tests pass
+
 ### Requirement: Isolate integration setup
 WHEN a user runs setup with the supported OpenSpec CLI, the tool SHALL generate the six core agent skills using isolated profile and delivery preferences without changing the user's global settings.
 

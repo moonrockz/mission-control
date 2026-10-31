@@ -1,3 +1,4 @@
+----
 import {
   "moonbitlang/async@0.22.5",
   "moonbitlang/async@0.22.5/fs",
@@ -10,6 +11,7 @@ import {
   "moonrockz/moonspec@0.11.0",
   "moonrockz/expect@0.6.1",
 }
+----
 
 ///|
 /// The exit codes of the task scripts: 0 for success, 1 for a failure and 2
@@ -514,20 +516,20 @@ fn plan(
   git_ref : GitRef,
   version : Version,
   facts : ReleaseFacts,
-) -> Result[Plan, PlanError] {
-  guard trigger is Push else { return Ok(DryRun(version)) }
+) -> Plan raise PlanError {
+  guard trigger is Push else { return DryRun(version) }
   match git_ref {
-    Tag(tag) if tag != version => return Err(TagMismatch(tag~, version~))
+    Tag(tag) if tag != version => raise TagMismatch(tag~, version~)
     _ => ()
   }
-  guard facts.main is OnMain else { return Err(NotOnMain(git_ref.name())) }
+  guard facts.main is OnMain else { raise NotOnMain(git_ref.name()) }
   if facts.release is Complete {
-    return Ok(Skip("v\{version} is already released"))
+    return Skip("v\{version} is already released")
   }
   match facts.changelog {
-    NoSection => Err(NoChangelogSection(version))
-    Placeholder => Err(HighlightsPlaceholder(version))
-    Ready => Ok(Release(version))
+    NoSection => raise NoChangelogSection(version)
+    Placeholder => raise HighlightsPlaceholder(version)
+    Ready => Release(version)
   }
 }
 
@@ -1289,20 +1291,20 @@ async fn run_plan() -> Unit {
     let (exists, assets, draft) = inspect_release("v\{version}")
     release = ReleaseState::of(exists~, draft~, assets~)
   }
-  match plan(trigger, git_ref, version, { main, release, changelog }) {
-    Err(error) => fail_with(error.message())
-    Ok(p) => {
-      match p {
-        Release(v) => println("Release \{v}")
-        DryRun(v) => println("Dry run of \{v}: nothing is published")
-        Skip(reason) => println(reason)
-      }
-      match @env.get_env_var("GITHUB_OUTPUT") {
-        Some(path) if path != "" =>
-          @fs.write_file(path, plan_outputs(p), append=true)
-        _ => println(plan_outputs(p).trim_end())
-      }
+  let p = plan(trigger, git_ref, version, { main, release, changelog }) catch {
+    error => {
+      fail_with(error.message())
+      return
     }
+  }
+  match p {
+    Release(v) => println("Release \{v}")
+    DryRun(v) => println("Dry run of \{v}: nothing is published")
+    Skip(reason) => println(reason)
+  }
+  match @env.get_env_var("GITHUB_OUTPUT") {
+    Some(path) if path != "" => @fs.write_file(path, plan_outputs(p), append=true)
+    _ => println(plan_outputs(p).trim_end())
   }
 }
 
@@ -1971,9 +1973,12 @@ impl @moonspec.World for ReleaseWorld with fn configure(self, setup) {
         self.event,
         if self.dry_run { "true" } else { "" },
       )
-      plan(trigger, GitRef::parse(self.ref_type, self.ref_name), version, facts).map_err(
-        e => e.message(),
-      )
+      let git_ref = GitRef::parse(self.ref_type, self.ref_name)
+      try plan(trigger, git_ref, version, facts) catch {
+        e => Err(e.message())
+      } noraise {
+        p => Ok(p)
+      }
     } catch {
       e => Err(e.message())
     }

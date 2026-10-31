@@ -16,7 +16,7 @@ pub async fn setup(@openspec-ext.RepositoryPath) -> Unit
 pub suberror InstallError {
   Conflict(String)
   InvalidLock(String)
-  SetupFailed(Int)
+  SetupFailed(Int32)
 }
 #deprecated
 pub fn InstallError::output(Self, &Logger) -> Unit

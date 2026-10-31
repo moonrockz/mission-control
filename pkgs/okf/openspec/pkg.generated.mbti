@@ -21,9 +21,9 @@ pub fn openspec_checks(profile? : OpenSpecProfile) -> @okf.RuleSet
 
 pub let openspec_types : ReadOnlyArray[OpenSpecType]
 
-pub fn parse_spec(CapabilityPath, ArrayView[(Int, String)], dialects? : ArrayView[&@ears.Dialect]) -> SpecModel
+pub fn parse_spec(CapabilityPath, ArrayView[(Int32, String)], dialects? : ArrayView[&@ears.Dialect]) -> SpecModel
 
-pub fn parse_tasks(ArrayView[(Int, String)]) -> Array[TaskGroup]
+pub fn parse_tasks(ArrayView[(Int32, String)]) -> Array[TaskGroup]
 
 pub fn view(@okf.Bundle, profile? : OpenSpecProfile) -> OpenSpecView
 
@@ -46,9 +46,9 @@ pub fn NameError::to_repr(Self) -> @debug.Repr
 // Types and methods
 type CapabilityPath derive(Eq, Hash, @debug.Debug)
 pub fn CapabilityPath::CapabilityPath(String) -> Self raise NameError
-pub fn CapabilityPath::compare(Self, Self) -> Int
+pub fn CapabilityPath::compare(Self, Self) -> Int32
 pub fn CapabilityPath::equal(Self, Self) -> Bool
-pub fn CapabilityPath::hash(Self) -> Int
+pub fn CapabilityPath::hash(Self) -> Int32
 pub fn CapabilityPath::hash_combine(Self, Hasher) -> Unit
 pub fn CapabilityPath::not_equal(Self, Self) -> Bool
 pub fn CapabilityPath::op_ge(Self, Self) -> Bool
@@ -75,9 +75,9 @@ pub fn Change::to_repr(Self) -> @debug.Repr
 
 type ChangeName derive(Eq, Hash, @debug.Debug)
 pub fn ChangeName::ChangeName(String) -> Self raise NameError
-pub fn ChangeName::compare(Self, Self) -> Int
+pub fn ChangeName::compare(Self, Self) -> Int32
 pub fn ChangeName::equal(Self, Self) -> Bool
-pub fn ChangeName::hash(Self) -> Int
+pub fn ChangeName::hash(Self) -> Int32
 pub fn ChangeName::hash_combine(Self, Hasher) -> Unit
 pub fn ChangeName::not_equal(Self, Self) -> Bool
 pub fn ChangeName::op_ge(Self, Self) -> Bool
@@ -95,7 +95,7 @@ pub(all) enum ChangeState {
   Archived
 } derive(Eq, Hash, @debug.Debug)
 pub fn ChangeState::equal(Self, Self) -> Bool
-pub fn ChangeState::hash(Self) -> Int
+pub fn ChangeState::hash(Self) -> Int32
 pub fn ChangeState::hash_combine(Self, Hasher) -> Unit
 pub fn ChangeState::not_equal(Self, Self) -> Bool
 pub fn ChangeState::output(Self, &Logger) -> Unit
@@ -125,8 +125,8 @@ pub fn DeltaSection::not_equal(Self, Self) -> Bool
 pub fn DeltaSection::to_repr(Self) -> @debug.Repr
 
 pub(all) enum IncompleteRename {
-  MissingTo(from~ : RequirementName, line~ : Int)
-  MissingFrom(to~ : RequirementName, line~ : Int)
+  MissingTo(from~ : RequirementName, line~ : Int32)
+  MissingFrom(to~ : RequirementName, line~ : Int32)
 } derive(Eq, @debug.Debug)
 pub fn IncompleteRename::equal(Self, Self) -> Bool
 pub fn IncompleteRename::not_equal(Self, Self) -> Bool
@@ -173,7 +173,7 @@ pub(all) enum OpenSpecType {
 } derive(Eq, Hash, @debug.Debug)
 pub fn OpenSpecType::concept_type(Self) -> @okf.ConceptType
 pub fn OpenSpecType::equal(Self, Self) -> Bool
-pub fn OpenSpecType::hash(Self) -> Int
+pub fn OpenSpecType::hash(Self) -> Int32
 pub fn OpenSpecType::hash_combine(Self, Hasher) -> Unit
 pub fn OpenSpecType::not_equal(Self, Self) -> Bool
 pub fn OpenSpecType::of_concept_type(@okf.ConceptType) -> Self?
@@ -194,7 +194,7 @@ pub fn OpenSpecView::without_lines(Self) -> Self
 pub struct Rename {
   from : RequirementName
   to : RequirementName
-  line : Int
+  line : Int32
 } derive(Eq, @debug.Debug)
 pub fn Rename::equal(Self, Self) -> Bool
 pub fn Rename::not_equal(Self, Self) -> Bool
@@ -204,8 +204,8 @@ pub struct Requirement {
   name : RequirementName
   text : String
   scenarios : ReadOnlyArray[Scenario]
-  line : Int
-  text_lines : ReadOnlyArray[Int]
+  line : Int32
+  text_lines : ReadOnlyArray[Int32]
   sentences : ReadOnlyArray[@ears.Occurrence]
   sentence_diagnostics : ReadOnlyArray[@ears.Diagnostic]
 } derive(Eq, @debug.Debug)
@@ -216,7 +216,7 @@ pub fn Requirement::to_repr(Self) -> @debug.Repr
 type RequirementName derive(Eq, Hash, @debug.Debug)
 pub fn RequirementName::RequirementName(String) -> Self raise NameError
 pub fn RequirementName::equal(Self, Self) -> Bool
-pub fn RequirementName::hash(Self) -> Int
+pub fn RequirementName::hash(Self) -> Int32
 pub fn RequirementName::hash_combine(Self, Hasher) -> Unit
 pub fn RequirementName::not_equal(Self, Self) -> Bool
 pub fn RequirementName::output(Self, &Logger) -> Unit
@@ -228,7 +228,7 @@ pub struct Scenario {
   name : String
   when_ : ReadOnlyArray[String]
   then_ : ReadOnlyArray[String]
-  line : Int
+  line : Int32
 } derive(Eq, @debug.Debug)
 pub fn Scenario::equal(Self, Self) -> Bool
 pub fn Scenario::not_equal(Self, Self) -> Bool
@@ -239,7 +239,7 @@ pub struct SpecModel {
   purpose : String?
   requirements : ReadOnlyArray[Requirement]
   deltas : ReadOnlyArray[DeltaSection]
-  unnamed_requirements : ReadOnlyArray[Int]
+  unnamed_requirements : ReadOnlyArray[Int32]
 } derive(Eq, @debug.Debug)
 pub fn SpecModel::equal(Self, Self) -> Bool
 pub fn SpecModel::not_equal(Self, Self) -> Bool
@@ -249,7 +249,7 @@ pub struct Task {
   number : TaskNumber?
   text : String
   done : Bool
-  line : Int
+  line : Int32
 } derive(Eq, @debug.Debug)
 pub fn Task::equal(Self, Self) -> Bool
 pub fn Task::not_equal(Self, Self) -> Bool
@@ -265,9 +265,9 @@ pub fn TaskGroup::to_repr(Self) -> @debug.Repr
 
 type TaskNumber derive(Eq, Hash, @debug.Debug)
 pub fn TaskNumber::TaskNumber(String) -> Self raise NameError
-pub fn TaskNumber::compare(Self, Self) -> Int
+pub fn TaskNumber::compare(Self, Self) -> Int32
 pub fn TaskNumber::equal(Self, Self) -> Bool
-pub fn TaskNumber::hash(Self) -> Int
+pub fn TaskNumber::hash(Self) -> Int32
 pub fn TaskNumber::hash_combine(Self, Hasher) -> Unit
 pub fn TaskNumber::not_equal(Self, Self) -> Bool
 pub fn TaskNumber::op_ge(Self, Self) -> Bool
@@ -275,7 +275,7 @@ pub fn TaskNumber::op_gt(Self, Self) -> Bool
 pub fn TaskNumber::op_le(Self, Self) -> Bool
 pub fn TaskNumber::op_lt(Self, Self) -> Bool
 pub fn TaskNumber::output(Self, &Logger) -> Unit
-pub fn TaskNumber::parts(Self) -> ReadOnlyArray[Int]
+pub fn TaskNumber::parts(Self) -> ReadOnlyArray[Int32]
 pub fn TaskNumber::to_repr(Self) -> @debug.Repr
 pub fn TaskNumber::to_string(Self) -> String
 pub impl Compare for TaskNumber

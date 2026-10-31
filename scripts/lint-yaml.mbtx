@@ -1,7 +1,4 @@
-///|
-/// Lint every YAML file in the repository with yamllint.
-///
-/// Usage: `mise run lint:yaml`, or `moonx scripts/lint-yaml.mbtx`. The ignore list is in `.yamllint.yml`.
+----
 import {
   "moonbitlang/async@0.22.5",
   "moonbitlang/async@0.22.5/process",
@@ -9,6 +6,12 @@ import {
   "moonbitlang/x@0.5.5/sys",
   "moonbitlang/core/env",
 }
+----
+
+///|
+/// Lint every YAML file in the repository with yamllint.
+///
+/// Usage: `mise run lint:yaml`, or `moonx scripts/lint-yaml.mbtx`. The ignore list is in `.yamllint.yml`.
 
 ///|
 /// The exit codes of the task scripts: 0 for success, 1 for a failure and 2

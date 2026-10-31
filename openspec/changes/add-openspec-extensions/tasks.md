@@ -10,6 +10,10 @@ Bead: moonbase-933
 
 - [x] 1.4 Preserve Markdown schema templates as opaque assets through the OKF profile and converters; verify the repository round-trip test and a focused regression.
 
+Bead: moonbase-gid
+
+- [x] 1.5 Move the imports of the bundled script and of every task script into frontmatter and pin MoonBit 0.10.18+6c83a7f62; verify `moon test --deny-warn` of the scripts, the app tests and the extension lock check on 0.10.18.
+
 ## 2. Repository adoption
 
 Bead: moonbase-933

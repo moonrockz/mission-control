@@ -86,5 +86,10 @@ The workspace version setter updates the extension lock version alongside module
 and contract versions, so normal release preparation keeps validation in step.
 
 The shared script pins `moonbitlang/async@0.22.4`, the baseline supported by
-the consuming repositories. Its legacy import syntax also supports Moon 0.10.15.
+the consuming repositories. It declares its imports in frontmatter (between two
+`----` lines), so `moon test --deny-warn` passes on MoonBit 0.10.18, which warns
+about an import block outside frontmatter (`unfenced_import`). Frontmatter needs
+MoonBit 0.10.17+d971670cd or later. An earlier version stops with a parse error
+at the first `----` line, so pin 0.10.18 or later in a consumer before you install
+this snapshot.
 The packaged host uses the module dependencies declared in `moon.mod`.
