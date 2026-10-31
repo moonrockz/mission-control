@@ -1,10 +1,4 @@
-///|
-/// Run the browser store checks in headless Chromium, WebKit and Firefox with Playwright.
-///
-/// Usage: `mise run test:browser [-- --install]`. It builds `tests/okf-browser`
-/// for js, copies the page to `_build/okf-browser/site`, and runs
-/// `tests/okf-browser/opfs.spec.cjs`. `--install` first installs the three
-/// browsers and their system libraries with the Playwright CLI that mise pins.
+----
 import {
   "moonbitlang/async@0.22.5",
   "moonbitlang/async@0.22.5/fs",
@@ -13,6 +7,15 @@ import {
   "moonbitlang/core/env",
   "moonbitlang/x@0.5.5/sys",
 }
+----
+
+///|
+/// Run the browser store checks in headless Chromium, WebKit and Firefox with Playwright.
+///
+/// Usage: `mise run test:browser [-- --install]`. It builds `tests/okf-browser`
+/// for js, copies the page to `_build/okf-browser/site`, and runs
+/// `tests/okf-browser/opfs.spec.cjs`. `--install` first installs the three
+/// browsers and their system libraries with the Playwright CLI that mise pins.
 
 ///|
 /// The exit codes of the task scripts: 0 for success, 1 for a failure and 2

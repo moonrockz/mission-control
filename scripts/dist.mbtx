@@ -1,14 +1,4 @@
-///|
-/// Build the release outputs and pack them into `dist/`.
-///
-/// `build` cross-compiles four native binaries with zig and builds the two wasm files. It does not build
-/// windows-x64: a cross-built Windows binary reads its arguments wrongly, because moon picks the `platform`
-/// setting of `core` from the host OS. `build-windows` builds that binary natively and runs on Windows only.
-/// `pack` needs all five binaries. It writes the eight release files to `dist/`: five archives, `mission-control.wasm`, `mission-control-gc.wasm`
-/// and `checksums.txt`. With no argument, the script runs `build` and then `pack`.
-///
-/// Usage: `mise run build:release`, `mise run release:assets`, or `moonx scripts/dist.mbtx [build|build-windows|pack]`.
-/// The script exits with a non-zero code on failure.
+----
 import {
   "moonbitlang/async@0.22.5",
   "moonbitlang/async@0.22.5/fs",
@@ -26,6 +16,19 @@ import {
   "moonrockz/moonspec@0.11.0",
   "moonrockz/expect@0.6.1",
 }
+----
+
+///|
+/// Build the release outputs and pack them into `dist/`.
+///
+/// `build` cross-compiles four native binaries with zig and builds the two wasm files. It does not build
+/// windows-x64: a cross-built Windows binary reads its arguments wrongly, because moon picks the `platform`
+/// setting of `core` from the host OS. `build-windows` builds that binary natively and runs on Windows only.
+/// `pack` needs all five binaries. It writes the eight release files to `dist/`: five archives, `mission-control.wasm`, `mission-control-gc.wasm`
+/// and `checksums.txt`. With no argument, the script runs `build` and then `pack`.
+///
+/// Usage: `mise run build:release`, `mise run release:assets`, or `moonx scripts/dist.mbtx [build|build-windows|pack]`.
+/// The script exits with a non-zero code on failure.
 
 ///|
 /// The exit codes of the task scripts: 0 for success, 1 for a failure and 2

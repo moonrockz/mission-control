@@ -1,3 +1,12 @@
+----
+import {
+  "moonbitlang/async@0.22.5",
+  "moonbitlang/async@0.22.5/fs",
+  "moonbitlang/x@0.5.5/sys",
+  "moonbitlang/core/env",
+}
+----
+
 ///|
 /// Check that the package structure of the workspace is valid.
 ///
@@ -10,12 +19,6 @@
 ///
 /// Usage: `mise run validate:packages`, or `moonx scripts/validate-packages.mbtx`.
 /// It exits with 0 when the structure is valid, else with 1.
-import {
-  "moonbitlang/async@0.22.5",
-  "moonbitlang/async@0.22.5/fs",
-  "moonbitlang/x@0.5.5/sys",
-  "moonbitlang/core/env",
-}
 
 ///|
 /// The exit codes of the task scripts: 0 for success, 1 for a failure and 2

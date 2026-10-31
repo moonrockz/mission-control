@@ -27,7 +27,7 @@ pub fn is_markdown_name(String) -> Bool
 
 pub fn kind_of(BundlePath) -> DocKind
 
-pub fn lexical_compare(String, String) -> Int
+pub fn lexical_compare(String, String) -> Int32
 
 pub fn link_escapes(Bundle, Document, Link, options? : Options) -> Bool
 
@@ -35,7 +35,7 @@ pub fn load_bundle(DocumentSet, root? : StoreDir, label? : BundleLabel, options?
 
 pub fn marker_comment(String) -> String
 
-pub let max_search_limit : Int
+pub let max_search_limit : Int32
 
 pub fn normalize_description(String) -> String
 
@@ -47,7 +47,7 @@ pub let okf_concept_keys : ReadOnlyArray[String]
 
 pub fn okf_v02_conformance() -> RuleSet
 
-pub fn parse_index_entry(String, line_number? : Int) -> IndexEntry?
+pub fn parse_index_entry(String, line_number? : Int32) -> IndexEntry?
 
 pub fn profile_conflicts(ArrayView[&Profile]) -> Array[ProfileConflict]
 
@@ -93,7 +93,7 @@ pub fn GitHubUrlError::not_equal(Self, Self) -> Bool
 pub fn GitHubUrlError::to_repr(Self) -> @debug.Repr
 
 pub(all) suberror MetadataError {
-  InvalidYaml(line~ : Int, column~ : Int, message~ : String)
+  InvalidYaml(line~ : Int32, column~ : Int32, message~ : String)
   Unterminated
 } derive(Eq, @debug.Debug)
 pub fn MetadataError::equal(Self, Self) -> Bool
@@ -113,11 +113,11 @@ pub(all) suberror ValueError {
   BlankConceptType(String)
   InvalidFieldKey(String)
   InvalidRuleName(String)
-  InvalidSearchLimit(Int)
+  InvalidSearchLimit(Int32)
   InvalidDate(String)
   InvalidInstant(String)
   BlankName(String)
-  InvalidIdWidth(Int)
+  InvalidIdWidth(Int32)
   UnknownState(register~ : String, state~ : String)
   UnknownRegister(register~ : String)
 } derive(Eq, @debug.Debug)
@@ -173,10 +173,10 @@ pub fn Bundle::unindexed_concepts(Self) -> Array[Document]
 
 type BundleLabel derive(Eq, Hash, @debug.Debug)
 pub fn BundleLabel::BundleLabel(String) -> Self raise ValueError
-pub fn BundleLabel::compare(Self, Self) -> Int
+pub fn BundleLabel::compare(Self, Self) -> Int32
 pub fn BundleLabel::equal(Self, Self) -> Bool
 pub fn BundleLabel::group(Self) -> ReadOnlyArray[String]
-pub fn BundleLabel::hash(Self) -> Int
+pub fn BundleLabel::hash(Self) -> Int32
 pub fn BundleLabel::hash_combine(Self, Hasher) -> Unit
 pub fn BundleLabel::is_bare(Self) -> Bool
 pub fn BundleLabel::name(Self) -> String
@@ -193,12 +193,12 @@ pub impl Show for BundleLabel
 
 type BundlePath derive(Eq, Hash, @debug.Debug)
 pub fn BundlePath::BundlePath(String) -> Self raise PathError
-pub fn BundlePath::compare(Self, Self) -> Int
-pub fn BundlePath::depth(Self) -> Int
+pub fn BundlePath::compare(Self, Self) -> Int32
+pub fn BundlePath::depth(Self) -> Int32
 pub fn BundlePath::directory(Self) -> Array[String]
 pub fn BundlePath::ends_with(Self, String) -> Bool
 pub fn BundlePath::equal(Self, Self) -> Bool
-pub fn BundlePath::hash(Self) -> Int
+pub fn BundlePath::hash(Self) -> Int32
 pub fn BundlePath::hash_combine(Self, Hasher) -> Unit
 pub fn BundlePath::name(Self) -> String
 pub fn BundlePath::not_equal(Self, Self) -> Bool
@@ -217,7 +217,7 @@ pub impl Show for BundlePath
 
 pub(all) struct Citation {
   label : String
-  line : Int
+  line : Int32
 } derive(Eq, @debug.Debug)
 pub fn Citation::equal(Self, Self) -> Bool
 pub fn Citation::not_equal(Self, Self) -> Bool
@@ -226,7 +226,7 @@ pub fn Citation::to_repr(Self) -> @debug.Repr
 pub(all) struct CodeBlock {
   language : String?
   code : String
-  line : Int
+  line : Int32
 } derive(Eq, @debug.Debug)
 pub fn CodeBlock::equal(Self, Self) -> Bool
 pub fn CodeBlock::not_equal(Self, Self) -> Bool
@@ -235,7 +235,7 @@ pub fn CodeBlock::to_repr(Self) -> @debug.Repr
 type CommitSha derive(Eq, Hash, @debug.Debug)
 pub fn CommitSha::CommitSha(String) -> Self raise GitHubUrlError
 pub fn CommitSha::equal(Self, Self) -> Bool
-pub fn CommitSha::hash(Self) -> Int
+pub fn CommitSha::hash(Self) -> Int32
 pub fn CommitSha::hash_combine(Self, Hasher) -> Unit
 pub fn CommitSha::not_equal(Self, Self) -> Bool
 pub fn CommitSha::to_repr(Self) -> @debug.Repr
@@ -243,9 +243,9 @@ pub fn CommitSha::to_string(Self) -> String
 
 type ConceptId derive(Eq, Hash, @debug.Debug)
 pub fn ConceptId::ConceptId(String) -> Self raise PathError
-pub fn ConceptId::compare(Self, Self) -> Int
+pub fn ConceptId::compare(Self, Self) -> Int32
 pub fn ConceptId::equal(Self, Self) -> Bool
-pub fn ConceptId::hash(Self) -> Int
+pub fn ConceptId::hash(Self) -> Int32
 pub fn ConceptId::hash_combine(Self, Hasher) -> Unit
 pub fn ConceptId::not_equal(Self, Self) -> Bool
 pub fn ConceptId::of_path(BundlePath) -> Self?
@@ -262,9 +262,9 @@ pub impl Show for ConceptId
 
 type ConceptType derive(@debug.Debug)
 pub fn ConceptType::ConceptType(String) -> Self raise ValueError
-pub fn ConceptType::compare(Self, Self) -> Int
+pub fn ConceptType::compare(Self, Self) -> Int32
 pub fn ConceptType::equal(Self, Self) -> Bool
-pub fn ConceptType::hash(Self) -> Int
+pub fn ConceptType::hash(Self) -> Int32
 pub fn ConceptType::hash_combine(Self, Hasher) -> Unit
 pub fn ConceptType::not_equal(Self, Self) -> Bool
 pub fn ConceptType::op_ge(Self, Self) -> Bool
@@ -283,9 +283,9 @@ pub(all) struct DocKey {
   bundle : BundleLabel
   path : BundlePath
 } derive(Eq, Hash, @debug.Debug)
-pub fn DocKey::compare(Self, Self) -> Int
+pub fn DocKey::compare(Self, Self) -> Int32
 pub fn DocKey::equal(Self, Self) -> Bool
-pub fn DocKey::hash(Self) -> Int
+pub fn DocKey::hash(Self) -> Int32
 pub fn DocKey::hash_combine(Self, Hasher) -> Unit
 pub fn DocKey::not_equal(Self, Self) -> Bool
 pub fn DocKey::of(Bundle, Document) -> Self
@@ -319,7 +319,7 @@ pub fn DocRef::to_repr(Self) -> @debug.Repr
 type Document
 pub fn Document::Document(BundlePath, StorePath, String) -> Self
 pub fn Document::body(Self) -> String
-pub fn Document::body_line(Self) -> Int
+pub fn Document::body_line(Self) -> Int32
 pub fn Document::citations(Self) -> Array[Citation]
 pub fn Document::cited_sources(Self) -> Array[(Citation, Source?)]
 pub fn Document::code_blocks(Self) -> Array[CodeBlock]
@@ -340,7 +340,7 @@ pub fn Document::metadata(Self) -> Metadata
 pub fn Document::metadata_error(Self) -> MetadataError?
 pub fn Document::outline(Self) -> Array[Heading]
 pub fn Document::path(Self) -> BundlePath
-pub fn Document::prose_lines(Self) -> Array[(Int, String)]
+pub fn Document::prose_lines(Self) -> Array[(Int32, String)]
 pub fn Document::section(Self, String) -> SectionContent?
 pub fn Document::store_path(Self) -> StorePath
 pub fn Document::text(Self) -> String
@@ -353,7 +353,7 @@ pub fn DocumentSet::contains(Self, StorePath) -> Bool
 pub fn DocumentSet::entries(Self) -> ReadOnlyArray[FileEntry]
 pub fn DocumentSet::get(Self, StorePath) -> FileEntry?
 pub fn DocumentSet::has_directory(Self, StoreDir) -> Bool
-pub fn DocumentSet::length(Self) -> Int
+pub fn DocumentSet::length(Self) -> Int32
 pub fn DocumentSet::of_texts(ArrayView[(String, String)]) -> Self raise PathError
 pub fn DocumentSet::with_entry(Self, FileEntry) -> Self
 pub fn DocumentSet::without(Self, StorePath) -> Self
@@ -385,7 +385,7 @@ pub fn Edge::to_repr(Self) -> @debug.Repr
 type EntryName derive(Eq, Hash, @debug.Debug)
 pub fn EntryName::EntryName(String) -> Self raise PathError
 pub fn EntryName::equal(Self, Self) -> Bool
-pub fn EntryName::hash(Self) -> Int
+pub fn EntryName::hash(Self) -> Int32
 pub fn EntryName::hash_combine(Self, Hasher) -> Unit
 pub fn EntryName::not_equal(Self, Self) -> Bool
 pub fn EntryName::output(Self, &Logger) -> Unit
@@ -414,9 +414,9 @@ pub fn Facet::to_repr(Self) -> @debug.Repr
 
 type FieldKey derive(Eq, Hash, @debug.Debug)
 pub fn FieldKey::FieldKey(String) -> Self raise ValueError
-pub fn FieldKey::compare(Self, Self) -> Int
+pub fn FieldKey::compare(Self, Self) -> Int32
 pub fn FieldKey::equal(Self, Self) -> Bool
-pub fn FieldKey::hash(Self) -> Int
+pub fn FieldKey::hash(Self) -> Int32
 pub fn FieldKey::hash_combine(Self, Hasher) -> Unit
 pub fn FieldKey::not_equal(Self, Self) -> Bool
 pub fn FieldKey::op_ge(Self, Self) -> Bool
@@ -435,7 +435,7 @@ pub fn Fields::bool(Self, String) -> Bool?
 pub fn Fields::entries(Self) -> ReadOnlyArray[(String, Value)]
 pub fn Fields::equal(Self, Self) -> Bool
 pub fn Fields::get(Self, String) -> Value?
-pub fn Fields::int(Self, String) -> Int?
+pub fn Fields::int(Self, String) -> Int32?
 pub fn Fields::keys(Self) -> Array[String]
 pub fn Fields::not_equal(Self, Self) -> Bool
 pub fn Fields::text(Self, String) -> String?
@@ -475,7 +475,7 @@ pub struct Finding {
   severity : Severity
   rule : RuleName
   subject : FindingSubject
-  line : Int?
+  line : Int32?
   message : String
   hint : String?
 } derive(Eq, @debug.Debug)
@@ -528,8 +528,8 @@ pub fn Graph::outbound(Self, DocKey) -> Array[Edge]
 pub(all) struct Header {
   shape : HeaderShape
   body : String
-  body_offset : Int
-  body_line : Int
+  body_offset : Int32
+  body_line : Int32
   bom : Bool
 } derive(Eq, @debug.Debug)
 pub fn Header::equal(Self, Self) -> Bool
@@ -549,7 +549,7 @@ pub struct Heading {
   level : @mdc.HeadingLevel
   text : String
   slug : String
-  line : Int
+  line : Int32
 } derive(Eq, @debug.Debug)
 pub fn Heading::equal(Self, Self) -> Bool
 pub fn Heading::not_equal(Self, Self) -> Bool
@@ -564,20 +564,20 @@ pub fn IdRule::not_equal(Self, Self) -> Bool
 pub fn IdRule::to_repr(Self) -> @debug.Repr
 
 type IdWidth derive(Eq, Hash, @debug.Debug)
-pub fn IdWidth::IdWidth(Int) -> Self raise ValueError
+pub fn IdWidth::IdWidth(Int32) -> Self raise ValueError
 pub fn IdWidth::default() -> Self
 pub fn IdWidth::equal(Self, Self) -> Bool
-pub fn IdWidth::hash(Self) -> Int
+pub fn IdWidth::hash(Self) -> Int32
 pub fn IdWidth::hash_combine(Self, Hasher) -> Unit
 pub fn IdWidth::not_equal(Self, Self) -> Bool
-pub fn IdWidth::to_int(Self) -> Int
+pub fn IdWidth::to_int(Self) -> Int32
 pub fn IdWidth::to_repr(Self) -> @debug.Repr
 
 pub(all) struct IndexEntry {
   text : String
   destination : String
   description : String?
-  line : Int
+  line : Int32
 } derive(Eq, @debug.Debug)
 pub fn IndexEntry::equal(Self, Self) -> Bool
 pub fn IndexEntry::not_equal(Self, Self) -> Bool
@@ -612,7 +612,7 @@ pub fn IndexModel::to_repr(Self) -> @debug.Repr
 
 pub struct IndexSection {
   heading : IndexHeading
-  line : Int
+  line : Int32
   entries : ReadOnlyArray[IndexEntry]
   text : ReadOnlyArray[String]
 } derive(Eq, @debug.Debug)
@@ -622,10 +622,10 @@ pub fn IndexSection::title(Self) -> String?
 pub fn IndexSection::to_repr(Self) -> @debug.Repr
 
 type Instant derive(Compare, Eq, Hash, @debug.Debug)
-pub fn Instant::compare(Self, Self) -> Int
+pub fn Instant::compare(Self, Self) -> Int32
 pub fn Instant::date_text(Self) -> String
 pub fn Instant::equal(Self, Self) -> Bool
-pub fn Instant::hash(Self) -> Int
+pub fn Instant::hash(Self) -> Int32
 pub fn Instant::hash_combine(Self, Hasher) -> Unit
 pub fn Instant::millis(Self) -> Int64
 pub fn Instant::not_equal(Self, Self) -> Bool
@@ -640,13 +640,13 @@ pub fn Instant::to_repr(Self) -> @debug.Repr
 
 pub struct Issue {
   subject : FindingSubject
-  line : Int?
+  line : Int32?
   message : String
   hint : String?
 } derive(Eq, @debug.Debug)
-pub fn Issue::at(Bundle, Document, String, line? : Int, hint? : String) -> Self
+pub fn Issue::at(Bundle, Document, String, line? : Int32, hint? : String) -> Self
 pub fn Issue::equal(Self, Self) -> Bool
-pub fn Issue::in_bundle(DocKey, String, line? : Int, hint? : String) -> Self
+pub fn Issue::in_bundle(DocKey, String, line? : Int32, hint? : String) -> Self
 pub fn Issue::not_equal(Self, Self) -> Bool
 pub fn Issue::stray(StorePath, String, hint? : String) -> Self
 pub fn Issue::to_repr(Self) -> @debug.Repr
@@ -670,7 +670,7 @@ pub fn Knowledge::concepts(Self) -> Array[(Bundle, Document)]
 pub fn Knowledge::document(Self, DocKey) -> Document?
 pub fn Knowledge::document_at(Self, StorePath) -> (Bundle, Document)?
 pub fn Knowledge::documents(Self) -> Array[(Bundle, Document)]
-pub fn Knowledge::facet(Self, Facet, filters? : ArrayView[Filter]) -> Array[(String, Int)]
+pub fn Knowledge::facet(Self, Facet, filters? : ArrayView[Filter]) -> Array[(String, Int32)]
 pub fn Knowledge::filter(Self, ArrayView[Filter]) -> Array[(Bundle, Document)]
 pub fn Knowledge::find_document(Self, String, bundle? : BundleLabel) -> Lookup[(Bundle, Document)]
 pub fn Knowledge::options(Self) -> Options
@@ -685,7 +685,7 @@ pub impl LinkResolver for KnowledgeResolver
 
 pub struct Line {
   text : String
-  start : Int
+  start : Int32
   ending : LineEnding?
 } derive(Eq, @debug.Debug)
 pub fn Line::ending_text(Self) -> String
@@ -712,7 +712,7 @@ pub struct Link {
 pub fn Link::Link(String, String) -> Self
 pub fn Link::equal(Self, Self) -> Bool
 pub fn Link::fragment(Self) -> String?
-pub fn Link::line_number(Self) -> Int?
+pub fn Link::line_number(Self) -> Int32?
 pub fn Link::not_equal(Self, Self) -> Bool
 pub fn Link::path_part(Self) -> String
 pub fn Link::to_repr(Self) -> @debug.Repr
@@ -736,7 +736,7 @@ pub fn LinkKind::not_equal(Self, Self) -> Bool
 pub fn LinkKind::to_repr(Self) -> @debug.Repr
 
 pub enum LinkOrigin {
-  Body(line~ : Int)
+  Body(line~ : Int32)
   FromProfile
 } derive(Eq, @debug.Debug)
 pub fn LinkOrigin::equal(Self, Self) -> Bool
@@ -745,9 +745,9 @@ pub fn LinkOrigin::to_repr(Self) -> @debug.Repr
 
 type LogDate derive(Eq, Hash, @debug.Debug)
 pub fn LogDate::LogDate(String) -> Self raise ValueError
-pub fn LogDate::compare(Self, Self) -> Int
+pub fn LogDate::compare(Self, Self) -> Int32
 pub fn LogDate::equal(Self, Self) -> Bool
-pub fn LogDate::hash(Self) -> Int
+pub fn LogDate::hash(Self) -> Int32
 pub fn LogDate::hash_combine(Self, Hasher) -> Unit
 pub fn LogDate::instant(Self) -> Instant
 pub fn LogDate::not_equal(Self, Self) -> Bool
@@ -765,7 +765,7 @@ pub impl Show for LogDate
 pub(all) struct LogEntry {
   label : String?
   text : String
-  line : Int
+  line : Int32
 } derive(Eq, @debug.Debug)
 pub fn LogEntry::equal(Self, Self) -> Bool
 pub fn LogEntry::not_equal(Self, Self) -> Bool
@@ -793,7 +793,7 @@ pub fn LogModel::undated_sections(Self) -> Array[LogSection]
 
 pub struct LogSection {
   heading : LogHeading
-  line : Int
+  line : Int32
   entries : ReadOnlyArray[LogEntry]
 } derive(Eq, @debug.Debug)
 pub fn LogSection::equal(Self, Self) -> Bool
@@ -811,7 +811,7 @@ pub fn[T] Lookup::to_option(Self[T]) -> T?
 pub fn[T : @debug.Debug] Lookup::to_repr(Self[T]) -> @debug.Repr
 
 type Metadata derive(Eq, @debug.Debug)
-pub fn Metadata::Metadata(String, first_line? : Int) -> Self raise MetadataError
+pub fn Metadata::Metadata(String, first_line? : Int32) -> Self raise MetadataError
 pub fn Metadata::attester(Self) -> String?
 pub fn Metadata::bool(Self, String) -> Bool?
 pub fn Metadata::computation(Self) -> String?
@@ -825,10 +825,10 @@ pub fn Metadata::executor(Self) -> Executor?
 pub fn Metadata::fields(Self) -> Fields
 pub fn Metadata::generated(Self, options? : Options) -> Attribution?
 pub fn Metadata::get(Self, String) -> Value?
-pub fn Metadata::int(Self, String) -> Int?
+pub fn Metadata::int(Self, String) -> Int32?
 pub fn Metadata::is_stale(Self, Instant, options? : Options) -> Bool
 pub fn Metadata::keys(Self) -> Array[String]
-pub fn Metadata::line_of(Self, String) -> Int?
+pub fn Metadata::line_of(Self, String) -> Int32?
 pub fn Metadata::mappings(Self, String) -> Array[Fields]
 pub fn Metadata::not_equal(Self, Self) -> Bool
 pub fn Metadata::of_fields(Fields) -> Self
@@ -860,7 +860,7 @@ pub fn NestedLogs::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Normalized {
   segments : ReadOnlyArray[String]
-  above : Int
+  above : Int32
 } derive(Eq, @debug.Debug)
 pub fn Normalized::equal(Self, Self) -> Bool
 pub fn Normalized::not_equal(Self, Self) -> Bool
@@ -924,8 +924,8 @@ pub fn ProfileConflict::to_repr(Self) -> @debug.Repr
 pub(all) struct RawEntry {
   key : String
   inline : String
-  first_line : Int
-  last_line : Int
+  first_line : Int32
+  last_line : Int32
 } derive(Eq, @debug.Debug)
 pub fn RawEntry::equal(Self, Self) -> Bool
 pub fn RawEntry::not_equal(Self, Self) -> Bool
@@ -944,9 +944,9 @@ pub fn Record::with_document(Self, Document) -> Self
 
 type RecordId derive(Eq, Hash, @debug.Debug)
 pub fn RecordId::RecordId(String) -> Self raise ValueError
-pub fn RecordId::compare(Self, Self) -> Int
+pub fn RecordId::compare(Self, Self) -> Int32
 pub fn RecordId::equal(Self, Self) -> Bool
-pub fn RecordId::hash(Self) -> Int
+pub fn RecordId::hash(Self) -> Int32
 pub fn RecordId::hash_combine(Self, Hasher) -> Unit
 pub fn RecordId::not_equal(Self, Self) -> Bool
 pub fn RecordId::op_ge(Self, Self) -> Bool
@@ -993,7 +993,7 @@ pub(all) struct Region {
   marker : String
   preamble : String
   content : String
-  line : Int
+  line : Int32
 } derive(Eq, @debug.Debug)
 pub fn Region::equal(Self, Self) -> Bool
 pub fn Region::not_equal(Self, Self) -> Bool
@@ -1026,7 +1026,7 @@ pub fn Register::transitions(Self) -> ReadOnlyArray[Transition]
 type RegisterName derive(Eq, Hash, @debug.Debug)
 pub fn RegisterName::RegisterName(String) -> Self raise ValueError
 pub fn RegisterName::equal(Self, Self) -> Bool
-pub fn RegisterName::hash(Self) -> Int
+pub fn RegisterName::hash(Self) -> Int32
 pub fn RegisterName::hash_combine(Self, Hasher) -> Unit
 pub fn RegisterName::not_equal(Self, Self) -> Bool
 pub fn RegisterName::output(Self, &Logger) -> Unit
@@ -1035,7 +1035,7 @@ pub fn RegisterName::to_string(Self) -> String
 pub impl Show for RegisterName
 
 type Report
-pub fn Report::count(Self, Severity) -> Int
+pub fn Report::count(Self, Severity) -> Int32
 pub fn Report::fails(Self, strict? : Bool) -> Bool
 pub fn Report::findings(Self) -> ReadOnlyArray[Finding]
 pub fn Report::of_rule(Self, RuleName) -> Array[Finding]
@@ -1057,9 +1057,9 @@ pub fn Rule::severity(Self) -> Severity
 
 type RuleName derive(Eq, Hash, @debug.Debug)
 pub fn RuleName::RuleName(String) -> Self raise ValueError
-pub fn RuleName::compare(Self, Self) -> Int
+pub fn RuleName::compare(Self, Self) -> Int32
 pub fn RuleName::equal(Self, Self) -> Bool
-pub fn RuleName::hash(Self) -> Int
+pub fn RuleName::hash(Self) -> Int32
 pub fn RuleName::hash_combine(Self, Hasher) -> Unit
 pub fn RuleName::not_equal(Self, Self) -> Bool
 pub fn RuleName::op_ge(Self, Self) -> Bool
@@ -1091,7 +1091,7 @@ pub fn ScanField::to_repr(Self) -> @debug.Repr
 pub struct ScanHit {
   key : DocKey
   fields : ReadOnlyArray[ScanField]
-  lines : ReadOnlyArray[(Int, String)]
+  lines : ReadOnlyArray[(Int32, String)]
 } derive(Eq, @debug.Debug)
 pub fn ScanHit::equal(Self, Self) -> Bool
 pub fn ScanHit::not_equal(Self, Self) -> Bool
@@ -1107,13 +1107,13 @@ pub fn SearchHit::not_equal(Self, Self) -> Bool
 pub fn SearchHit::to_repr(Self) -> @debug.Repr
 
 type SearchLimit derive(Eq, Hash, @debug.Debug)
-pub fn SearchLimit::SearchLimit(Int) -> Self raise ValueError
+pub fn SearchLimit::SearchLimit(Int32) -> Self raise ValueError
 pub fn SearchLimit::default() -> Self
 pub fn SearchLimit::equal(Self, Self) -> Bool
-pub fn SearchLimit::hash(Self) -> Int
+pub fn SearchLimit::hash(Self) -> Int32
 pub fn SearchLimit::hash_combine(Self, Hasher) -> Unit
 pub fn SearchLimit::not_equal(Self, Self) -> Bool
-pub fn SearchLimit::to_int(Self) -> Int
+pub fn SearchLimit::to_int(Self) -> Int32
 pub fn SearchLimit::to_repr(Self) -> @debug.Repr
 
 pub struct SearchRequest {
@@ -1140,9 +1140,9 @@ pub(all) enum Severity {
   Warning
   Info
 } derive(Compare, Eq, Hash, @debug.Debug)
-pub fn Severity::compare(Self, Self) -> Int
+pub fn Severity::compare(Self, Self) -> Int32
 pub fn Severity::equal(Self, Self) -> Bool
-pub fn Severity::hash(Self) -> Int
+pub fn Severity::hash(Self) -> Int32
 pub fn Severity::hash_combine(Self, Hasher) -> Unit
 pub fn Severity::not_equal(Self, Self) -> Bool
 pub fn Severity::op_ge(Self, Self) -> Bool
@@ -1157,7 +1157,7 @@ pub(all) struct Source {
   id : String?
   title : String?
   author : String?
-  usage_count : Int?
+  usage_count : Int32?
   last_modified : String?
   usage_window : UsageWindow?
 } derive(Eq, @debug.Debug)
@@ -1168,7 +1168,7 @@ pub fn Source::to_repr(Self) -> @debug.Repr
 type StateName derive(Eq, Hash, @debug.Debug)
 pub fn StateName::StateName(String) -> Self raise ValueError
 pub fn StateName::equal(Self, Self) -> Bool
-pub fn StateName::hash(Self) -> Int
+pub fn StateName::hash(Self) -> Int32
 pub fn StateName::hash_combine(Self, Hasher) -> Unit
 pub fn StateName::not_equal(Self, Self) -> Bool
 pub fn StateName::output(Self, &Logger) -> Unit
@@ -1191,12 +1191,12 @@ pub fn Status::to_string(Self) -> String
 type StoreDir derive(Eq, Hash, @debug.Debug)
 pub fn StoreDir::StoreDir(String) -> Self raise PathError
 pub fn StoreDir::child(Self, EntryName) -> Self
-pub fn StoreDir::compare(Self, Self) -> Int
+pub fn StoreDir::compare(Self, Self) -> Int32
 pub fn StoreDir::contains(Self, StorePath) -> Bool
 pub fn StoreDir::encloses(Self, Self) -> Bool
 pub fn StoreDir::equal(Self, Self) -> Bool
 pub fn StoreDir::file(Self, EntryName) -> StorePath
-pub fn StoreDir::hash(Self) -> Int
+pub fn StoreDir::hash(Self) -> Int32
 pub fn StoreDir::hash_combine(Self, Hasher) -> Unit
 pub fn StoreDir::is_root(Self) -> Bool
 pub fn StoreDir::name(Self) -> String?
@@ -1216,9 +1216,9 @@ pub impl Show for StoreDir
 
 type StorePath derive(Eq, Hash, @debug.Debug)
 pub fn StorePath::StorePath(String) -> Self raise PathError
-pub fn StorePath::compare(Self, Self) -> Int
+pub fn StorePath::compare(Self, Self) -> Int32
 pub fn StorePath::equal(Self, Self) -> Bool
-pub fn StorePath::hash(Self) -> Int
+pub fn StorePath::hash(Self) -> Int32
 pub fn StorePath::hash_combine(Self, Hasher) -> Unit
 pub fn StorePath::is_under(Self, StoreDir) -> Bool
 pub fn StorePath::name(Self) -> String
@@ -1281,7 +1281,7 @@ pub(all) enum TrustTier {
   MachineConfirmed
   HumanReviewed
 } derive(Compare, Eq, @debug.Debug)
-pub fn TrustTier::compare(Self, Self) -> Int
+pub fn TrustTier::compare(Self, Self) -> Int32
 pub fn TrustTier::equal(Self, Self) -> Bool
 pub fn TrustTier::not_equal(Self, Self) -> Bool
 pub fn TrustTier::op_ge(Self, Self) -> Bool
@@ -1293,7 +1293,7 @@ pub fn TrustTier::to_repr(Self) -> @debug.Repr
 pub struct TypedReference {
   key : FieldKey
   value : String
-  line : Int?
+  line : Int32?
   target : RefTarget
 } derive(Eq, @debug.Debug)
 pub fn TypedReference::equal(Self, Self) -> Bool
@@ -1303,7 +1303,7 @@ pub fn TypedReference::to_repr(Self) -> @debug.Repr
 
 type UnknownStatus derive(Eq, Hash, @debug.Debug)
 pub fn UnknownStatus::equal(Self, Self) -> Bool
-pub fn UnknownStatus::hash(Self) -> Int
+pub fn UnknownStatus::hash(Self) -> Int32
 pub fn UnknownStatus::hash_combine(Self, Hasher) -> Unit
 pub fn UnknownStatus::not_equal(Self, Self) -> Bool
 pub fn UnknownStatus::output(Self, &Logger) -> Unit
@@ -1340,7 +1340,7 @@ pub(all) enum Value {
   Null
 } derive(Eq, @debug.Debug)
 pub fn Value::as_bool(Self) -> Bool?
-pub fn Value::as_int(Self) -> Int?
+pub fn Value::as_int(Self) -> Int32?
 pub fn Value::as_mappings(Self) -> Array[Fields]
 pub fn Value::as_text(Self) -> String?
 pub fn Value::as_texts(Self) -> Array[String]

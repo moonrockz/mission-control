@@ -62,7 +62,7 @@ Mission Control builds on packages from these orgs:
 
 - **moonbitlang.** The toolchain, `moonbitlang/core` and `moonbitlang/x`.
 - **moonbit-community.** [Rabbita](https://github.com/moonbit-community/rabbita) `0.16.5` for the web UI. [Proton](https://github.com/moonbit-community/proton) `proton_contract` `0.4.0` for the desktop command descriptors. The Proton window runtime (`moonbit-community/proton`) links CEF. It is not a dependency yet. See [apps/desktop/README.md](apps/desktop/README.md).
-- **moonrockz.** `zig-cross` `0.1.2` cross-builds the release binaries. `moonspec` and `expect` test the task scripts.
+- **moonrockz.** `zig-cross` `0.3.2` cross-builds the release binaries. `moonspec` and `expect` test the task scripts.
 - **moonstack.** No package from moonstack is pinned. Add one when its release matches the MoonBit version in `.config/mise/config.toml`.
 
 ## Prerequisites

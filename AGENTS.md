@@ -16,6 +16,7 @@ Write task and automation scripts in MoonBit, as standalone `.mbtx` scripts, not
 - Declare its mise task in `.config/mise/config.toml`: `run = "moonx scripts/<name>.mbtx"`.
 - Pin the version of each import: `"moonbitlang/async@0.22.5/process"`. Use `moonbitlang/async` for processes (`@process.run`, `@process.collect_output`), files (`@fs`) and `@stdio`; `moonbitlang/core/env` for `@env.args()` and environment variables; `moonbitlang/x/sys` for `@sys.exit`.
 - `@env.args()` has the script binary at index 0. Task arguments start at index 1 (`mise run task -- arg`).
+- Put the `import { ... }` block in frontmatter, between two `----` lines at the start of the file, and put the doc comment after it. MoonBit 0.10.18 warns (`unfenced_import`) about an import block outside frontmatter, and `--deny-warn` makes the warning an error. Frontmatter needs MoonBit 0.10.17+d971670cd or later.
 - A `.mbtx` file cannot start with a shebang line, so a mise file task cannot be a `.mbtx` file. Keep the toml task declaration.
 - Exit with 1 for a failure and 2 for a usage error, through the script's copy of the `ExitCode` enum. Do not print and continue. `scripts/test-scripts.mbtx` checks that every copy of `ExitCode` is the same.
 - Parse arguments and inputs once into types, such as a backend or a release trigger, and stop with a usage error for an argument that the script does not know.
@@ -154,7 +155,7 @@ Mission Control publishes to mooncakes.io and GitHub Releases, and records every
 - To release, run `mise run release:prepare [X.Y.Z]` on a clean working tree. It computes the next version with git-cliff (`cliff.toml`), sets the version everywhere, prepends the section to `CHANGELOG.md`, commits `chore(release): vX.Y.Z` on `release/vX.Y.Z`, pushes it and opens a draft pull request. `--local` stops before the push.
 - Replace the highlights comment in `CHANGELOG.md` with a few sentences. Push, then run `mise run release:refresh`. Then merge. Do not bump the version in another pull request.
 - The merge changes `moon.mod` on main, so the Release workflow (`.github/workflows/release.yml`) runs. The jobs are `plan`, `validate`, `build-windows`, `build`, `smoke`, `publish` and `release`.
-- `build` cross-compiles four native binaries with `moonx moonrockz/zig-cross@0.1.2`. Windows is built on a Windows runner. A cross-built Windows binary reads its arguments wrongly.
+- `build` cross-compiles four native binaries with `moonx moonrockz/zig-cross@0.3.2`. Windows is built on a Windows runner. A cross-built Windows binary reads its arguments wrongly.
 - `publish` needs the `MOONCAKES_USER_TOKEN` org secret. It runs after `smoke`. A mooncakes.io version is permanent.
 - A pull request that changes a release file, and a manual run with `dry_run`, run `plan`, `validate`, `build-windows`, `build` and `smoke` only. They never publish and never create a release.
 - **Re-run failed jobs.** After a transient failure, use "Re-run failed jobs" on the run. `publish` skips a version that is already published. `release` uploads only the missing assets.
