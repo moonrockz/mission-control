@@ -155,7 +155,7 @@ Mission Control publishes to mooncakes.io and GitHub Releases, and records every
 - To release, run `mise run release:prepare [X.Y.Z]` on a clean working tree. It computes the next version with git-cliff (`cliff.toml`), sets the version everywhere, prepends the section to `CHANGELOG.md`, commits `chore(release): vX.Y.Z` on `release/vX.Y.Z`, pushes it and opens a draft pull request. `--local` stops before the push.
 - Replace the highlights comment in `CHANGELOG.md` with a few sentences. Push, then run `mise run release:refresh`. Then merge. Do not bump the version in another pull request.
 - The merge changes `moon.mod` on main, so the Release workflow (`.github/workflows/release.yml`) runs. The jobs are `plan`, `validate`, `build-windows`, `build`, `smoke`, `publish` and `release`.
-- `build` cross-compiles four native binaries with `moonx moonrockz/zig-cross@0.1.2`. Windows is built on a Windows runner. A cross-built Windows binary reads its arguments wrongly.
+- `build` cross-compiles four native binaries with `moonx moonrockz/zig-cross@0.3.2`. Windows is built on a Windows runner. A cross-built Windows binary reads its arguments wrongly.
 - `publish` needs the `MOONCAKES_USER_TOKEN` org secret. It runs after `smoke`. A mooncakes.io version is permanent.
 - A pull request that changes a release file, and a manual run with `dry_run`, run `plan`, `validate`, `build-windows`, `build` and `smoke` only. They never publish and never create a release.
 - **Re-run failed jobs.** After a transient failure, use "Re-run failed jobs" on the run. `publish` skips a version that is already published. `release` uploads only the missing assets.

@@ -71,7 +71,7 @@ run = "moonx scripts/build.mbtx native --release"
 
 [tasks."build:cross"]
 description = "Cross-compile native binaries with zig (args: build targets, then -- and package paths)"
-run = "moonx moonrockz/zig-cross@0.1.2 build"
+run = "moonx moonrockz/zig-cross@0.3.2 build"
 
 [tasks.test]
 description = "Run tests for all workspace members (args: targets; default: wasm wasm-gc js native)"
@@ -119,7 +119,7 @@ run = "moonx scripts/dist.mbtx pack"
 
 [tasks."test:native-zig"]
 description = "Run the native tests with zig as the C compiler (the host wrapper of zig-cross)"
-run = "moonx moonrockz/zig-cross@0.1.2 exec host -- moonx scripts/test.mbtx native"
+run = "moonx moonrockz/zig-cross@0.3.2 exec host -- moonx scripts/test.mbtx native"
 
 [tasks."test:browser"]
 description = "Run the OKF browser store checks in headless Chromium, WebKit and Firefox with Playwright (args: --install)"
