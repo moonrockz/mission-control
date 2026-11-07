@@ -129,6 +129,28 @@ impl @moonspec.World for SnapshotWorld with fn configure(self, setup) {
             files.remove(@extension.BundleFile::Notice.path())
           }),
         )
+      "lock and template gone" => {
+        self.lock = None
+        self.files.remove(@extension.BundleFile::Tasks.path())
+      }
+      "format 1 and template gone" => {
+        self.lock = Some(
+          "{\"format\": 1, \"extension\": \"html-design\", \"module\": \"moonrockz/openspec-ext\", \"version\": \"0.1.0\", \"files\": {}}",
+        )
+        self.files.remove(@extension.BundleFile::Tasks.path())
+      }
+      "malformed lock and template gone" => {
+        self.lock = Some("{}")
+        self.files.remove(@extension.BundleFile::Tasks.path())
+      }
+      "missing digest and file" => {
+        self.lock = Some(
+          edit_lock_files(self.lock.unwrap(), files => {
+            files.remove(@extension.BundleFile::Notice.path())
+          }),
+        )
+        self.files.remove(@extension.BundleFile::Notice.path())
+      }
       "drift and schema" => {
         self.files.set(design, "Local edit")
         self.config = Some("schema: spec-driven\n")

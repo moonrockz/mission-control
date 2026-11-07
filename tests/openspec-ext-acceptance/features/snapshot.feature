@@ -17,6 +17,10 @@ Feature: Check an installed html-design snapshot
       | missing lock       | Missing file: openspec/extensions.lock.json                                                 |
       | extra lock entry   | Unexpected extension file set                                                               |
       | missing digest     | Unexpected extension file set; Missing digest: openspec/schemas/html-design/NOTICE          |
+      | lock and template gone | Missing file: openspec/extensions.lock.json; Missing file: openspec/schemas/html-design/templates/tasks.md |
+      | format 1 and template gone | Extension lock format 1 is from the bundled script. Run mission-control-tools openspec install.; Missing file: openspec/schemas/html-design/templates/tasks.md |
+      | malformed lock and template gone | Unsupported extension lock; Missing file: openspec/schemas/html-design/templates/tasks.md |
+      | missing digest and file | Unexpected extension file set; Missing digest: openspec/schemas/html-design/NOTICE; Missing file: openspec/schemas/html-design/NOTICE |
       | drift and schema   | Extension drift: openspec/schemas/html-design/templates/design.html; Default schema must be html-design |
 
   Scenario: The snapshot level does not depend on the tool version

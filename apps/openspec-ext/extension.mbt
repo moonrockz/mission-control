@@ -515,7 +515,8 @@ fn schema_is_html_design(config : String) -> Bool {
 
 ///|
 /// Check a snapshot from the texts that the host read. `None` is a missing file. The problems
-/// come in a fixed order: lock, managed files in bundle order, config. The function reads no files.
+/// come in a fixed order: lock, managed files in bundle order, config. A missing managed file is
+/// reported even when the lock is missing or cannot be read. The function reads no files.
 pub fn check_snapshot(
   lock~ : String?,
   config~ : String?,
@@ -542,32 +543,40 @@ pub fn check_snapshot(
         Current(tool, locked) => Some((tool, locked))
       }
   }
-  if parsed is Some((recorded, locked)) {
-    // After a tool mismatch, every changed template would also differ from this bundle.
-    // The mismatch alone says what to do, so bundle drift is reported only for the same tool.
-    let bundle = match level {
-      Bundle(expected) if recorded != expected => {
-        problems.push(ToolVersion(recorded~, expected~))
-        None
+  // The lock is needed only to compare digests. A missing managed file is reported whatever the lock is.
+  let (locked, bundle) = match parsed {
+    None => (None, None)
+    Some((recorded, locked)) => {
+      // After a tool mismatch, every changed template would also differ from this bundle.
+      // The mismatch alone says what to do, so bundle drift is reported only for the same tool.
+      let bundle = match level {
+        Bundle(expected) if recorded != expected => {
+          problems.push(ToolVersion(recorded~, expected~))
+          None
+        }
+        Bundle(expected) => Some(expected)
+        Snapshot => None
       }
-      Bundle(expected) => Some(expected)
-      Snapshot => None
-    }
-    if locked.length() != files().length() {
-      problems.push(FileSet)
-    }
-    for managed in files() {
-      let actual = file(managed)
-      match (locked.get(managed.path()), actual) {
-        (None, _) => problems.push(MissingDigest(managed))
-        (Some(_), None) => problems.push(MissingFile(Managed(managed)))
-        (Some(expected), Some(text)) =>
-          if digest(text) != expected {
-            problems.push(Drift(managed))
-          } else if bundle is Some(tool) && text != managed.content() {
-            problems.push(BundleDrift(managed, tool))
-          }
+      if locked.length() != files().length() {
+        problems.push(FileSet)
       }
+      (Some(locked), bundle)
+    }
+  }
+  for managed in files() {
+    let recorded = locked.bind(l => l.get(managed.path()))
+    if locked is Some(_) && recorded is None {
+      problems.push(MissingDigest(managed))
+    }
+    match (file(managed), recorded) {
+      (None, _) => problems.push(MissingFile(Managed(managed)))
+      (Some(_), None) => ()
+      (Some(text), Some(expected)) =>
+        if digest(text) != expected {
+          problems.push(Drift(managed))
+        } else if bundle is Some(tool) && text != managed.content() {
+          problems.push(BundleDrift(managed, tool))
+        }
     }
   }
   match config {
