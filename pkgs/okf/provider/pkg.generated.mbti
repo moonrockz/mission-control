@@ -1,0 +1,137 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonrockz/okf/provider"
+
+import {
+  "moonbitlang/core/debug",
+  "moonrockz/okf",
+  "moonrockz/okf/edit",
+}
+
+// Values
+pub async fn apply(@edit.EditPlan, &DocumentStore) -> Int32 raise StoreError
+
+pub fn fingerprint(@okf.Knowledge) -> Map[@okf.DocKey, Int32]
+
+pub async fn load(&DocumentStore, under? : @okf.StoreDir, options? : @okf.Options, profiles? : ArrayView[&@okf.Profile]) -> @okf.Knowledge raise StoreError
+
+pub async fn load_bundle(&DocumentStore, root? : @okf.StoreDir, options? : @okf.Options, profiles? : ArrayView[&@okf.Profile]) -> @okf.Bundle raise StoreError
+
+pub async fn load_set(&DocumentStore, under? : @okf.StoreDir, assets? : Bool) -> @okf.DocumentSet raise StoreError
+
+pub fn safe_path(String) -> @okf.StorePath raise StoreError
+
+// Errors
+pub(all) suberror IndexError {
+  NotBuilt
+  InvalidMetadata(schema_version~ : Int32, document_count~ : Int32)
+  IndexFailed(String)
+} derive(Eq, @debug.Debug)
+pub fn IndexError::equal(Self, Self) -> Bool
+pub fn IndexError::not_equal(Self, Self) -> Bool
+pub fn IndexError::to_repr(Self) -> @debug.Repr
+
+pub(all) suberror RootError {
+  BlankRoot(String)
+} derive(Eq, @debug.Debug)
+pub fn RootError::equal(Self, Self) -> Bool
+pub fn RootError::not_equal(Self, Self) -> Bool
+pub fn RootError::to_repr(Self) -> @debug.Repr
+
+pub(all) suberror StoreError {
+  NotFound(StoreLocation)
+  PermissionDenied(StoreLocation)
+  InvalidPath(String)
+  Failed(StoreLocation, String)
+} derive(Eq, @debug.Debug)
+pub fn StoreError::equal(Self, Self) -> Bool
+pub fn StoreError::not_equal(Self, Self) -> Bool
+pub fn StoreError::to_repr(Self) -> @debug.Repr
+
+// Types and methods
+pub(all) enum EntryKind {
+  File
+  Directory
+} derive(Eq, @debug.Debug)
+pub fn EntryKind::equal(Self, Self) -> Bool
+pub fn EntryKind::not_equal(Self, Self) -> Bool
+pub fn EntryKind::to_repr(Self) -> @debug.Repr
+
+pub struct IndexMetadata {
+  schema_version : Int32
+  built_at : @okf.Instant
+  document_count : Int32
+} derive(Eq, @debug.Debug)
+pub fn IndexMetadata::IndexMetadata(schema_version~ : Int32, built_at~ : @okf.Instant, document_count~ : Int32) -> Self raise IndexError
+pub fn IndexMetadata::equal(Self, Self) -> Bool
+pub fn IndexMetadata::not_equal(Self, Self) -> Bool
+pub fn IndexMetadata::to_repr(Self) -> @debug.Repr
+
+pub(all) enum IndexStatus {
+  Missing
+  Fresh
+  Stale(String)
+} derive(Eq, @debug.Debug)
+pub fn IndexStatus::equal(Self, Self) -> Bool
+pub fn IndexStatus::not_equal(Self, Self) -> Bool
+pub fn IndexStatus::to_repr(Self) -> @debug.Repr
+
+pub(all) struct StoreEntry {
+  name : @okf.EntryName
+  kind : EntryKind
+} derive(Eq, @debug.Debug)
+pub fn StoreEntry::equal(Self, Self) -> Bool
+pub fn StoreEntry::not_equal(Self, Self) -> Bool
+pub fn StoreEntry::to_repr(Self) -> @debug.Repr
+
+pub(all) enum StoreLocation {
+  FileAt(@okf.StorePath)
+  DirectoryAt(@okf.StoreDir)
+} derive(Eq, @debug.Debug)
+pub fn StoreLocation::equal(Self, Self) -> Bool
+pub fn StoreLocation::not_equal(Self, Self) -> Bool
+pub fn StoreLocation::output(Self, &Logger) -> Unit
+pub fn StoreLocation::to_repr(Self) -> @debug.Repr
+pub fn StoreLocation::to_string(Self) -> String
+pub impl Show for StoreLocation
+
+type StoreRoot derive(Eq, Hash, @debug.Debug)
+pub fn StoreRoot::StoreRoot(String) -> Self raise RootError
+pub fn StoreRoot::equal(Self, Self) -> Bool
+pub fn StoreRoot::hash(Self) -> Int32
+pub fn StoreRoot::hash_combine(Self, Hasher) -> Unit
+pub fn StoreRoot::join(Self, ArrayView[String]) -> String
+pub fn StoreRoot::not_equal(Self, Self) -> Bool
+pub fn StoreRoot::output(Self, &Logger) -> Unit
+pub fn StoreRoot::relative_message(Self, String) -> String
+pub fn StoreRoot::to_repr(Self) -> @debug.Repr
+pub fn StoreRoot::to_string(Self) -> String
+pub impl Show for StoreRoot
+
+// Type aliases
+
+// Traits
+pub(open) trait DocumentStore {
+  async fn list(Self, @okf.StoreDir) -> Array[StoreEntry] raise StoreError
+  async fn read_text(Self, @okf.StorePath) -> String raise StoreError
+  async fn read_bytes(Self, @okf.StorePath) -> Bytes raise StoreError
+  async fn write_text(Self, @okf.StorePath, String) -> Unit raise StoreError
+  async fn write_bytes(Self, @okf.StorePath, Bytes) -> Unit raise StoreError
+  async fn delete(Self, @okf.StorePath) -> Unit raise StoreError
+  async fn modified(Self, @okf.StorePath) -> @okf.Instant? raise StoreError
+}
+
+pub(open) trait IndexProvider {
+  async fn build(Self, @okf.Knowledge, &@okf.Clock) -> IndexMetadata raise IndexError
+  async fn status(Self, @okf.Knowledge) -> IndexStatus raise IndexError
+  async fn metadata(Self) -> IndexMetadata? raise IndexError
+  async fn documents(Self, ArrayView[@okf.Filter]) -> Array[@okf.DocKey] raise IndexError
+  async fn facet(Self, @okf.Facet) -> Array[(String, Int32)] raise IndexError
+  async fn links_from(Self, @okf.DocKey) -> Array[@okf.Edge] raise IndexError
+  async fn backlinks(Self, @okf.DocKey) -> Array[@okf.Edge] raise IndexError
+  async fn headings(Self, @okf.DocKey) -> Array[@okf.Heading] raise IndexError
+  async fn sources(Self, @okf.DocKey) -> Array[@okf.Source] raise IndexError
+}
+
+pub(open) trait SearchProvider {
+  async fn search(Self, @okf.SearchRequest) -> Array[@okf.SearchHit] raise IndexError
+}

@@ -1,0 +1,289 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonrockz/mdc"
+
+import {
+  "moonbit-community/cmark/cmark",
+  "moonbit-community/cmark/cmark_base",
+  "moonbit-community/yaml",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn[A : CursorFold] fold_cursor_with(Node, A) -> A
+
+pub fn[A : Fold] fold_with(Node, A) -> A
+
+pub fn parse(String, strict? : Bool, layout? : Bool, locs? : Bool, file? : String) -> Document raise ParseError
+
+pub fn[A] reduce(Node, (Node, ReadOnlyArray[A]) -> A) -> A
+
+pub fn[A] reduce_cursor(Node, (Cursor, ReadOnlyArray[A]) -> A) -> A
+
+pub fn[A : CursorReducer] reduce_cursor_with(Node) -> A
+
+pub fn[A : Reducer] reduce_with(Node) -> A
+
+pub fn walk(Node, (Node) -> Control, leave? : (Node) -> Unit) -> Unit
+
+pub fn walk_cursor(Node, (Cursor) -> Control, leave? : (Cursor) -> Unit) -> Unit
+
+// Errors
+pub(all) suberror FrontmatterError {
+  InvalidYaml(at~ : TextPosition, message~ : String)
+  NotAMapping
+  MultipleDocuments(count~ : Int32)
+} derive(Eq, @debug.Debug)
+pub fn FrontmatterError::equal(Self, Self) -> Bool
+pub fn FrontmatterError::not_equal(Self, Self) -> Bool
+pub fn FrontmatterError::to_repr(Self) -> @debug.Repr
+
+pub(all) suberror ParseError {
+  UnterminatedFrontmatter
+  InvalidFrontmatter(FrontmatterError)
+} derive(@debug.Debug)
+pub fn ParseError::to_repr(Self) -> @debug.Repr
+
+pub(all) suberror PositionError {
+  InvalidPosition(line~ : Int32, column~ : Int32)
+  StartAfterEnd(start~ : TextPosition, end~ : TextPosition)
+  InvalidOffsets(start~ : Int32, end~ : Int32)
+} derive(Eq, @debug.Debug)
+pub fn PositionError::equal(Self, Self) -> Bool
+pub fn PositionError::not_equal(Self, Self) -> Bool
+pub fn PositionError::to_repr(Self) -> @debug.Repr
+
+// Types and methods
+pub enum BlockKind {
+  BlankLine
+  BlockQuote
+  Blocks
+  CodeBlock
+  Heading(level~ : HeadingLevel)
+  HtmlBlock
+  LinkRefDefinition
+  List
+  Paragraph
+  ThematicBreak
+  ExtMathBlock
+  ExtTable
+  ExtFootnoteDefinition
+} derive(Eq, @debug.Debug)
+pub fn BlockKind::equal(Self, Self) -> Bool
+pub fn BlockKind::not_equal(Self, Self) -> Bool
+pub fn BlockKind::to_repr(Self) -> @debug.Repr
+
+type BlockView derive(@debug.Debug)
+pub fn BlockView::kind(Self) -> BlockKind
+pub fn BlockView::location(Self) -> @cmark_base.TextLoc
+pub fn BlockView::to_cmark(Self) -> @cmark.Block
+pub fn BlockView::to_repr(Self) -> @debug.Repr
+
+pub(all) enum Control {
+  Continue
+  SkipChildren
+  Stop
+} derive(Eq, @debug.Debug)
+pub fn Control::equal(Self, Self) -> Bool
+pub fn Control::not_equal(Self, Self) -> Bool
+pub fn Control::to_repr(Self) -> @debug.Repr
+
+type Cursor
+pub fn Cursor::Cursor(Node) -> Self
+pub fn[V : CursorVisitor] Cursor::accept(Self, V) -> Unit
+pub fn Cursor::children(Self) -> ReadOnlyArray[Self]
+pub fn Cursor::depth(Self) -> Int32
+pub fn Cursor::first_child(Self) -> Self?
+pub fn[A] Cursor::fold(Self, A, Folder[A]) -> A
+pub fn[A : CursorFold] Cursor::fold_with(Self, A) -> A
+pub fn Cursor::last_child(Self) -> Self?
+pub fn Cursor::next_sibling(Self) -> Self?
+pub fn Cursor::node(Self) -> Node
+pub fn Cursor::parent(Self) -> Self?
+pub fn Cursor::path(Self) -> NodePath
+pub fn Cursor::previous_sibling(Self) -> Self?
+pub fn[A] Cursor::reduce(Self, (Self, ReadOnlyArray[A]) -> A) -> A
+pub fn[A : CursorReducer] Cursor::reduce_with(Self) -> A
+pub fn Cursor::to_repr(Self) -> @debug.Repr
+pub fn Cursor::walk(Self, (Self) -> Control, leave? : (Self) -> Unit) -> Unit
+pub impl @debug.Debug for Cursor
+
+type Document derive(@debug.Debug)
+pub fn Document::Document(String, strict? : Bool, layout? : Bool, locs? : Bool, file? : String) -> Self raise ParseError
+pub fn[V : Visitor] Document::accept(Self, V) -> Unit
+pub fn[V : CursorVisitor] Document::accept_cursor(Self, V) -> Unit
+pub fn Document::body(Self) -> String
+pub fn Document::body_line(Self) -> Int32
+pub fn Document::body_offset(Self) -> Int32
+pub fn Document::cursor(Self) -> Cursor
+pub fn[A] Document::fold(Self, A, Folder[A]) -> A
+pub fn[A : CursorFold] Document::fold_cursor_with(Self, A) -> A
+pub fn[A : Fold] Document::fold_with(Self, A) -> A
+pub fn Document::frontmatter(Self) -> Frontmatter?
+pub fn[A] Document::reduce(Self, (Node, ReadOnlyArray[A]) -> A) -> A
+pub fn[A] Document::reduce_cursor(Self, (Cursor, ReadOnlyArray[A]) -> A) -> A
+pub fn[A : CursorReducer] Document::reduce_cursor_with(Self) -> A
+pub fn[A : Reducer] Document::reduce_with(Self) -> A
+pub fn Document::root(Self) -> Node
+pub fn Document::source_range(Self, @cmark_base.TextLoc) -> SourceRange?
+pub fn Document::to_cmark(Self) -> @cmark.Doc
+pub fn Document::to_repr(Self) -> @debug.Repr
+
+pub(all) enum FoldAction[A] {
+  Continue(A)
+  SkipChildren(A)
+  Stop(A)
+} derive(Eq, @debug.Debug)
+pub fn[A : Eq] FoldAction::equal(Self[A], Self[A]) -> Bool
+pub fn[A : Eq] FoldAction::not_equal(Self[A], Self[A]) -> Bool
+pub fn[A : @debug.Debug] FoldAction::to_repr(Self[A]) -> @debug.Repr
+
+type Folder[A]
+pub fn[A] Folder::Folder((A, Node) -> FoldAction[A]) -> Self[A]
+pub fn[A : CursorFold] Folder::from_cursor_trait() -> Self[A]
+pub fn[A : Fold] Folder::from_trait() -> Self[A]
+pub fn[A] Folder::with_cursor((A, Cursor) -> FoldAction[A]) -> Self[A]
+
+type Frontmatter derive(@debug.Debug)
+pub fn Frontmatter::Frontmatter(String) -> Self raise FrontmatterError
+pub fn Frontmatter::raw(Self) -> String
+pub fn Frontmatter::to_repr(Self) -> @debug.Repr
+pub fn Frontmatter::value(Self) -> @yaml.Yaml
+
+pub(all) enum HeadingLevel {
+  H1
+  H2
+  H3
+  H4
+  H5
+  H6
+} derive(Compare, Eq, Hash, @debug.Debug)
+pub fn HeadingLevel::compare(Self, Self) -> Int32
+pub fn HeadingLevel::equal(Self, Self) -> Bool
+pub fn HeadingLevel::hash(Self) -> Int32
+pub fn HeadingLevel::hash_combine(Self, Hasher) -> Unit
+pub fn HeadingLevel::not_equal(Self, Self) -> Bool
+pub fn HeadingLevel::of_int(Int32) -> Self?
+pub fn HeadingLevel::op_ge(Self, Self) -> Bool
+pub fn HeadingLevel::op_gt(Self, Self) -> Bool
+pub fn HeadingLevel::op_le(Self, Self) -> Bool
+pub fn HeadingLevel::op_lt(Self, Self) -> Bool
+pub fn HeadingLevel::output(Self, &Logger) -> Unit
+pub fn HeadingLevel::to_int(Self) -> Int32
+pub fn HeadingLevel::to_repr(Self) -> @debug.Repr
+pub fn HeadingLevel::to_string(Self) -> String
+pub impl Show for HeadingLevel
+
+pub enum InlineKind {
+  Autolink
+  Break
+  CodeSpan(code~ : String)
+  Emphasis
+  Image
+  Inlines
+  Link
+  RawHtml
+  StrongEmphasis
+  Text(text~ : String)
+  ExtStrikethrough
+  ExtMathSpan(tex~ : String)
+} derive(Eq, @debug.Debug)
+pub fn InlineKind::equal(Self, Self) -> Bool
+pub fn InlineKind::not_equal(Self, Self) -> Bool
+pub fn InlineKind::to_repr(Self) -> @debug.Repr
+
+type InlineView derive(@debug.Debug)
+pub fn InlineView::kind(Self) -> InlineKind
+pub fn InlineView::location(Self) -> @cmark_base.TextLoc
+pub fn InlineView::to_cmark(Self) -> @cmark.Inline
+pub fn InlineView::to_repr(Self) -> @debug.Repr
+
+pub(all) enum Node {
+  Document(Document)
+  Frontmatter(Frontmatter)
+  Block(BlockView)
+  Inline(InlineView)
+} derive(@debug.Debug)
+pub fn[V : CursorVisitor] Node::accept_cursor(Self, V) -> Unit
+pub fn Node::at(Self, NodePath) -> Self?
+pub fn Node::children(Self) -> ReadOnlyArray[Self]
+pub fn Node::cursor(Self) -> Cursor
+pub fn[A] Node::fold(Self, A, Folder[A]) -> A
+pub fn[A : CursorFold] Node::fold_cursor_with(Self, A) -> A
+pub fn[A : Fold] Node::fold_with(Self, A) -> A
+pub fn[A : CursorReducer] Node::reduce_cursor_with(Self) -> A
+pub fn[A : Reducer] Node::reduce_with(Self) -> A
+pub fn Node::to_repr(Self) -> @debug.Repr
+
+type NodePath derive(Eq, @debug.Debug)
+pub fn NodePath::equal(Self, Self) -> Bool
+pub fn NodePath::indices(Self) -> ReadOnlyArray[Int32]
+pub fn NodePath::not_equal(Self, Self) -> Bool
+pub fn NodePath::output(Self, &Logger) -> Unit
+pub fn NodePath::to_repr(Self) -> @debug.Repr
+pub fn NodePath::to_string(Self) -> String
+pub impl Show for NodePath
+
+type SourceRange derive(Eq, Hash, @debug.Debug)
+pub fn SourceRange::SourceRange(start~ : TextPosition, end~ : TextPosition, start_offset~ : Int32, end_offset~ : Int32) -> Self raise PositionError
+pub fn SourceRange::end(Self) -> TextPosition
+pub fn SourceRange::end_offset(Self) -> Int32
+pub fn SourceRange::equal(Self, Self) -> Bool
+pub fn SourceRange::hash(Self) -> Int32
+pub fn SourceRange::hash_combine(Self, Hasher) -> Unit
+pub fn SourceRange::not_equal(Self, Self) -> Bool
+pub fn SourceRange::start(Self) -> TextPosition
+pub fn SourceRange::start_offset(Self) -> Int32
+pub fn SourceRange::to_repr(Self) -> @debug.Repr
+
+type TextPosition derive(Compare, Eq, Hash, @debug.Debug)
+pub fn TextPosition::TextPosition(line~ : Int32, column~ : Int32) -> Self raise PositionError
+pub fn TextPosition::column(Self) -> Int32
+pub fn TextPosition::compare(Self, Self) -> Int32
+pub fn TextPosition::equal(Self, Self) -> Bool
+pub fn TextPosition::hash(Self) -> Int32
+pub fn TextPosition::hash_combine(Self, Hasher) -> Unit
+pub fn TextPosition::line(Self) -> Int32
+pub fn TextPosition::not_equal(Self, Self) -> Bool
+pub fn TextPosition::op_ge(Self, Self) -> Bool
+pub fn TextPosition::op_gt(Self, Self) -> Bool
+pub fn TextPosition::op_le(Self, Self) -> Bool
+pub fn TextPosition::op_lt(Self, Self) -> Bool
+pub fn TextPosition::output(Self, &Logger) -> Unit
+pub fn TextPosition::to_repr(Self) -> @debug.Repr
+pub fn TextPosition::to_string(Self) -> String
+pub impl Show for TextPosition
+
+// Type aliases
+
+// Traits
+pub(open) trait CursorFold {
+  fn enter(Self, Cursor) -> FoldAction[Self]
+}
+
+pub(open) trait CursorReducer {
+  fn reduce(Cursor, ReadOnlyArray[Self]) -> Self
+}
+
+pub(open) trait CursorVisitor {
+  fn visit_document(Self, Cursor) -> Control = _
+  fn visit_frontmatter(Self, Cursor) -> Control = _
+  fn visit_block(Self, Cursor) -> Control = _
+  fn visit_inline(Self, Cursor) -> Control = _
+  fn leave(Self, Cursor) -> Unit = _
+}
+
+pub(open) trait Fold {
+  fn enter(Self, Node) -> FoldAction[Self]
+}
+
+pub(open) trait Reducer {
+  fn reduce(Node, ReadOnlyArray[Self]) -> Self
+}
+
+pub(open) trait Visitor {
+  fn visit_document(Self, Document) -> Control = _
+  fn visit_frontmatter(Self, Frontmatter) -> Control = _
+  fn visit_block(Self, BlockView) -> Control = _
+  fn visit_inline(Self, InlineView) -> Control = _
+  fn leave(Self, Node) -> Unit = _
+}

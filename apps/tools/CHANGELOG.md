@@ -5,6 +5,9 @@ with its highlights written releases that version when it reaches main (see `app
 
 ## [Unreleased]
 
+- `openspec setup` accepts OpenSpec 1.16.x as well as 1.14.3. Other versions get
+  `Setup requires OpenSpec 1.14.3 or 1.16.x`.
+
 ## [0.1.0] - 2026-11-07
 
 The first release of `mission-control-tools`. It carries the shared OpenSpec commands, so a consumer

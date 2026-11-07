@@ -30,6 +30,8 @@ pub fn retired_files() -> Array[RetiredFile]
 
 pub fn retirement(RetiredFile, String?, Lock?) -> Retirement
 
+pub let supported_openspec : String
+
 // Errors
 pub suberror ExtensionError {
   InvalidPath(String)
@@ -59,6 +61,17 @@ pub fn LockError::output(Self, &Logger) -> Unit
 #deprecated
 pub fn LockError::to_string(Self) -> String
 pub impl Show for LockError
+
+pub suberror OpenSpecVersionError {
+  InvalidOpenSpecVersion(String)
+  UnsupportedOpenSpec(@mission-control-contracts.Version)
+}
+pub fn OpenSpecVersionError::message(Self) -> String
+#deprecated
+pub fn OpenSpecVersionError::output(Self, &Logger) -> Unit
+#deprecated
+pub fn OpenSpecVersionError::to_string(Self) -> String
+pub impl Show for OpenSpecVersionError
 
 // Types and methods
 pub(all) enum BundleFile {
@@ -152,6 +165,12 @@ pub enum Retirement {
   Edited
   Unmanaged
 }
+
+pub struct SupportedOpenSpec {
+  // private fields
+}
+pub fn SupportedOpenSpec::SupportedOpenSpec(String) -> Self raise OpenSpecVersionError
+pub fn SupportedOpenSpec::version(Self) -> @mission-control-contracts.Version
 
 pub struct Tool {
   // private fields

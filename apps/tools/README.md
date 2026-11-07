@@ -84,7 +84,7 @@ in any order after the command.
 | `openspec check` | Compares each managed file with its digest in `openspec/extensions.lock.json`, and checks that `openspec/config.yaml` selects `html-design`. The result does not depend on the tool version. This is what `scripts/openspec-ext.mbtx check` did. | No |
 | `openspec check --bundle` | Does the snapshot check, then checks that the lock records this tool and version, and that each managed file is the file in this binary. Use it in `openspec:check`, so that a version bump without `install` fails. | No |
 | `openspec install` | Installs or updates the schema, the templates, `LICENSE` and `NOTICE`, selects `html-design` in the config, and writes the lock. It refuses a local edit before it writes anything. It deletes the retired script copy when it is not edited. | Yes |
-| `openspec setup` | Does the snapshot check, requires OpenSpec 1.14.3, and runs `openspec init` for the core profile with a temporary configuration directory. Your global OpenSpec settings do not change. It does not install. | Agent skills |
+| `openspec setup` | Does the snapshot check, requires OpenSpec 1.14.3 or a 1.16 patch release (1.16.x), and runs `openspec init` for the core profile with a temporary configuration directory. Your global OpenSpec settings do not change. It does not install. | Agent skills |
 
 Exit codes: 0 for success, 1 for a failure and 2 for a usage error. A usage error stops before any file is
 read.

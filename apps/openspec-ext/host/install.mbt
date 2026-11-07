@@ -21,15 +21,12 @@ pub fn InstallError::message(self : InstallError) -> String {
       "Edited retired file: \{file.path()}. Review it and remove it before installing."
     UnsupportedLock(reason) =>
       "Unsupported extension lock (\{reason.message()}); restore it from version control"
-    OpenSpecVersion => "Setup requires OpenSpec \{openspec_version}"
+    OpenSpecVersion =>
+      "Setup requires OpenSpec \{@extension.supported_openspec}"
     SetupFailed(code) => "OpenSpec integration setup failed: \{code}"
     CheckFailed(problems) => problems.map(p => p.message()).iter().join("\n")
   }
 }
-
-///|
-/// The OpenSpec CLI version that setup supports.
-let openspec_version : String = "1.14.3"
 
 ///|
 /// Reject symlink destinations, including dangling links and parent directories.
@@ -250,8 +247,8 @@ async fn openspec_version_in(root : String) -> String? {
 }
 
 ///|
-/// Check the snapshot, require the supported OpenSpec CLI, and generate the core skills with
-/// isolated preferences. User preferences are untouched. Setup does not install.
+/// Check the snapshot, require a supported OpenSpec CLI (1.14.3 or 1.16.x), and generate the
+/// core skills with isolated preferences. User preferences are untouched. Setup does not install.
 pub async fn setup(repository : @extension.RepositoryPath) -> Unit {
   setup_with(repository, openspec_version_in, (root, _, environment) => {
     @process.run(
@@ -276,8 +273,13 @@ pub async fn setup_with(
   let report = check(repository, Snapshot)
   guard report.problems.is_empty() else { raise CheckFailed(report.problems) }
   let root = report.root
-  guard version_in(root) == Some(openspec_version) else {
-    raise OpenSpecVersion
+  // Parse the version text at the process boundary; a text that is not supported stops setup.
+  let _ : @extension.SupportedOpenSpec = match version_in(root) {
+    Some(text) =>
+      @extension.SupportedOpenSpec(text) catch {
+        _ => raise OpenSpecVersion
+      }
+    None => raise OpenSpecVersion
   }
   isolated_init((home, environment) => run_init(root, home, environment))
 }

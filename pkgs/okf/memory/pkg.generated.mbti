@@ -1,0 +1,47 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonrockz/okf/memory"
+
+import {
+  "moonrockz/okf",
+  "moonrockz/okf/provider",
+}
+
+// Values
+pub let memory_schema_version : Int32
+
+// Errors
+
+// Types and methods
+type MemoryIndex
+pub fn MemoryIndex::MemoryIndex(resolver? : &@okf.LinkResolver) -> Self
+pub async fn MemoryIndex::backlinks(Self, @okf.DocKey) -> Array[@okf.Edge] raise @provider.IndexError
+pub async fn MemoryIndex::build(Self, @okf.Knowledge, &@okf.Clock) -> @provider.IndexMetadata raise @provider.IndexError
+pub fn MemoryIndex::build_now(Self, @okf.Knowledge, &@okf.Clock) -> @provider.IndexMetadata raise @provider.IndexError
+pub async fn MemoryIndex::documents(Self, ArrayView[@okf.Filter]) -> Array[@okf.DocKey] raise @provider.IndexError
+pub async fn MemoryIndex::facet(Self, @okf.Facet) -> Array[(String, Int32)] raise @provider.IndexError
+pub async fn MemoryIndex::headings(Self, @okf.DocKey) -> Array[@okf.Heading] raise @provider.IndexError
+pub async fn MemoryIndex::links_from(Self, @okf.DocKey) -> Array[@okf.Edge] raise @provider.IndexError
+pub async fn MemoryIndex::metadata(Self) -> @provider.IndexMetadata? raise @provider.IndexError
+pub async fn MemoryIndex::search(Self, @okf.SearchRequest) -> Array[@okf.SearchHit] raise @provider.IndexError
+pub fn MemoryIndex::search_now(Self, @okf.SearchRequest) -> Array[@okf.SearchHit] raise @provider.IndexError
+pub async fn MemoryIndex::sources(Self, @okf.DocKey) -> Array[@okf.Source] raise @provider.IndexError
+pub async fn MemoryIndex::status(Self, @okf.Knowledge) -> @provider.IndexStatus raise @provider.IndexError
+pub impl @provider.IndexProvider for MemoryIndex
+pub impl @provider.SearchProvider for MemoryIndex
+
+type MemoryStore
+pub fn MemoryStore::MemoryStore(set? : @okf.DocumentSet, clock? : &@okf.Clock, read_only? : Bool) -> Self
+pub async fn MemoryStore::delete(Self, @okf.StorePath) -> Unit raise @provider.StoreError
+pub async fn MemoryStore::list(Self, @okf.StoreDir) -> Array[@provider.StoreEntry] raise @provider.StoreError
+pub async fn MemoryStore::modified(Self, @okf.StorePath) -> @okf.Instant? raise @provider.StoreError
+pub fn MemoryStore::put(Self, @okf.StorePath, String) -> Unit
+pub async fn MemoryStore::read_bytes(Self, @okf.StorePath) -> Bytes raise @provider.StoreError
+pub async fn MemoryStore::read_text(Self, @okf.StorePath) -> String raise @provider.StoreError
+pub fn MemoryStore::snapshot(Self) -> @okf.DocumentSet
+pub async fn MemoryStore::write_bytes(Self, @okf.StorePath, Bytes) -> Unit raise @provider.StoreError
+pub async fn MemoryStore::write_text(Self, @okf.StorePath, String) -> Unit raise @provider.StoreError
+pub impl @provider.DocumentStore for MemoryStore
+
+// Type aliases
+
+// Traits

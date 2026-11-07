@@ -1,0 +1,63 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonrockz/mission-control-contracts"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub let commands : ReadOnlyArray[Command]
+
+pub fn version() -> Version
+
+// Errors
+pub(all) suberror CommandError {
+  UnknownCommand(String)
+} derive(Eq, @debug.Debug)
+pub fn CommandError::equal(Self, Self) -> Bool
+pub fn CommandError::not_equal(Self, Self) -> Bool
+pub fn CommandError::to_repr(Self) -> @debug.Repr
+
+pub(all) suberror VersionError {
+  InvalidVersion(String)
+} derive(Eq, @debug.Debug)
+pub fn VersionError::equal(Self, Self) -> Bool
+pub fn VersionError::not_equal(Self, Self) -> Bool
+pub fn VersionError::to_repr(Self) -> @debug.Repr
+
+// Types and methods
+pub(all) enum Command {
+  Help
+  Version
+} derive(Eq, @debug.Debug)
+pub fn Command::Command(String) -> Self raise CommandError
+pub fn Command::description(Self) -> String
+pub fn Command::equal(Self, Self) -> Bool
+pub fn Command::name(Self) -> String
+pub fn Command::not_equal(Self, Self) -> Bool
+pub fn Command::proton_id(Self) -> String
+pub fn Command::to_repr(Self) -> @debug.Repr
+
+type Version derive(Compare, Eq, Hash, @debug.Debug)
+pub fn Version::Version(String) -> Self raise VersionError
+pub fn Version::compare(Self, Self) -> Int32
+pub fn Version::current() -> Self
+pub fn Version::equal(Self, Self) -> Bool
+pub fn Version::hash(Self) -> Int32
+pub fn Version::hash_combine(Self, Hasher) -> Unit
+pub fn Version::major(Self) -> Int32
+pub fn Version::minor(Self) -> Int32
+pub fn Version::not_equal(Self, Self) -> Bool
+pub fn Version::op_ge(Self, Self) -> Bool
+pub fn Version::op_gt(Self, Self) -> Bool
+pub fn Version::op_le(Self, Self) -> Bool
+pub fn Version::op_lt(Self, Self) -> Bool
+pub fn Version::output(Self, &Logger) -> Unit
+pub fn Version::patch(Self) -> Int32
+pub fn Version::to_repr(Self) -> @debug.Repr
+pub fn Version::to_string(Self) -> String
+pub impl Show for Version
+
+// Type aliases
+
+// Traits
