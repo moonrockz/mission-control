@@ -8,6 +8,10 @@ import {
 // Values
 pub fn can_replace(BundleFile, String?, FileDigest?) -> Bool
 
+pub fn check_snapshot(lock~ : String?, config~ : String?, file~ : (BundleFile) -> String?, level~ : CheckLevel) -> Array[Problem]
+
+pub let config_path : String
+
 pub fn configure(String) -> String raise ExtensionError
 
 pub fn digest(String) -> FileDigest
@@ -16,25 +20,45 @@ pub fn files() -> Array[BundleFile]
 
 pub fn initial_config() -> String
 
-pub fn lock_text() -> String
+pub let lock_path : String
 
-pub fn parse_command(ArrayView[String]) -> Command raise ExtensionError
+pub fn lock_text(Tool) -> String
 
-pub fn usage() -> String
+pub fn parse_lock(String) -> Lock raise LockError
 
-pub fn version() -> @mission-control-contracts.Version
+pub fn retired_files() -> Array[RetiredFile]
+
+pub fn retirement(RetiredFile, String?, Lock?) -> Retirement
 
 // Errors
 pub suberror ExtensionError {
-  InvalidArguments(String)
+  InvalidPath(String)
   InvalidConfig(String)
   InvalidDigest(String)
+  InvalidTool(String)
 }
 #deprecated
 pub fn ExtensionError::output(Self, &Logger) -> Unit
 #deprecated
 pub fn ExtensionError::to_string(Self) -> String
 pub impl Show for ExtensionError
+
+pub suberror LockError {
+  Syntax
+  MissingField(String)
+  UnknownFormat(String)
+  WrongExtension(String)
+  WrongModule(String)
+  InvalidToolName(String)
+  InvalidVersion(String)
+  InvalidDigest(String)
+}
+pub fn LockError::message(Self) -> String
+#deprecated
+pub fn LockError::output(Self, &Logger) -> Unit
+#deprecated
+pub fn LockError::to_string(Self) -> String
+pub impl Show for LockError
 
 // Types and methods
 pub(all) enum BundleFile {
@@ -45,20 +69,21 @@ pub(all) enum BundleFile {
   Tasks
   Notice
   License
-  Workflow
-  WorkflowFeature
-}
+} derive(Eq)
 pub fn BundleFile::content(Self) -> String
+#deprecated
+pub fn BundleFile::equal(Self, Self) -> Bool
+#deprecated
+pub fn BundleFile::not_equal(Self, Self) -> Bool
 pub fn BundleFile::path(Self) -> String
 
-pub enum Command {
-  Help
-  Version
-  Repository(Operation, RepositoryPath)
+pub(all) enum CheckLevel {
+  Snapshot
+  Bundle(Tool)
 }
 
 pub struct FileDigest {
-  value : String
+  // private fields
 } derive(Eq)
 pub fn FileDigest::FileDigest(String) -> Self raise ExtensionError
 #deprecated
@@ -67,17 +92,78 @@ pub fn FileDigest::equal(Self, Self) -> Bool
 pub fn FileDigest::not_equal(Self, Self) -> Bool
 pub fn FileDigest::text(Self) -> String
 
-pub enum Operation {
-  Install
-  Check
-  Setup
+pub enum Input {
+  LockFile
+  Config
+  Managed(BundleFile)
+} derive(Eq)
+#deprecated
+pub fn Input::equal(Self, Self) -> Bool
+#deprecated
+pub fn Input::not_equal(Self, Self) -> Bool
+pub fn Input::path(Self) -> String
+
+pub enum Lock {
+  Legacy(LockedFiles)
+  Current(Tool, LockedFiles)
 }
+pub fn Lock::files(Self) -> LockedFiles
+
+pub struct LockedFiles {
+  // private fields
+}
+pub fn LockedFiles::get(Self, String) -> FileDigest?
+pub fn LockedFiles::length(Self) -> Int32
+
+pub enum Problem {
+  MissingFile(Input)
+  UnsupportedLock
+  LegacyLock
+  FileSet
+  MissingDigest(BundleFile)
+  Drift(BundleFile)
+  Schema
+  ToolVersion(recorded~ : Tool, expected~ : Tool)
+  BundleDrift(BundleFile, Tool)
+}
+pub fn Problem::code(Self) -> String
+pub fn Problem::message(Self) -> String
+pub fn Problem::path(Self) -> String?
 
 pub struct RepositoryPath {
-  value : String
+  // private fields
 }
 pub fn RepositoryPath::RepositoryPath(String) -> Self raise ExtensionError
 pub fn RepositoryPath::text(Self) -> String
+
+pub(all) enum RetiredFile {
+  Script
+  ScriptFeature
+} derive(Eq)
+#deprecated
+pub fn RetiredFile::equal(Self, Self) -> Bool
+#deprecated
+pub fn RetiredFile::not_equal(Self, Self) -> Bool
+pub fn RetiredFile::path(Self) -> String
+
+pub enum Retirement {
+  Absent
+  Delete
+  Edited
+  Unmanaged
+}
+
+pub struct Tool {
+  // private fields
+} derive(Eq)
+pub fn Tool::Tool(String, @mission-control-contracts.Version) -> Self raise ExtensionError
+#deprecated
+pub fn Tool::equal(Self, Self) -> Bool
+pub fn Tool::module_name(Self) -> String
+pub fn Tool::name(Self) -> String
+#deprecated
+pub fn Tool::not_equal(Self, Self) -> Bool
+pub fn Tool::version(Self) -> @mission-control-contracts.Version
 
 // Type aliases
 

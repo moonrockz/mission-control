@@ -1,12 +1,35 @@
 ///|
+/// Why an install, a check or a setup stopped. Each case gives its own message.
 pub suberror InstallError {
-  Conflict(String)
-  InvalidLock(String)
+  Symlink(String)
+  LocalEdit(@extension.BundleFile)
+  EditedRetired(@extension.RetiredFile)
+  UnsupportedLock(@extension.LockError)
+  OpenSpecVersion
   SetupFailed(Int32)
+  CheckFailed(Array[@extension.Problem])
 }
 
 ///|
-let lock_path : String = "openspec/extensions.lock.json"
+/// The message of the error, as the CLI prints it.
+pub fn InstallError::message(self : InstallError) -> String {
+  match self {
+    Symlink(path) => "Refusing symlink destination: \{path}"
+    LocalEdit(file) =>
+      "Local or unmanaged file: \{file.path()}. Review and move it aside before installing."
+    EditedRetired(file) =>
+      "Edited retired file: \{file.path()}. Review it and remove it before installing."
+    UnsupportedLock(reason) =>
+      "Unsupported extension lock (\{reason.message()}); restore it from version control"
+    OpenSpecVersion => "Setup requires OpenSpec \{openspec_version}"
+    SetupFailed(code) => "OpenSpec integration setup failed: \{code}"
+    CheckFailed(problems) => problems.map(p => p.message()).iter().join("\n")
+  }
+}
+
+///|
+/// The OpenSpec CLI version that setup supports.
+let openspec_version : String = "1.14.3"
 
 ///|
 /// Reject symlink destinations, including dangling links and parent directories.
@@ -16,7 +39,7 @@ async fn safe_path(root : String, relative : String) -> Unit {
     path = path + "/" + part.to_owned()
     let kind = Some(@fs.kind(path, follow_symlink=false)) catch { _ => None }
     if kind is Some(SymLink) {
-      raise Conflict("Refusing symlink destination: \{path}")
+      raise Symlink(path)
     }
   }
 }
@@ -31,66 +54,116 @@ async fn read_optional(path : String) -> String? {
 }
 
 ///|
-fn previous_hashes(text : String?) -> Map[String, @extension.FileDigest] raise {
-  guard text is Some(text) else { return Map([]) }
-  let lock = @json.parse(text)
-  guard lock
-    is {
-      "format": 1,
-      "extension": "html-design",
-      "module": "moonrockz/openspec-ext",
-      "version": String(_),
-      "files": Object(hashes),
-      ..
-    } else {
-    raise InvalidLock(
-      "Unsupported extension lock; restore it from version control",
-    )
-  }
-  let result = Map([])
+/// The result of a check: the resolved repository root and the problems, in report order. The
+/// fields are private, so a report cannot change after the check.
+pub struct CheckReport {
+  priv root : String
+  priv problems : Array[@extension.Problem]
+}
+
+///|
+/// The absolute repository root that the check resolved. It is the operating system's answer to
+/// `realpath` of the given path, so it has no rules of its own to parse.
+pub fn CheckReport::root(self : CheckReport) -> String {
+  self.root
+}
+
+///|
+/// A copy of the problems, in report order.
+pub fn CheckReport::problems(self : CheckReport) -> Array[@extension.Problem] {
+  self.problems.copy()
+}
+
+///|
+/// Read the lock, the config and the managed files, and check them. This never writes files.
+pub async fn check(
+  repository : @extension.RepositoryPath,
+  level : @extension.CheckLevel,
+) -> CheckReport {
+  let root = @fs.realpath(repository.text())
+  safe_path(root, @extension.lock_path)
+  safe_path(root, @extension.config_path)
+  let texts = []
   for file in @extension.files() {
-    if hashes.get(file.path()) is None {
-      continue
-    }
-    guard hashes.get(file.path()) is Some(String(hash)) else {
-      raise InvalidLock("Missing digest for \{file.path()}")
-    }
-    result.set(file.path(), @extension.FileDigest(hash))
+    safe_path(root, file.path())
+    texts.push((file, read_optional("\{root}/\{file.path()}")))
   }
-  result
+  let problems = @extension.check_snapshot(
+    lock=read_optional("\{root}/\{@extension.lock_path}"),
+    config=read_optional("\{root}/\{@extension.config_path}"),
+    file=wanted => {
+      for entry in texts {
+        if entry.0 == wanted {
+          break entry.1
+        }
+      } nobreak {
+        None
+      }
+    },
+    level~,
+  )
+  { root, problems, }
 }
 
 ///|
 /// Preflight all ownership and config checks before writing any destination.
 /// A failed I/O write leaves the old lock in place; rerunning repairs partial installs.
-pub async fn install(repository : @extension.RepositoryPath) -> Unit {
+pub async fn install(
+  repository : @extension.RepositoryPath,
+  tool : @extension.Tool,
+) -> Unit {
   let root = @fs.realpath(repository.text())
   for
     relative in [
-      "openspec/config.yaml", lock_path, "openspec/extensions.lock.json.next", "openspec/specs",
+      @extension.config_path,
+      @extension.lock_path,
+      "\{@extension.lock_path}.next",
+      "openspec/specs",
       "openspec/changes/archive",
     ] {
     safe_path(root, relative)
   }
-  let config_path = "\{root}/openspec/config.yaml"
-  let config = match read_optional(config_path) {
+  let config_file = "\{root}/\{@extension.config_path}"
+  let config = match read_optional(config_file) {
     Some(source) => @extension.configure(source)
     None => @extension.initial_config()
   }
-  let previous = previous_hashes(read_optional("\{root}/\{lock_path}"))
+  let previous = match read_optional("\{root}/\{@extension.lock_path}") {
+    None => None
+    Some(text) =>
+      Some(
+        @extension.parse_lock(text) catch {
+          reason => raise UnsupportedLock(reason)
+        },
+      )
+  }
   for file in @extension.files() {
     safe_path(root, file.path())
     guard @extension.can_replace(
       file,
       read_optional("\{root}/\{file.path()}"),
-      previous.get(file.path()),
+      previous.bind(lock => lock.files().get(file.path())),
     ) else {
-      raise Conflict(
-        "Local or unmanaged file: \{file.path()}. Review and move it aside before installing.",
-      )
+      raise LocalEdit(file)
     }
   }
-  @fs.mkdir("\{root}/scripts/features", recursive=true, allow_exist=true)
+  let retire = []
+  for file in @extension.retired_files() {
+    match
+      @extension.retirement(
+        file,
+        read_optional("\{root}/\{file.path()}"),
+        previous,
+      ) {
+      Delete => {
+        // Only a file that will be deleted needs the guard: never delete through a link.
+        safe_path(root, file.path())
+        retire.push(file)
+      }
+      Edited => raise EditedRetired(file)
+      Absent | Unmanaged => ()
+    }
+  }
   @fs.mkdir(
     "\{root}/openspec/schemas/html-design/templates",
     recursive=true,
@@ -108,76 +181,110 @@ pub async fn install(repository : @extension.RepositoryPath) -> Unit {
       @fs.write_file(destination, file.content())
     }
   }
-  if read_optional(config_path) != Some(config) {
-    @fs.write_file(config_path, config)
+  if read_optional(config_file) != Some(config) {
+    @fs.write_file(config_file, config)
+  }
+  // Retired files go after the managed writes and before the lock: a rerun after an
+  // interruption still finds the previous lock and repeats the same decisions.
+  for file in retire {
+    @fs.remove("\{root}/\{file.path()}")
   }
   // Commit the ownership record last, so a failed write cannot certify a partial install.
-  if read_optional("\{root}/\{lock_path}") != Some(@extension.lock_text()) {
-    let next = "\{root}/\{lock_path}.next"
-    @fs.write_file(next, @extension.lock_text())
-    @fs.rename(next, "\{root}/\{lock_path}", replace=true)
+  let lock = @extension.lock_text(tool)
+  if read_optional("\{root}/\{@extension.lock_path}") != Some(lock) {
+    let next = "\{root}/\{@extension.lock_path}.next"
+    @fs.write_file(next, lock)
+    @fs.rename(next, "\{root}/\{@extension.lock_path}", replace=true)
   }
 }
 
 ///|
-/// Verify the pinned bundle and config. This operation never writes files.
-pub async fn check(repository : @extension.RepositoryPath) -> Unit {
-  let root = @fs.realpath(repository.text())
-  safe_path(root, lock_path)
-  let lock = read_optional("\{root}/\{lock_path}")
-  let _ = previous_hashes(lock)
-  guard lock == Some(@extension.lock_text()) else {
-    raise Conflict(
-      "Extension lock differs from openspec-ext \{@extension.version()}; run install with the intended version",
-    )
-  }
-  for file in @extension.files() {
-    safe_path(root, file.path())
-    guard read_optional("\{root}/\{file.path()}") == Some(file.content()) else {
-      raise Conflict("Extension drift: \{file.path()}")
-    }
-  }
-  safe_path(root, "openspec/config.yaml")
-  guard read_optional("\{root}/openspec/config.yaml") is Some(config) &&
-    @extension.configure(config) == config else {
-    raise Conflict("Project default schema must be html-design")
+/// The global OpenSpec preferences that setup uses, whatever the user's own preferences are.
+pub fn setup_preferences() -> Json {
+  {
+    "profile": "core",
+    "delivery": "skills",
+    "telemetry": { "noticeSeen": true },
   }
 }
 
 ///|
-/// Generate skills with an isolated global config, leaving user preferences untouched.
-pub async fn setup(repository : @extension.RepositoryPath) -> Unit {
-  let root = @fs.realpath(repository.text())
-  let (version_code, output, _) = @process.collect_output(
-    "openspec",
-    ["--version"],
-    cwd=root,
+/// Own the lifetime of a temporary configuration directory and pass it explicitly to
+/// `run_init` as its home and its environment. The directory is removed after `run_init` returns.
+pub async fn isolated_init(
+  run_init : async (String, Map[String, String]) -> Int32,
+) -> Unit {
+  let home = @fs.tmpdir(prefix="openspec-ext")
+  defer @fs.rmdir(home, recursive=true)
+  @fs.mkdir("\{home}/openspec")
+  @fs.write_file(
+    "\{home}/openspec/config.json",
+    setup_preferences().stringify(),
   )
-  guard version_code == 0 && output.text().trim() == "1.14.3" else {
-    raise Conflict(
-      "setup requires OpenSpec 1.14.3; pin npm:@fission-ai/openspec in mise",
-    )
-  }
-  install(repository)
-  let code = @process.run(
-    "moon",
-    ["run", "--target", "wasm", "scripts/openspec-ext.mbtx", "--", "setup"],
-    cwd=root,
-    stdout=@stdio.stdout,
-    stderr=@stdio.stderr,
-  )
+  let code = run_init(home, {
+    "XDG_CONFIG_HOME": home,
+    "OPENSPEC_TELEMETRY": "0",
+  })
   guard code == 0 else { raise SetupFailed(code) }
 }
 
 ///|
-pub impl Show for InstallError with fn output(self, logger) {
-  match self {
-    Conflict(message) | InvalidLock(message) => logger.write_string(message)
-    SetupFailed(code) =>
-      logger.write_string(
-        "OpenSpec integration setup failed with exit code \{code}",
-      )
+/// The agents that setup generates skills for.
+let setup_tools : String = "agents,codex,claude,github-copilot,cursor,grok,gemini,opencode"
+
+///|
+/// The version that `openspec --version` prints in `root`, or `None` when it cannot run.
+async fn openspec_version_in(root : String) -> String? {
+  let (code, output, _) = @process.collect_output(
+    "openspec",
+    ["--version"],
+    cwd=root,
+  ) catch {
+    _ => return None
   }
+  if code == 0 {
+    Some(output.text().trim().to_owned())
+  } else {
+    None
+  }
+}
+
+///|
+/// Check the snapshot, require the supported OpenSpec CLI, and generate the core skills with
+/// isolated preferences. User preferences are untouched. Setup does not install.
+pub async fn setup(repository : @extension.RepositoryPath) -> Unit {
+  setup_with(repository, openspec_version_in, (root, _, environment) => {
+    @process.run(
+      "openspec",
+      ["init", "--tools", setup_tools, "--profile", "core", "--no-animation"],
+      cwd=root,
+      extra_env=environment,
+      stdout=@stdio.stdout,
+      stderr=@stdio.stderr,
+    )
+  })
+}
+
+///|
+/// `setup` with its two processes passed in: `version_in(root)` gives the OpenSpec CLI version,
+/// and `run_init(root, home, environment)` runs `openspec init`. Tests pass both.
+pub async fn setup_with(
+  repository : @extension.RepositoryPath,
+  version_in : async (String) -> String?,
+  run_init : async (String, String, Map[String, String]) -> Int32,
+) -> Unit {
+  let report = check(repository, Snapshot)
+  guard report.problems.is_empty() else { raise CheckFailed(report.problems) }
+  let root = report.root
+  guard version_in(root) == Some(openspec_version) else {
+    raise OpenSpecVersion
+  }
+  isolated_init((home, environment) => run_init(root, home, environment))
+}
+
+///|
+pub impl Show for InstallError with fn output(self, logger) {
+  logger.write_string(self.message())
 }
 
 ///|

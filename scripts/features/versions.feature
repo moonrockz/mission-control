@@ -188,7 +188,7 @@ Feature: One version across the workspace
   Scenario: The version type is the one in release.mbtx
     Then the version type is the one in release.mbtx
 
-  Scenario: Version changes keep the extension ownership lock in step
+  Scenario: Tools version changes keep the extension ownership lock in step
     Given a file "openspec/extensions.lock.json" with the text:
       """
       {"version": "0.1.0", "files": {"schema.yaml": "12345"}}
@@ -197,4 +197,88 @@ Feature: One version across the workspace
     Then the result is:
       """
       {"version": "0.1.1", "files": {"schema.yaml": "12345"}}
+      """
+
+  Scenario: The tools CLI keeps its own version in a workspace check
+    Given a file "apps/cli/moon.mod" with the text:
+      """
+      name = "moonrockz/mission-control-cli"
+
+      version = "0.1.0"
+      """
+    And a file "apps/tools/moon.mod" with the text:
+      """
+      name = "moonrockz/mission-control-tools"
+
+      version = "0.3.0"
+
+      import {
+        "moonrockz/mission-control-cli@0.1.0",
+      }
+      """
+    When I look for versions other than "0.1.0" with the independent module "apps/tools/moon.mod"
+    Then the mismatches are ""
+
+  Scenario: A stale workspace import in the tools CLI is a workspace mismatch
+    Given a file "apps/cli/moon.mod" with the text:
+      """
+      name = "moonrockz/mission-control-cli"
+
+      version = "0.2.0"
+      """
+    And a file "apps/tools/moon.mod" with the text:
+      """
+      name = "moonrockz/mission-control-tools"
+
+      version = "0.3.0"
+
+      import {
+        "moonrockz/mission-control-cli@0.1.0",
+      }
+      """
+    When I look for versions other than "0.2.0" with the independent module "apps/tools/moon.mod"
+    Then the mismatches are "apps/tools/moon.mod: found 0.1.0, expected 0.2.0"
+
+  Scenario: The tools family checks its module, its version text and the extension lock
+    Given a file "apps/tools/moon.mod" with the text:
+      """
+      name = "moonrockz/mission-control-tools"
+
+      version = "0.2.0"
+      """
+    And a file "apps/tools/version.mbt" with the text:
+      """
+      let tools_version : String = "0.1.0"
+      """
+    And a file "openspec/extensions.lock.json" with the text:
+      """
+      {
+        "format": 2,
+        "version": "0.2.0"
+      }
+      """
+    When I look for tools versions other than "0.2.0"
+    Then the mismatches are "apps/tools/version.mbt: found 0.1.0, expected 0.2.0"
+
+  Scenario: A tools file without its version text is a mismatch
+    Given a file "apps/tools/version.mbt" with the text:
+      """
+      let other : String = "0.2.0"
+      """
+    When I look for tools versions other than "0.2.0"
+    Then the mismatches are "apps/tools/version.mbt: found no version, expected 0.2.0"
+
+  Scenario: Set the tools version in its files
+    Given a file "apps/tools/version.mbt" with the text:
+      """
+      let tools_version : String = "0.1.0"
+      """
+    And a file "openspec/extensions.lock.json" with the text:
+      """
+      "version": "0.1.0"
+      """
+    When I set the versions of the files to "0.2.0"
+    Then the result is:
+      """
+      let tools_version : String = "0.2.0"|"version": "0.2.0"
       """

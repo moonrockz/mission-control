@@ -1,113 +1,58 @@
 # OpenSpec extensions
 
-`openspec-ext` installs and checks a shared OpenSpec workflow in any repository.
-The first bundle is `html-design`: proposal, capability specs, an offline
-`design.html`, and tasks. Repository context, tracking and approval rules stay in
-`AGENTS.md` and `openspec/config.yaml`.
+`moonrockz/openspec-ext` is the library behind `mission-control-tools openspec`. It owns the shared
+`html-design` bundle: proposal, capability specs, an offline `design.html`, and tasks. Repository context,
+tracking and approval rules stay in each consumer's `AGENTS.md` and `openspec/config.yaml`.
 
-## Run from source
+Consumers do not use this module directly. They pin the released `mission-control-tools` binary; see
+[apps/tools/README.md](../tools/README.md) for the install entry, the commands and the migration from the
+old `scripts/openspec-ext.mbtx` copy.
 
-The new module is not published yet. From a Mission Control checkout, use its
-pinned toolchain and pass the target repository explicitly:
+## Packages
 
-```shell
-mise exec -- moon run apps/openspec-ext/cmd -- install /path/to/repository
-mise exec -- moon run apps/openspec-ext/cmd -- check /path/to/repository
-mise exec -- moon run apps/openspec-ext/cmd -- setup /path/to/repository
-```
+| Package | Content | Targets |
+|---------|---------|---------|
+| `moonrockz/openspec-ext` | The bundle files, the config migration, the typed lock (format 1 and 2), the retired files and the pure snapshot and bundle checks. No I/O. | wasm, wasm-gc, js, native |
+| `moonrockz/openspec-ext/host` | `install`, `check` and `setup`: file reads and writes, symlink guards, the retirement of old files and the isolated `openspec init`. | wasm, native |
 
-`install` and `check` need only MoonBit. `setup` also needs OpenSpec **1.14.3**
-on PATH. Pin `npm:@fission-ai/openspec = "1.14.3"` and Node 24.14.1 in the
-consumer's mise tools. Setup generates the six core skills for Codex, Claude,
-Copilot, Cursor, Grok, Gemini, OpenCode and portable `.agents` clients. It uses a
-temporary global config, so personal profile and delivery settings do not affect
-the result. Existing Copilot cloud preferences remain in project configuration.
-
-After the module is released, use the actual published version:
-
-```shell
-moonx moonrockz/openspec-ext@<published-version>/cmd setup .
-moonx moonrockz/openspec-ext@<published-version>/cmd check .
-```
-
-Do not pin an unpublished candidate in a consumer. The existing Mission Control
-release scripts include this module; publication is a separate release action.
+The host uses `moonbitlang/async` file and process support, which has no JS or wasm-gc backend. The wasm
+build runs under `moonrun` (`moon run`), which supplies the file system host.
 
 ## Files and updates
 
-Commit `openspec/config.yaml`, `openspec/schemas/html-design/`,
-`openspec/extensions.lock.json`, `scripts/openspec-ext.mbtx` and generated agent skills. Fresh clones use the
-checked-in files and need no global schema installation or sibling checkout.
+`bundle.mbt` is the source for all shared files. Each raw multiline literal is one installed file. Change it
+here, test it, and run `mise run openspec:install` for this repository. The managed set is
+`openspec/schemas/html-design/` only: `schema.yaml`, four templates, `LICENSE` and `NOTICE`. Consumers commit
+these files, because OpenSpec reads them.
 
-Consumers can run the bundled script as `moon run scripts/openspec-ext.mbtx -- check`
-or `-- setup` without a registry dependency. This checks the installed snapshot
-against its lock; the packaged tool also compares it with the selected release.
+The ownership lock (`openspec/extensions.lock.json`, format 2) records the tool module, the tool version and
+the SHA-256 of each managed file. A check never writes. The snapshot check compares the files with the lock;
+the bundle check also compares the lock tool version and the files with the bundle of the tool.
 
-`bundle.mbt` is the source for all shared files. Each raw multiline literal is
-one installed file. Change it here, test it, and run `install` for consumers.
-The ownership lock records the tool version and SHA-256 of each managed file.
-`check` reports a different default schema, missing file, edited file or lock.
-It never writes. Run it with the version recorded in the lock.
+An install replaces only missing files, identical files, or files that still match the previous lock. It
+refuses unmanaged conflicts and local edits before writing anything. A file that an older bundle managed and
+this bundle does not (`scripts/openspec-ext.mbtx` and its feature) is deleted when it still has the digest of
+the previous lock, and stops the install when it does not. Only these fixed paths are ever deleted. To adopt
+an existing custom schema, review it, move its policy into the project config, and move the old schema aside
+before installing. Unsupported YAML layouts fail before writes; ordinary block configs retain comments and
+all values except the default schema.
 
-An update replaces only missing files, identical files, or files that still
-match the previous lock. It refuses unmanaged conflicts and local edits before
-writing anything. To adopt an existing custom schema, review it, move its policy
-into the project config, and move the old schema aside before installing.
-Keep overrides in project config rather than editing managed templates.
-Unsupported YAML layouts fail before writes; ordinary block configs retain
-comments and all values except the default schema.
+The lock is written last. An interrupted install can leave partial files; rerun the same version to repair
+them. Concurrent installation in one repository is unsupported. Symlink destinations are refused.
 
-The lock is written last. An interrupted install can leave partial files;
-rerun the same version to repair them. Concurrent installation in one repository
-is unsupported. Symlink destinations are refused.
-
-Existing changes keep their `.openspec.yaml` schema and their original designs.
-A default-schema change applies to new work. Existing HTML designs that use
-external assets still require their original archive path handling; new bundle
-designs have inline CSS and need no path rewrite.
+Existing changes keep their `.openspec.yaml` schema and their original designs. A default-schema change
+applies to new work.
 
 ## Verify
 
 ```shell
-mise exec -- moon test apps/openspec-ext tests/openspec-ext-acceptance --target wasm --deny-warn
+mise exec -- moon test apps/openspec-ext apps/tools tests/openspec-ext-acceptance --target native --deny-warn
+mise run openspec:check
 mise exec -- openspec schema validate html-design
 mise exec -- openspec validate --all --strict
 ```
 
-The pure bundle builds on all four MoonBit targets. Host I/O and the command
-support wasm and native because `moonbitlang/async` does not supply JS or wasm-gc
-filesystem and process support. Existing release binaries remain the
-`mission-control` CLI; the extension command ships as its own mooncakes module.
-
-The bundled script runs its Gherkin feature with `moon test scripts/openspec-ext.mbtx`.
-It checks valid and edited snapshots, malformed configuration and lock data, and
-setup isolation. Its filesystem test also verifies temporary configuration cleanup.
-The workspace version setter updates the extension lock version alongside module
-and contract versions, so normal release preparation keeps validation in step.
-
-The shared script pins `moonbitlang/async@0.22.7`. From 0.22.6, async shares its
-runtime with `moonbitlang/core/async`, so it needs the `async/runtime_internal`
-package of the core library. MoonBit 0.10.18 is the first release that has that
-package. On 0.10.17+d971670cd, the script stops with
-`Cannot find import 'moonbitlang/core/async'`. The script runs on the `wasm`
-target, which is the default for a standalone script. It also runs on `native`
-with the system C compiler, but not with `moonrockz/zig-cross@0.3.2` (see
-below). It does not build for `wasm-gc` or `js`, because `moonbitlang/async/fs`
-has no backend for those targets.
-
-The packaged host uses the module dependencies declared in `moon.mod`, which
-keeps `moonbitlang/async@0.22.5`. The workspace resolves one async version, and
-`moonrockz/zig-cross@0.3.2` cannot compile the `fs.c` stub of async 0.22.7: its
-forced `-include limits.h` comes before `#define _GNU_SOURCE`, so `O_PATH` is not
-declared. Move `moon.mod` to 0.22.7 after a zig-cross release that passes
-`-DNAME_MAX=255` in place of the forced include.
-
-The script declares its imports in frontmatter (between two `----` lines), so
-`moon test --deny-warn` passes on MoonBit 0.10.18, which warns about an import
-block outside frontmatter (`unfenced_import`). Pin MoonBit 0.10.18 in a consumer
-before you install this snapshot.
-
-MoonBit 0.10.20 cannot compile the script yet. It removes the `to_json` method
-call on core types such as `String`, and `moonrockz/moonspec@0.11.0` depends on
-`moonrockz/cucumber-messages@0.3.0`, which uses that call. Do not move a consumer
-to 0.10.20 until a `moonspec` release supports it.
+The packaged host uses the module dependencies in `moon.mod`, which keep `moonbitlang/async@0.22.5`.
+`moonrockz/zig-cross@0.3.2` cannot compile the `fs.c` stub of async 0.22.7: its forced `-include limits.h`
+comes before `#define _GNU_SOURCE`, so `O_PATH` is not declared. Move `moon.mod` to 0.22.7 after a zig-cross
+release that passes `-DNAME_MAX=255` in place of the forced include.

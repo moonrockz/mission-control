@@ -76,6 +76,8 @@ lefthook-local.yml
 # Release outputs
 
 dist/
+# Release outputs of the tools CLI (mise run build:tools).
+dist-tools/
 
 # Beads / Dolt files (added by bd init)
 .dolt/

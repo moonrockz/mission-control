@@ -188,14 +188,38 @@ run = "moonx scripts/publish.mbtx"
 description = "Run the published moonx CLI with bounded retries for registry asset availability (args: X.Y.Z)"
 run = "moonx scripts/publish.mbtx verify-cli"
 
+[tasks."build:tools"]
+description = "Build the tools CLI release outputs (4 cross-built native binaries) and pack them into dist-tools/. Pack needs the windows-x64 binary from build:tools-windows"
+run = "moonx scripts/dist.mbtx tools"
+
+[tasks."build:tools-windows"]
+description = "Build the windows-x64 binary of the tools CLI natively (Windows host only)"
+run = "moonx scripts/dist.mbtx build-windows tools"
+
+[tasks."release:tools-plan"]
+description = "Decide what the tools release workflow does (reads GITHUB_EVENT_NAME, GITHUB_REF_TYPE, GITHUB_REF_NAME, DRY_RUN; writes GITHUB_OUTPUT)"
+run = "moonx scripts/release-tools.mbtx plan"
+
+[tasks."release:tools-notes"]
+description = "Print the GitHub release notes of a tools version, with the mise entries (args: X.Y.Z)"
+run = "moonx scripts/release-tools.mbtx notes"
+
+[tasks."release:tools-github"]
+description = "Create the tools GitHub release from dist-tools/, or upload the assets it lacks (args: X.Y.Z; needs GITHUB_SHA and RUNNER_TEMP)"
+run = "moonx scripts/release-tools.mbtx github"
+
+[tasks."release:tools-status"]
+description = "Check that the tools version, its tools-v tag and its GitHub release agree"
+run = "moonx scripts/release-tools.mbtx status"
+
 [tasks."openspec:install"]
 description = "Install the shared html-design extension in this repository"
-run = "moon run apps/openspec-ext/cmd -- install ."
+run = "moon run -q apps/tools -- openspec install ."
 
 [tasks."openspec:check"]
-description = "Check the shared OpenSpec bundle and ownership lock"
-run = "moon run apps/openspec-ext/cmd -- check ."
+description = "Check the shared OpenSpec bundle and ownership lock against the tools CLI in this checkout"
+run = "moon run -q apps/tools -- openspec check --bundle ."
 
 [tasks."openspec:setup"]
-description = "Install html-design and regenerate core agent skills"
-run = "moon run apps/openspec-ext/cmd -- setup ."
+description = "Check the html-design snapshot and regenerate core agent skills"
+run = "moon run -q apps/tools -- openspec setup ."
