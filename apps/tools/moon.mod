@@ -1,6 +1,6 @@
 name = "moonrockz/mission-control-tools"
 
-version = "0.1.0"
+version = "0.1.1"
 
 description = "Repository tools for Mission Control consumers, released as native binaries"
 

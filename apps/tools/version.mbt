@@ -1,7 +1,7 @@
 ///|
 /// The version text of the tools CLI. `scripts/versions.mbtx set-tools` sets it to the version
 /// of `apps/tools/moon.mod`; the tools family is separate from the workspace version.
-let tools_version : String = "0.1.0"
+let tools_version : String = "0.1.1"
 
 ///|
 /// The module that the tools CLI records in an extension lock.

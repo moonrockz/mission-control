@@ -5,7 +5,15 @@ with its highlights written releases that version when it reaches main (see `app
 
 ## [Unreleased]
 
-- `openspec setup` accepts OpenSpec 1.16.x as well as 1.14.3. Other versions get
+## [0.1.1] - 2026-11-07
+
+`openspec setup` now works in repositories that pin OpenSpec 1.16. Before, it accepted only 1.14.3,
+so `mise run openspec:setup` stopped in finos/morphir-gleam (1.16.1) and finos/morphir-scala (1.16.0).
+OpenSpec 1.16.0 and 1.16.1 were tested with the managed `html-design` files. The managed files and
+`openspec check` do not change. After you move the mise entry to 0.1.1, run
+`mission-control-tools openspec install`, so that the lock records 0.1.1 and `check --bundle` passes.
+
+- `openspec setup` accepts OpenSpec 1.14.3 and each 1.16 patch release (1.16.x). Other versions get
   `Setup requires OpenSpec 1.14.3 or 1.16.x`.
 
 ## [0.1.0] - 2026-11-07
