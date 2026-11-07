@@ -15,6 +15,6 @@ preferred_target = "wasm"
 import {
   "moonrockz/mission-control-contracts@0.1.0",
   "moonbit-community/yaml@0.0.7",
-  "moonbitlang/async@0.22.7",
+  "moonbitlang/async@0.22.5",
   "moonbitlang/x@0.5.5",
 }

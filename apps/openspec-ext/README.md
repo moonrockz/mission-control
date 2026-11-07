@@ -92,8 +92,14 @@ package. On 0.10.17+d971670cd, the script stops with
 `Cannot find import 'moonbitlang/core/async'`. The script runs on the `wasm`
 target, which is the default for a standalone script, and on `native`. It does
 not build for `wasm-gc` or `js`, because `moonbitlang/async/fs` has no backend
-for those targets. The packaged host uses the module dependencies declared in
-`moon.mod`.
+for those targets.
+
+The packaged host uses the module dependencies declared in `moon.mod`, which
+keeps `moonbitlang/async@0.22.5`. The workspace resolves one async version, and
+`moonrockz/zig-cross@0.3.2` cannot compile the `fs.c` stub of async 0.22.7: its
+forced `-include limits.h` comes before `#define _GNU_SOURCE`, so `O_PATH` is not
+declared. Move `moon.mod` to 0.22.7 after a zig-cross release that passes
+`-DNAME_MAX=255` in place of the forced include.
 
 The script declares its imports in frontmatter (between two `----` lines), so
 `moon test --deny-warn` passes on MoonBit 0.10.18, which warns about an import
