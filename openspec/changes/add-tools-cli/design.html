@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>add-tools-cli: design</title>
+<meta name="color-scheme" content="light dark">
+<style>
+:root { color-scheme: light dark; --bg: #fafafa; --fg: #18212f; --muted: #526071;
+  --line: #cbd5e1; --panel: #eef2f6; --link: #075caa; --accent: #0f766e; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #111827; --fg: #e5e7eb; --muted: #b0bdce;
+    --line: #475569; --panel: #1e293b; --link: #8cc8ff; --accent: #5eead4; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 1rem/1.6 system-ui, sans-serif; }
+main { max-width: 70rem; margin: auto; padding: clamp(1rem, 4vw, 3rem); }
+h1, h2, h3 { line-height: 1.25; overflow-wrap: anywhere; }
+h2 { margin-top: 2rem; border-bottom: 1px solid var(--line); padding-bottom: .4rem; }
+a { color: var(--link); }
+a:focus-visible { outline: 3px solid var(--link); outline-offset: 3px; }
+.meta { color: var(--muted); }
+.toc, pre, details { background: var(--panel); border: 1px solid var(--line);
+  border-radius: .4rem; padding: 1rem; }
+code { font-family: ui-monospace, monospace; overflow-wrap: anywhere; }
+pre { overflow-x: auto; } pre code { overflow-wrap: normal; }
+table { border-collapse: collapse; width: 100%; }
+th, td { border: 1px solid var(--line); padding: .6rem; text-align: left;
+  overflow-wrap: anywhere; vertical-align: top; }
+svg { max-width: 100%; height: auto; }
+svg .box { fill: var(--panel); stroke: var(--line); }
+svg .hot { fill: var(--panel); stroke: var(--accent); stroke-width: 2; }
+svg text { fill: var(--fg); font: 13px system-ui, sans-serif; }
+svg .small { fill: var(--muted); font-size: 11px; }
+svg .arrow { stroke: var(--muted); stroke-width: 1.5; fill: none; marker-end: url(#head); }
+@media print { main { max-width: none; padding: 0; } pre, tr { break-inside: avoid; } }
+</style>
+</head>
+<body>
+<main>
+<h1>add-tools-cli: design</h1>
+<p class="meta">OpenSpec change add-tools-cli | 2026-11-07 | proposed | bead moonbase-4ca</p>
+
+<nav class="toc" aria-label="Contents">
+<ul>
+<li><a href="#context">Context</a></li>
+<li><a href="#goals">Goals and non-goals</a></li>
+<li><a href="#decisions">Decisions</a>
+  <ul>
+  <li><a href="#name-1">NAME-1. Module, binary and command names</a></li>
+  <li><a href="#cmd-1">CMD-1. Command grammar</a></li>
+  <li><a href="#cmd-2">CMD-2. Two check levels</a></li>
+  <li><a href="#cmd-3">CMD-3. Messages and exit codes</a></li>
+  <li><a href="#cmd-4">CMD-4. JSON reports</a></li>
+  <li><a href="#core-1">CORE-1. Reuse of openspec-ext</a></li>
+  <li><a href="#set-1">SET-1. Setup in the binary</a></li>
+  <li><a href="#lock-1">LOCK-1. Lock format 2 and retired files</a></li>
+  <li><a href="#ver-1">VER-1. Tools version family</a></li>
+  <li><a href="#rel-1">REL-1. Release workflow and tags</a></li>
+  <li><a href="#rel-2">REL-2. Consumer mise entry</a></li>
+  <li><a href="#rel-3">REL-3. Dry run without new pull request jobs</a></li>
+  </ul>
+</li>
+<li><a href="#risks">Risks and trade-offs</a></li>
+<li><a href="#migration">Migration plan</a></li>
+<li><a href="#open-questions">Open questions</a></li>
+</ul>
+</nav>
+
+<h2 id="context">Context</h2>
+<p>See <a href="proposal.md">proposal.md</a> for the reason. The current state:</p>
+<ul>
+<li><code>apps/openspec-ext</code> (module <code>moonrockz/openspec-ext</code>) has a pure bundle (<code>bundle.mbt</code>, <code>extension.mbt</code>), a host package with <code>install</code>, <code>check</code> and <code>setup</code> (<code>host/install.mbt</code>), and a command in <code>cmd</code>. The module is not published yet.</li>
+<li>The bundle has nine files. Two of them are <code>scripts/openspec-ext.mbtx</code> and its feature. Consumers run the script with <code>moon run --target wasm</code>; the host <code>setup</code> also runs the script.</li>
+<li>The script check is a snapshot check: it compares the files with the lock digests and does not know a tool version. The host check compares the lock text with the bundle of its own version.</li>
+<li>The lock is format 1 and records <code>"module": "moonrockz/openspec-ext"</code> and the workspace version.</li>
+<li>All workspace modules share one version (<code>scripts/versions.mbtx</code>). The Release workflow builds the main CLI only: five native archives, two wasm files and <code>checksums.txt</code>, with no attestations.</li>
+<li>A zig-cross build of <code>apps/openspec-ext/cmd</code> with <code>moonbitlang/async</code> 0.22.5 passes for linux-x64, linux-arm64, darwin-arm64 and darwin-x64 (tested on 2026-11-07). <code>moonbitlang/async</code> lists Windows support through IOCP.</li>
+</ul>
+
+<svg viewBox="0 0 880 250" role="img" aria-labelledby="flow-title">
+<title id="flow-title">From one build in Mission Control to a pinned binary in each consumer</title>
+<defs><marker id="head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+<rect class="box" x="10" y="20" width="200" height="90" rx="6"/>
+<text x="24" y="46">apps/openspec-ext</text>
+<text class="small" x="24" y="66">bundle, lock, pure checks</text>
+<text class="small" x="24" y="84">host: install, check, setup</text>
+<rect class="hot" x="260" y="20" width="200" height="90" rx="6"/>
+<text x="274" y="46">apps/tools</text>
+<text class="small" x="274" y="66">mission-control-tools</text>
+<text class="small" x="274" y="84">openspec check|setup|install</text>
+<rect class="box" x="510" y="20" width="160" height="90" rx="6"/>
+<text x="524" y="46">release-tools.yml</text>
+<text class="small" x="524" y="66">tag tools-vX.Y.Z</text>
+<text class="small" x="524" y="84">5 archives + checksums</text>
+<rect class="box" x="710" y="20" width="160" height="90" rx="6"/>
+<text x="724" y="46">Consumer</text>
+<text class="small" x="724" y="66">mise http entry</text>
+<text class="small" x="724" y="84">sha256 per platform</text>
+<path class="arrow" d="M210,65 H255"/>
+<path class="arrow" d="M460,65 H505"/>
+<path class="arrow" d="M670,65 H705"/>
+<rect class="box" x="710" y="150" width="160" height="80" rx="6"/>
+<text x="724" y="176">openspec/schemas/</text>
+<text class="small" x="724" y="196">html-design (7 files)</text>
+<text class="small" x="724" y="214">extensions.lock.json v2</text>
+<path class="arrow" d="M790,110 V145"/>
+<text class="small" x="300" y="170">Removed from consumers: scripts/openspec-ext.mbtx,</text>
+<text class="small" x="300" y="188">its feature, its moon test task and the MoonBit compile.</text>
+</svg>
+
+<h2 id="goals">Goals and non-goals</h2>
+<p><strong>Goals:</strong> one binary that a consumer pins by version and checksum; the same check and setup results as the script; a release that does not depend on the main CLI release; a migration that a consumer does in one pull request.</p>
+<p><strong>Non-goals:</strong> new OpenSpec features in the bundle; a plugin system for tool groups; automatic edits of consumer mise files; a release-prepare automation for the tools family (the release is rare; the steps are in the README).</p>
+
+<h2 id="decisions">Decisions</h2>
+
+<h3 id="name-1">NAME-1. Module, binary and command names</h3>
+<p>Module <code>moonrockz/mission-control-tools</code> in <code>apps/tools</code>. The executable is <code>mission-control-tools</code> (<code>mission-control-tools.exe</code> on Windows). The OpenSpec commands are in the group <code>openspec</code>.</p>
+<ul>
+<li>The name tells a reader that the tool comes from Mission Control and is not the product CLI. The group leaves space for other repository utilities without a new binary.</li>
+<li>Alternatives: <code>openspec-ext</code> as the binary name (ties the binary to one area, and the name is already the library); <code>mctools</code> (short, but nobody can guess the source); a <code>tools</code> subcommand of <code>mission-control</code> (Damian rejected it on 2026-11-07).</li>
+</ul>
+
+<h3 id="cmd-1">CMD-1. Command grammar</h3>
+<pre><code class="language-console">mission-control-tools help | --help | -h
+mission-control-tools version [--json]
+mission-control-tools openspec check [--bundle] [--json] [REPOSITORY]
+mission-control-tools openspec install [REPOSITORY]
+mission-control-tools openspec setup [REPOSITORY]</code></pre>
+<p>The parser is pure. It parses the arguments one time into a <code>Command</code> enum (<code>Help</code>, <code>Version(Format)</code>, <code>OpenSpec(OpenSpecCommand, RepositoryPath)</code>), with <code>CheckLevel</code> (<code>Snapshot</code>, <code>Bundle</code>) and <code>Format</code> (<code>Text</code>, <code>Json</code>) as enums, not booleans. Options and the path can come in any order after the command. A path that starts with <code>-</code> is an unknown option. The default path is <code>.</code>. <code>RepositoryPath</code> keeps its current rules (nonempty, no NUL, no line break).</p>
+
+<h3 id="cmd-2">CMD-2. Two check levels</h3>
+<table>
+<thead><tr><th>Level</th><th>Checks</th><th>Use</th></tr></thead>
+<tbody>
+<tr><td><code>check</code> (snapshot)</td><td>Lock format and file set; each managed file against its lock digest; default schema.</td><td>The same result as the script. It does not depend on the binary version, so a consumer can run any later binary on an old snapshot.</td></tr>
+<tr><td><code>check --bundle</code></td><td>The snapshot checks, then the lock tool and version against the binary, and each managed file against the bundle in the binary.</td><td>Consumer <code>openspec:check</code>. It fails when the mise pin moves and nobody runs install, so the pin and the lock stay together.</td></tr>
+</tbody>
+</table>
+<p>The bundle level is the current host <code>check</code>, extended with the snapshot problems. Alternative: only one strict check. Rejected: the task needs the script behavior, and a version-free check is useful when a consumer tests a new binary before it moves the lock.</p>
+
+<h3 id="cmd-3">CMD-3. Messages and exit codes</h3>
+<ul>
+<li>Exit codes: 0 success, 1 failure, 2 usage error, from one <code>ExitCode</code> value in the tools CLI. A usage error stops before any file read.</li>
+<li>Success lines: <code>html-design snapshot: OK</code> for check and setup (as the script); <code>html-design: OK (mission-control-tools X.Y.Z)</code> for install.</li>
+<li>Problem lines: <code>openspec-ext: &lt;text&gt;</code> on standard error. The texts are the script texts. The script printed them through <code>fail</code>, which added <code>Failure(&lt;file&gt;:&lt;line&gt; FAILED: …)</code>; the binary prints the text only. The <code>openspec-ext:</code> prefix stays, so log searches and consumer documentation keep working.</li>
+<li>New texts for cases where the script stopped with a raw file system error: <code>Missing file: &lt;path&gt;</code>, and the format 1 message of <a href="specs/openspec-extensions/spec.md">openspec-extensions</a>.</li>
+<li>The core returns all problems in a fixed order (lock, files in bundle order, config). The script stopped at the first; for one problem the output is the same.</li>
+</ul>
+
+<h3 id="cmd-4">CMD-4. JSON reports</h3>
+<p>The repository's agent-facing tools (the OpenSpec CLI, the morphir CLI) give <code>--json</code> on read commands. The tools CLI does the same for <code>check</code> and <code>version</code>. <code>install</code> and <code>setup</code> write files and stream the output of <code>openspec init</code>, so they have no JSON mode. The JSON goes to standard output; the exit code does not change.</p>
+<pre><code class="language-json">{
+  "tool": "mission-control-tools",
+  "version": "0.1.0",
+  "command": "openspec check",
+  "level": "bundle",
+  "repository": "/work/morphir",
+  "ok": false,
+  "problems": [
+    { "code": "drift", "path": "openspec/schemas/html-design/templates/design.html",
+      "message": "Extension drift: openspec/schemas/html-design/templates/design.html" }
+  ]
+}</code></pre>
+<p>Problem codes: <code>unsupported-lock</code>, <code>legacy-lock</code>, <code>file-set</code>, <code>missing-digest</code>, <code>missing-file</code>, <code>drift</code>, <code>schema</code>, <code>tool-version</code>, <code>bundle-drift</code>. Each code is a case of a <code>Problem</code> enum; the code and the message come from the case.</p>
+
+<h3 id="core-1">CORE-1. Reuse of openspec-ext</h3>
+<ul>
+<li><code>moonrockz/openspec-ext</code> stays the owner of the bundle, the lock and the checks. It gains a pure <code>check_snapshot(lock, files, config, level)</code> that returns problems. The inputs are the texts that the host read (<code>String?</code> for each path), so the core has no I/O and the acceptance tests use fixtures.</li>
+<li><code>openspec-ext/host</code> reads the files, calls the core, and does the writes of install and the process of setup. It takes the tool identity (module and version) as an argument, so the library does not import the tools module.</li>
+<li><code>apps/openspec-ext/cmd</code> is removed. Two commands with the same job would drift. The module is not published yet, so no user loses a command.</li>
+<li><code>apps/tools</code> has the argument parser, the output formats and <code>main</code>. It is native and wasm only, like the host (<code>moonbitlang/async</code> has no JS or wasm-gc file system). The release builds native only.</li>
+</ul>
+
+<h3 id="set-1">SET-1. Setup in the binary</h3>
+<p>The script's <code>setup_with</code> moves to the host: it makes a temporary directory, writes <code>openspec/config.json</code> with the core profile, skills delivery and the telemetry notice, runs <code>openspec init --tools agents,codex,claude,github-copilot,cursor,grok,gemini,opencode --profile core --no-animation</code> in the repository with <code>XDG_CONFIG_HOME</code> and <code>OPENSPEC_TELEMETRY=0</code>, and removes the directory with <code>defer</code>. The process runner is a function argument, so the test checks the environment and the cleanup without OpenSpec. Setup runs the snapshot check first and does not install, as the script did. The current host setup that installs and then runs the script goes away.</p>
+
+<h3 id="lock-1">LOCK-1. Lock format 2 and retired files</h3>
+<pre><code class="language-json">{
+  "format": 2,
+  "extension": "html-design",
+  "tool": "moonrockz/mission-control-tools",
+  "version": "0.1.0",
+  "files": {
+    "openspec/schemas/html-design/schema.yaml": "…",
+    "openspec/schemas/html-design/templates/proposal.md": "…",
+    "openspec/schemas/html-design/templates/spec.md": "…",
+    "openspec/schemas/html-design/templates/design.html": "…",
+    "openspec/schemas/html-design/templates/tasks.md": "…",
+    "openspec/schemas/html-design/NOTICE": "…",
+    "openspec/schemas/html-design/LICENSE": "…"
+  }
+}</code></pre>
+<ul>
+<li><code>version</code> is the version of the tools CLI that wrote the lock. A consumer reads one number in its mise file and one in its lock, and the bundle check compares them.</li>
+<li>The format number changes because the file set and the owner field change. A format 1 reader (an old script copy) rejects format 2, which is correct: the copy is gone after the migration.</li>
+<li><code>install</code> accepts a previous lock of format 1 or 2. For a file that the previous lock records and the bundle does not manage (the script and its feature), install deletes it when its digest matches the previous lock and fails before any write when it does not. A missing retired file is not a problem. Install deletes the retired files after it writes the managed files and before it writes the lock, so an interrupted run repeats safely.</li>
+<li>The lock is parsed at the boundary into a typed <code>Lock</code> (format, tool, version, digests as <code>FileDigest</code>). The checks use the typed value.</li>
+</ul>
+
+<h3 id="ver-1">VER-1. Tools version family</h3>
+<ul>
+<li><code>apps/tools/moon.mod</code> is the source of the tools version. The first version is 0.1.0. The binary reads its version from one constant in <code>apps/tools</code>, through a <code>Version</code> value.</li>
+<li><code>scripts/versions.mbtx</code> gets a second family. <code>check</code> checks the workspace family (every member except <code>apps/tools</code>) and the tools family (<code>apps/tools/moon.mod</code>, the version constant, its test, and <code>openspec/extensions.lock.json</code>). <code>set X.Y.Z</code> changes the workspace family only. <code>set-tools X.Y.Z</code> changes the tools family only. The sibling imports in <code>apps/tools/moon.mod</code> (<code>openspec-ext</code>, <code>contracts</code>) belong to the workspace family.</li>
+<li>The tools module is not in the publish lists. Alternative: publish to mooncakes.io for <code>moonx</code>. Rejected for now: it brings back the toolchain coupling, and a mooncakes.io version is permanent.</li>
+</ul>
+
+<h3 id="rel-1">REL-1. Release workflow and tags</h3>
+<ul>
+<li>New workflow <code>.github/workflows/release-tools.yml</code>. Triggers: a push to main that changes <code>apps/tools/moon.mod</code> or <code>apps/tools/CHANGELOG.md</code>, and <code>workflow_dispatch</code> with <code>dry_run</code>. It has no <code>pull_request</code> and no <code>merge_group</code> trigger. Concurrency group <code>release-tools</code>.</li>
+<li>Jobs: <code>plan</code>, <code>validate</code> (lint, the tools and openspec-ext tests on wasm and native, <code>openspec:check</code>, versions), <code>build-windows</code> (native on <code>windows-latest</code>), <code>build</code> (zig-cross for four targets, then pack), <code>smoke</code> (five runners: check out the repository, run <code>version</code> and <code>openspec check --bundle .</code>), <code>release</code>.</li>
+<li><code>scripts/release-tools.mbtx</code> has <code>plan</code>, <code>notes X.Y.Z</code>, <code>github X.Y.Z</code> and <code>status</code>. The plan reads the version from <code>apps/tools/moon.mod</code>, the run trigger, main ancestry, the state of the release <code>tools-vX.Y.Z</code> and the section in <code>apps/tools/CHANGELOG.md</code>, as typed values like the main release script. <code>github</code> creates the release with <code>--target</code> the commit, so GitHub creates the tag; a rerun uploads only the missing assets.</li>
+<li><code>scripts/dist.mbtx</code> gets a product argument (<code>cli</code>, the default, or <code>tools</code>). A <code>Product</code> enum gives the package, the executable name, the archive prefix, the output directory (<code>dist/</code> or <code>dist-tools/</code>) and whether wasm files are built. The main CLI outputs do not change.</li>
+<li>The main Release workflow keeps <code>tags: ['v*']</code>. GitHub matches tag filters from the start of the name, so <code>tools-v0.1.0</code> does not start it.</li>
+<li>No attestations, as in the main release. A later change can add <code>actions/attest-build-provenance</code> to both releases.</li>
+</ul>
+
+<h3 id="rel-2">REL-2. Consumer mise entry</h3>
+<p>The release notes end with this entry, generated by <code>release-tools.mbtx notes</code> from <code>checksums.txt</code>:</p>
+<pre><code class="language-toml">[tools."http:mission-control-tools"]
+version = "0.1.0"
+bin_path = "."
+
+[tools."http:mission-control-tools".platforms]
+linux-x64 = { url = "https://github.com/moonrockz/mission-control/releases/download/tools-v0.1.0/mission-control-tools-linux-x64.tar.gz", checksum = "sha256:…" }
+linux-arm64 = { url = "https://github.com/moonrockz/mission-control/releases/download/tools-v0.1.0/mission-control-tools-linux-arm64.tar.gz", checksum = "sha256:…" }
+macos-arm64 = { url = "https://github.com/moonrockz/mission-control/releases/download/tools-v0.1.0/mission-control-tools-darwin-arm64.tar.gz", checksum = "sha256:…" }
+macos-x64 = { url = "https://github.com/moonrockz/mission-control/releases/download/tools-v0.1.0/mission-control-tools-darwin-x64.tar.gz", checksum = "sha256:…" }
+windows-x64 = { url = "https://github.com/moonrockz/mission-control/releases/download/tools-v0.1.0/mission-control-tools-windows-x64.zip", checksum = "sha256:…", format = "zip" }
+# No Windows arm64 build; Windows on Arm runs the x64 build under emulation.
+windows-arm64 = { url = "https://github.com/moonrockz/mission-control/releases/download/tools-v0.1.0/mission-control-tools-windows-x64.zip", checksum = "sha256:…", format = "zip" }</code></pre>
+<ul>
+<li>The <code>http</code> backend pins the exact URL and checksum for each platform. It is the same form that consumers use for the MoonBit pin, it needs no GitHub API call (no rate limit in CI), and its key does not collide with <code>github:moonrockz/mission-control</code>, which installs the main CLI.</li>
+<li>Alternative: <code>github:moonrockz/mission-control</code> with <code>version_prefix = "tools-v"</code> and an <code>asset_pattern</code>. It verifies the GitHub asset digest, but one repository can have only one such key in a mise file, and the main CLI already uses it.</li>
+<li>The entry is proved before release with <code>file://</code> URLs to the locally built archives and their real checksums (mise accepts <code>file://</code> for the http backend).</li>
+</ul>
+
+<h3 id="rel-3">REL-3. Dry run without new pull request jobs</h3>
+<p>The task forbids new qualification jobs in pull request and merge queue CI. GitHub runs <code>workflow_dispatch</code> only for a workflow that is on the default branch, so the new workflow cannot have a dispatch dry run before it merges. Before the merge: a local dry run (plan with <code>DRY_RUN=true</code>, cross-build, pack, checksums, the mise entry, smoke on macOS arm64, and the morphir migration proof). The existing Release workflow runs on this pull request because it changes <code>scripts/dist.mbtx</code> and <code>scripts/versions.mbtx</code>; that run proves that the main CLI outputs do not change. After the merge and before the first tag: <code>gh workflow run release-tools.yml -f dry_run=true</code> builds all five platforms and runs smoke, including Windows.</p>
+
+<h2 id="risks">Risks and trade-offs</h2>
+<table>
+<thead><tr><th>Risk</th><th>Mitigation</th></tr></thead>
+<tbody>
+<tr><td>The Windows build of the async host is new; the main CLI does not use async.</td><td>The smoke job runs <code>openspec check --bundle</code> on Windows before any release. The dispatch dry run comes before the first tag.</td></tr>
+<tr><td>The first dispatch dry run happens only after the merge.</td><td>The local dry run covers four platforms; the merge does not release, because the plan skips a version without a changelog section.</td></tr>
+<tr><td>Merging this change on main with <code>apps/tools/moon.mod</code> new counts as a change of that path and can start a release.</td><td>The plan skips a version that has no section in <code>apps/tools/CHANGELOG.md</code>, and fails for a section that still has the highlights placeholder. The first merge has no 0.1.0 section, so the plan skips; the first release is a separate approved pull request that adds the section.</td></tr>
+<tr><td>Consumers that run an old script copy against a format 2 lock fail.</td><td>The migration replaces the script in the same pull request as the lock. The format 1 message tells a user who runs the binary first what to do.</td></tr>
+<tr><td>The message prefix <code>openspec-ext:</code> differs from the binary name.</td><td>It keeps the script output. The JSON mode gives the tool name.</td></tr>
+<tr><td>Mise entries with six URLs and checksums are long.</td><td>The release notes give the full entry; a consumer copies it. The README shows the template.</td></tr>
+</tbody>
+</table>
+
+<h2 id="migration">Migration plan</h2>
+<p>For each consumer, in one pull request:</p>
+<ol>
+<li>Add the <code>[tools."http:mission-control-tools"]</code> entry from the release notes to <code>.config/mise/config.toml</code> and run <code>mise install</code>.</li>
+<li>Run <code>mission-control-tools openspec install .</code>. It deletes the unedited <code>scripts/openspec-ext.mbtx</code> and <code>scripts/features/openspec_ext.feature</code>, keeps the schema files, and writes the format 2 lock.</li>
+<li>Change the tasks:
+<pre><code class="language-toml">[tasks."openspec:check"]
+run = "mission-control-tools openspec check --bundle"
+
+[tasks."openspec:setup"]
+run = "mission-control-tools openspec setup"
+
+[tasks."openspec:validate"]
+run = ["openspec schema validate html-design", "openspec validate --all --strict"]
+
+[tasks."openspec:verify"]
+run = ["mise run openspec:check", "mise run openspec:validate"]</code></pre>
+Remove <code>openspec:test</code> and the <code>moon update</code> step that existed only for the script. Remove the script from any script test runner.</li>
+<li>Run <code>mise run openspec:verify</code>. Commit the lock, the mise file and the deletions.</li>
+</ol>
+<p>Rollback: revert the pull request. The format 1 lock and the script return with it. Mission Control keeps the change history, so a later install of the previous bundle is not needed.</p>
+<p>In Mission Control: <code>openspec:install</code>, <code>openspec:check</code> and <code>openspec:setup</code> run <code>moon run apps/tools -- openspec …</code> from source; the lock moves to format 2; the script, its feature and its entry in the script tests are removed.</p>
+
+<h2 id="open-questions">Open questions</h2>
+<ul>
+<li>When to publish <code>moonrockz/openspec-ext</code> to mooncakes.io, now that no consumer needs it. The publish list keeps it; the next workspace release can drop it with no effect on this design.</li>
+</ul>
+
+</main>
+</body>
+</html>
