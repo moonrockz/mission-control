@@ -85,11 +85,29 @@ setup isolation. Its filesystem test also verifies temporary configuration clean
 The workspace version setter updates the extension lock version alongside module
 and contract versions, so normal release preparation keeps validation in step.
 
-The shared script pins `moonbitlang/async@0.22.4`, the baseline supported by
-the consuming repositories. It declares its imports in frontmatter (between two
-`----` lines), so `moon test --deny-warn` passes on MoonBit 0.10.18, which warns
-about an import block outside frontmatter (`unfenced_import`). Frontmatter needs
-MoonBit 0.10.17+d971670cd or later. An earlier version stops with a parse error
-at the first `----` line, so pin 0.10.18 or later in a consumer before you install
-this snapshot.
-The packaged host uses the module dependencies declared in `moon.mod`.
+The shared script pins `moonbitlang/async@0.22.7`. From 0.22.6, async shares its
+runtime with `moonbitlang/core/async`, so it needs the `async/runtime_internal`
+package of the core library. MoonBit 0.10.18 is the first release that has that
+package. On 0.10.17+d971670cd, the script stops with
+`Cannot find import 'moonbitlang/core/async'`. The script runs on the `wasm`
+target, which is the default for a standalone script. It also runs on `native`
+with the system C compiler, but not with `moonrockz/zig-cross@0.3.2` (see
+below). It does not build for `wasm-gc` or `js`, because `moonbitlang/async/fs`
+has no backend for those targets.
+
+The packaged host uses the module dependencies declared in `moon.mod`, which
+keeps `moonbitlang/async@0.22.5`. The workspace resolves one async version, and
+`moonrockz/zig-cross@0.3.2` cannot compile the `fs.c` stub of async 0.22.7: its
+forced `-include limits.h` comes before `#define _GNU_SOURCE`, so `O_PATH` is not
+declared. Move `moon.mod` to 0.22.7 after a zig-cross release that passes
+`-DNAME_MAX=255` in place of the forced include.
+
+The script declares its imports in frontmatter (between two `----` lines), so
+`moon test --deny-warn` passes on MoonBit 0.10.18, which warns about an import
+block outside frontmatter (`unfenced_import`). Pin MoonBit 0.10.18 in a consumer
+before you install this snapshot.
+
+MoonBit 0.10.20 cannot compile the script yet. It removes the `to_json` method
+call on core types such as `String`, and `moonrockz/moonspec@0.11.0` depends on
+`moonrockz/cucumber-messages@0.3.0`, which uses that call. Do not move a consumer
+to 0.10.20 until a `moonspec` release supports it.
