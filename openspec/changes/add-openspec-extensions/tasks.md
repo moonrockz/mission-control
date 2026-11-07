@@ -14,6 +14,10 @@ Bead: moonbase-gid
 
 - [x] 1.5 Move the imports of the bundled script and of every task script into frontmatter and pin MoonBit 0.10.18+6c83a7f62; verify `moon test --deny-warn` of the scripts, the app tests and the extension lock check on 0.10.18.
 
+Bead: moonbase-agl
+
+- [x] 1.6 Move the bundled script and the extension module to `moonbitlang/async@0.22.7` and keep MoonBit 0.10.18; verify `moon test --deny-warn` of the script on `wasm` and `native`, the app tests, the extension lock check and a consumer `openspec:verify` on 0.10.18.
+
 ## 2. Repository adoption
 
 Bead: moonbase-933
