@@ -38,7 +38,7 @@ Bead: moonbase-4ca
 
 Bead: moonbase-4ca
 
-- [ ] 5.1 Run `mise run check`, `mise run test:scripts` and `openspec validate --all --strict`; open the pull request and get CI and the existing Release pull request run green; fix verified review findings.
+- [x] 5.1 Run `mise run check`, `mise run test:scripts` and `openspec validate --all --strict`; open the pull request and get CI and the existing Release pull request run green; fix verified review findings.
 
 ## Workflow follow-up
 
