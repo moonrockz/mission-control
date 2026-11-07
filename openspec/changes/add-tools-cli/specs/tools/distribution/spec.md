@@ -68,7 +68,7 @@ WHEN `apps/tools/CHANGELOG.md` has no section for the version, the tools release
 WHEN the tools release workflow builds the release assets, the tools release workflow SHALL create a GitHub build provenance attestation for each archive and for `checksums.txt`, signed by the workflow `.github/workflows/release-tools.yml`, in dry runs and in releases.
 
 #### Scenario: Verify an archive
-- **WHEN** a user runs `gh attestation verify mission-control-tools-linux-x64.tar.gz --repo moonrockz/mission-control --signer-workflow moonrockz/mission-control/.github/workflows/release-tools.yml`
+- **WHEN** a user runs `gh attestation verify mission-control-tools-linux-x64.tar.gz --repo moonrockz/mission-control --signer-workflow moonrockz/mission-control/.github/workflows/release-tools.yml --source-ref refs/heads/main` on a released archive
 - **THEN** the command reports a verified attestation
 
 #### Scenario: Smoke check verifies the attestation

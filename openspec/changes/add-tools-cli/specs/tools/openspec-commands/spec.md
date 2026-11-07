@@ -90,6 +90,10 @@ WHEN a user adds `--json` to `openspec check`, the tools CLI SHALL print one JSO
 - **WHEN** a user runs `mission-control-tools openspec check --json` and a template is edited
 - **THEN** standard output is a JSON object with `"ok": false` and one problem with the code `drift` and the template path, and the exit code is 1
 
+#### Scenario: Unreadable repository as JSON
+- **WHEN** a user runs `mission-control-tools openspec check --json /no/such/repo`
+- **THEN** standard output is a JSON object with `"ok": false` and one problem with the code `error`, and the exit code is 1
+
 ### Requirement: Version command
 WHEN a user runs `mission-control-tools version`, the tools CLI SHALL print `mission-control-tools <version>`.
 

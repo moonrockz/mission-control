@@ -172,7 +172,7 @@ mission-control-tools openspec setup [REPOSITORY]</code></pre>
 <li><code>moonrockz/openspec-ext</code> stays the owner of the bundle, the lock and the checks. It gains a pure <code>check_snapshot(lock, files, config, level)</code> that returns problems. The inputs are the texts that the host read (<code>String?</code> for each path), so the core has no I/O and the acceptance tests use fixtures.</li>
 <li><code>openspec-ext/host</code> reads the files, calls the core, and does the writes of install and the process of setup. It takes the tool identity (module and version) as an argument, so the library does not import the tools module.</li>
 <li><code>apps/openspec-ext/cmd</code> is removed. Two commands with the same job would drift. The module is not published yet, so no user loses a command.</li>
-<li><code>apps/tools</code> has the argument parser, the output formats and <code>main</code>. It is native and wasm only, like the host (<code>moonbitlang/async</code> has no JS or wasm-gc file system). The release builds native only.</li>
+<li><code>apps/tools</code> has the argument parser, the output formats and <code>main</code>. It is native and wasm only, like the host (<code>moonbitlang/async</code> has no JS or wasm-gc file system). Mission Control runs the wasm build from source under <code>moonrun</code>; the release ships native binaries only, because a consumer has no <code>moonrun</code> host.</li>
 </ul>
 
 <h3 id="set-1">SET-1. Setup in the binary</h3>
@@ -273,7 +273,7 @@ version_prefix = "tools-v"
 <pre><code class="language-console">gh attestation verify mission-control-tools-linux-x64.tar.gz \
   --repo moonrockz/mission-control \
   --signer-workflow moonrockz/mission-control/.github/workflows/release-tools.yml</code></pre>
-The release notes and <code>apps/tools/README.md</code> give the same command. A dry-run attestation is a permanent public record for bytes that are not released; it names the run, so it does not make those bytes a release.</li>
+The release notes and <code>apps/tools/README.md</code> add <code>--source-ref refs/heads/main</code>, so only a build from main passes for a consumer. The smoke job leaves it out, because a dry run can come from another branch. A dry-run attestation is a permanent public record for bytes that are not released; it names the run, so it does not make those bytes a release.</li>
 <li>The release job uploads the bytes that the build job attested (the <code>dist-tools</code> artifact), so the attestation matches the release assets.</li>
 <li>The main CLI release is not changed; it can adopt the same step later.</li>
 </ul>
@@ -282,7 +282,8 @@ The release notes and <code>apps/tools/README.md</code> give the same command. A
 <table>
 <thead><tr><th>Risk</th><th>Mitigation</th></tr></thead>
 <tbody>
-<tr><td>The Windows build of the async host is new; the main CLI does not use async.</td><td>The smoke job runs <code>openspec check --bundle</code> on Windows before any release. The dispatch dry run comes before the first tag.</td></tr>
+<tr><td>The Windows build of the async host is new; the main CLI does not use async. The MoonBit runtime parts that async uses (thread pool, event bus) compile only with MSVC on Windows: a zig cross-build stops with <code>Currently only MSVC is supported on Windows</code>.</td><td>The Windows job runs <code>ilammy/msvc-dev-cmd@v1</code> before <code>moon build</code>, so <code>cl.exe</code> is on the path. The smoke job runs <code>openspec check --bundle</code> on Windows before any release. The dispatch dry run comes before the first tag.</td></tr>
+<tr><td>Git on Windows can check out the managed files with CRLF endings, and the byte comparison then reports drift.</td><td>The Windows smoke job sets <code>core.autocrlf false</code> before checkout. The README tells Windows consumers to keep LF for <code>openspec/schemas/html-design/**</code>.</td></tr>
 <tr><td>The first dispatch dry run happens only after the merge.</td><td>The local dry run covers four platforms; the merge does not release, because the plan skips a version without a changelog section.</td></tr>
 <tr><td>Merging this change on main with <code>apps/tools/moon.mod</code> new counts as a change of that path and can start a release.</td><td>The plan skips a version that has no section in <code>apps/tools/CHANGELOG.md</code>, and fails for a section that still has the highlights placeholder. The first merge has no 0.1.0 section, so the plan skips; the first release is a separate approved pull request that adds the section.</td></tr>
 <tr><td>Consumers that run an old script copy against a format 2 lock fail.</td><td>The migration replaces the script in the same pull request as the lock. The format 1 message tells a user who runs the binary first what to do.</td></tr>

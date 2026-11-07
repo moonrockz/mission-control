@@ -28,7 +28,7 @@ Out of scope:
 - Changes to the main `mission-control` CLI, its release assets or its version.
 - Publication of `moonrockz/mission-control-tools` to mooncakes.io. The binary is the distribution.
 - Attestations for the main CLI release. Only the tools release gets them in this change.
-- A wasm build of the tools CLI. `moonbitlang/async` file and process support needs a native host.
+- A wasm release asset of the tools CLI. Its wasm build runs only under `moonrun`, which supplies the file and process host, so consumers get native binaries. Mission Control itself runs the wasm build from source.
 
 ## Capabilities
 
