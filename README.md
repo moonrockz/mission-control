@@ -11,6 +11,7 @@ A MoonBit monorepo for Mission Control: shared contracts, a command-line applica
 | `pkgs/ears` | `moonrockz/ears` | Typed EARS requirements, plain-text parsing and Markdown/MDC extraction |
 | `pkgs/okf` | `moonrockz/okf` | Open Knowledge Format bundles: model, links, indexes, queries, validation, edits, stores and profiles |
 | `apps/openspec-ext` | `moonrockz/openspec-ext` | Shared OpenSpec schemas, safe installation, drift checks and agent setup |
+| `apps/tools` | `moonrockz/mission-control-tools` | The `mission-control-tools` command for consumer repositories, released separately as `tools-vX.Y.Z` |
 | `apps/cli` | `moonrockz/mission-control-cli` | The `mission-control` command |
 | `apps/web` | `moonrockz/mission-control-web` | Web UI written with [Rabbita](https://github.com/moonbit-community/rabbita) |
 | `apps/desktop` | `moonrockz/mission-control-desktop` | Desktop shell: Proton command descriptors and the HTML document the window loads |
@@ -137,12 +138,15 @@ mission-control/
 [OpenSpec extensions](apps/openspec-ext/README.md) owns the portable `html-design`
 bundle. Run `mise run openspec:check` to check the repository snapshot,
 `mise run openspec:install` to update it, and `mise run openspec:setup` to
-regenerate the core agent skills. Use the source commands in that guide to
-set up another repository. The new extension module awaits its first release.
+regenerate the core agent skills. These tasks run the tools CLI from source.
+
+Other repositories pin the released `mission-control-tools` binary with mise. The install entry, the
+commands and the migration from `scripts/openspec-ext.mbtx` are in
+[apps/tools/README.md](apps/tools/README.md).
 
 ## Release
 
-All modules share one version. The root `moon.mod` is the source of truth. `mise run validate:versions` fails when a module, a sibling import or the contract version text (`current_version` in `pkgs/contracts`) has another version.
+All modules except the tools CLI (`apps/tools`, see its README) share one version. The root `moon.mod` is the source of truth. `mise run validate:versions` fails when a module, a sibling import or the contract version text (`current_version` in `pkgs/contracts`) has another version.
 
 `mise run release:prepare [X.Y.Z]` computes the next version with git-cliff, sets the version, prepends a section to `CHANGELOG.md`, commits `chore(release): vX.Y.Z` on `release/vX.Y.Z`, pushes it and opens a draft pull request. `--local` stops before the push. Replace the highlights comment, push, then run `mise run release:refresh`. Merge that pull request. The Release workflow publishes the modules to mooncakes.io and creates the GitHub release. A pull request run and a manual run with `dry_run` do not publish.
 

@@ -1,0 +1,100 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonrockz/mission-control-tools"
+
+import {
+  "moonrockz/mission-control-contracts",
+  "moonrockz/openspec-ext",
+}
+
+// Values
+pub fn check_level(CheckScope) -> @openspec-ext.CheckLevel
+
+pub fn check_outcome(String, Array[@openspec-ext.Problem], CheckScope, Format) -> Outcome
+
+pub fn failure_outcome(Array[String]) -> Outcome
+
+pub fn help_outcome() -> Outcome
+
+pub fn install_outcome() -> Outcome
+
+pub fn parse(ArrayView[String]) -> Command raise UsageError
+
+pub fn setup_outcome() -> Outcome
+
+pub fn tool() -> @openspec-ext.Tool
+
+pub fn usage() -> String
+
+pub fn usage_outcome(UsageError) -> Outcome
+
+pub fn version() -> @mission-control-contracts.Version
+
+pub fn version_outcome(Format) -> Outcome
+
+// Errors
+pub suberror UsageError {
+  UnknownCommand(String)
+  UnknownOption(String)
+  RepeatedOption(String)
+  ExtraArgument(String)
+  MissingCommand
+  InvalidRepository(String)
+}
+pub fn UsageError::message(Self) -> String
+#deprecated
+pub fn UsageError::output(Self, &Logger) -> Unit
+#deprecated
+pub fn UsageError::to_string(Self) -> String
+pub impl Show for UsageError
+
+// Types and methods
+pub(all) enum CheckScope {
+  Snapshot
+  Bundle
+} derive(Eq)
+#deprecated
+pub fn CheckScope::equal(Self, Self) -> Bool
+#deprecated
+pub fn CheckScope::not_equal(Self, Self) -> Bool
+
+pub enum Command {
+  Help
+  Version(Format)
+  OpenSpec(OpenSpecCommand, @openspec-ext.RepositoryPath)
+}
+
+pub(all) enum ExitCode {
+  Success
+  Failure
+  Usage
+} derive(Eq)
+#deprecated
+pub fn ExitCode::equal(Self, Self) -> Bool
+#deprecated
+pub fn ExitCode::not_equal(Self, Self) -> Bool
+pub fn ExitCode::to_int(Self) -> Int32
+
+pub(all) enum Format {
+  Text
+  JsonReport
+} derive(Eq)
+#deprecated
+pub fn Format::equal(Self, Self) -> Bool
+#deprecated
+pub fn Format::not_equal(Self, Self) -> Bool
+
+pub enum OpenSpecCommand {
+  Check(CheckScope, Format)
+  Install
+  Setup
+}
+
+pub struct Outcome {
+  stdout : Array[String]
+  stderr : Array[String]
+  exit_code : ExitCode
+}
+
+// Type aliases
+
+// Traits

@@ -5,6 +5,7 @@ version = "0.1.0"
 import {
   "moonbit-community/cmark@0.4.12",
   "moonbitlang/async@0.22.5",
+  "moonrockz/mission-control-contracts@0.1.0",
   "moonrockz/mdc@0.1.0",
   "moonrockz/ears@0.1.0",
   "moonrockz/okf@0.1.0",

@@ -1,0 +1,20 @@
+pkgtype(kind: "executable")
+
+import {
+  "moonrockz/mission-control-contracts" @contracts,
+  "moonrockz/openspec-ext" @extension,
+  "moonrockz/openspec-ext/host",
+  "moonbitlang/async",
+  "moonbitlang/core/env",
+  "moonbitlang/x/sys",
+}
+
+import {
+  "moonbitlang/core/json",
+  "moonbitlang/async/fs" @async_fs,
+} for "wbtest"
+
+// The commands use moonbitlang/async/fs and async/process through openspec-ext/host. They have no
+// JS or wasm-gc backend. The release builds native binaries only.
+
+supported_targets = "wasm+native"

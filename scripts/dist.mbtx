@@ -27,7 +27,12 @@ import {
 /// `pack` needs all five binaries. It writes the eight release files to `dist/`: five archives, `mission-control.wasm`, `mission-control-gc.wasm`
 /// and `checksums.txt`. With no argument, the script runs `build` and then `pack`.
 ///
-/// Usage: `mise run build:release`, `mise run release:assets`, or `moonx scripts/dist.mbtx [build|build-windows|pack]`.
+/// A second argument `tools` selects the tools CLI (`apps/tools`) in place of the main CLI. Its outputs are the
+/// five `mission-control-tools-*` archives and `checksums.txt` in `dist-tools/`; it has no wasm files, because
+/// its file and process I/O needs a native host.
+///
+/// Usage: `mise run build:release`, `mise run release:assets`, `mise run build:tools`, or
+/// `moonx scripts/dist.mbtx [build|build-windows|pack] [tools]`.
 /// The script exits with a non-zero code on failure.
 
 ///|
@@ -53,19 +58,76 @@ fn ExitCode::exit(self : ExitCode) -> Unit {
 // End of the exit codes.
 
 ///|
-let usage : String = "Usage: dist.mbtx [build | build-windows | pack]"
+let usage : String = "Usage: dist.mbtx [build | build-windows | pack] [tools]"
+
+///|
+/// The command-line application that a release ships.
+enum Product {
+  /// The main `mission-control` CLI, released under `vX.Y.Z`.
+  Cli
+  /// The `mission-control-tools` CLI, released under `tools-vX.Y.Z`.
+  Tools
+} derive(Eq)
 
 ///|
 /// The MoonBit package that holds the command-line application.
-let package_path : String = "apps/cli"
+fn Product::package_path(self : Product) -> String {
+  match self {
+    Cli => "apps/cli"
+    Tools => "apps/tools"
+  }
+}
 
 ///|
 /// The base name of the executable that moon writes.
-let exe_stem : String = "mission-control-cli"
+fn Product::exe_stem(self : Product) -> String {
+  match self {
+    Cli => "mission-control-cli"
+    Tools => "mission-control-tools"
+  }
+}
 
 ///|
-/// The name of the executable inside each archive.
-let bin : String = "mission-control"
+/// The name of the executable inside each archive, and the prefix of each archive name.
+fn Product::bin(self : Product) -> String {
+  match self {
+    Cli => "mission-control"
+    Tools => "mission-control-tools"
+  }
+}
+
+///|
+/// The directory that `pack` writes.
+fn Product::dist_dir(self : Product) -> String {
+  match self {
+    Cli => "dist"
+    Tools => "dist-tools"
+  }
+}
+
+///|
+/// The mise task that builds the windows-x64 binary on a Windows host.
+fn Product::windows_task(self : Product) -> String {
+  match self {
+    Cli => "build:windows"
+    Tools => "build:tools-windows"
+  }
+}
+
+///|
+/// The name of the workflow artifact that holds the windows-x64 binary.
+fn Product::windows_artifact(self : Product) -> String {
+  match self {
+    Cli => "windows-x64-exe"
+    Tools => "tools-windows-x64-exe"
+  }
+}
+
+///|
+/// Whether the release has the two wasm files. The tools CLI needs native file and process I/O.
+fn Product::has_wasm(self : Product) -> Bool {
+  self is Cli
+}
 
 ///|
 /// A native release target: one archive with one executable.
@@ -133,9 +195,6 @@ let wasm_gc_name : String = "mission-control-gc.wasm"
 let checksums_name : String = "checksums.txt"
 
 ///|
-let dist_dir : String = "dist"
-
-///|
 fn fail_with(message : String) -> Unit {
   eprintln("❌ \{message}")
   ExitCode::Failure.exit()
@@ -148,30 +207,32 @@ fn is_windows(target : DistTarget) -> Bool {
 
 ///|
 /// The archive file name of one target.
-fn archive_name(target : DistTarget) -> String {
+fn archive_name(product : Product, target : DistTarget) -> String {
   if is_windows(target) {
-    "mission-control-\{target.name()}.zip"
+    "\{product.bin()}-\{target.name()}.zip"
   } else {
-    "mission-control-\{target.name()}.tar.gz"
+    "\{product.bin()}-\{target.name()}.tar.gz"
   }
 }
 
 ///|
 /// The name of the executable inside the archive of one target.
-fn binary_name(target : DistTarget) -> String {
+fn binary_name(product : Product, target : DistTarget) -> String {
   if is_windows(target) {
-    bin + ".exe"
+    product.bin() + ".exe"
   } else {
-    bin
+    product.bin()
   }
 }
 
 ///|
-/// The names of the eight files that `dist/` must hold.
-fn expected_outputs() -> Array[String] {
-  let names = dist_targets.map(archive_name)
-  names.push(wasm_name)
-  names.push(wasm_gc_name)
+/// The names of the files that the dist directory must hold: eight for the CLI, six for the tools.
+fn expected_outputs(product : Product) -> Array[String] {
+  let names = dist_targets.map(t => archive_name(product, t))
+  if product.has_wasm() {
+    names.push(wasm_name)
+    names.push(wasm_gc_name)
+  }
   names.push(checksums_name)
   names
 }
@@ -306,8 +367,8 @@ fn zip_file(name : String, data : Bytes) -> Bytes raise {
 }
 
 ///|
-fn cross_pattern(target : DistTarget) -> String {
-  "_build/cross/\{target.name()}/native/release/build/**/\{exe_stem}.exe"
+fn cross_pattern(product : Product, target : DistTarget) -> String {
+  "_build/cross/\{target.name()}/native/release/build/**/\{product.exe_stem()}.exe"
 }
 
 ///|
@@ -330,25 +391,32 @@ async fn run_step(label : String, cmd : String, args : Array[String]) -> Unit {
 }
 
 ///|
-async fn build() -> Unit {
+async fn build(product : Product) -> Unit {
   let args = ["run", "build:cross", "--"]
   for target in cross_targets {
     args.push(target.name())
   }
   args.push("--")
-  args.push(package_path)
+  args.push(product.package_path())
   run_step("Cross-compiling the native binaries", "mise", args)
-  for wasm in [Wasm, WasmGc] {
-    run_step("Building \{wasm.name()}", "moon", [
-      "build", package_path, "--target", wasm.name(), "--release",
-    ])
+  if product.has_wasm() {
+    for wasm in [Wasm, WasmGc] {
+      run_step("Building \{wasm.name()}", "moon", [
+        "build",
+        product.package_path(),
+        "--target",
+        wasm.name(),
+        "--release",
+      ])
+    }
   }
 }
 
 ///|
 /// Where `moon build --target native --release` writes the executable on the host.
-let native_exe_pattern : String =
-  "_build/native/release/build/**/\{exe_stem}.exe"
+fn native_exe_pattern(product : Product) -> String {
+  "_build/native/release/build/**/\{product.exe_stem()}.exe"
+}
 
 ///|
 /// True when the OS variable names Windows (Windows sets `OS=Windows_NT`).
@@ -358,20 +426,24 @@ fn is_windows_host(os : String?) -> Bool {
 
 ///|
 /// Build windows-x64 natively and copy the executable to the path that `pack` reads.
-async fn build_windows() -> Unit {
+async fn build_windows(product : Product) -> Unit {
   if !is_windows_host(@env.get_env_var("OS")) {
     fail_with(
-      "I build windows-x64 on a Windows host only. Run this on Windows, or download the windows-x64-exe artifact of the Release workflow.",
+      "I build windows-x64 on a Windows host only. Run this on Windows, or download the \{product.windows_artifact()} artifact of the release workflow.",
     )
   }
   run_step("Building the native binary for windows-x64", "moon", [
-    "build", package_path, "--target", "native", "--release",
+    "build",
+    product.package_path(),
+    "--target",
+    "native",
+    "--release",
   ])
-  let exe = single_match(native_exe_pattern)
-  let dir = "_build/cross/\{WindowsX64.name()}/native/release/build/moonrockz/\{exe_stem}"
+  let exe = single_match(native_exe_pattern(product))
+  let dir = "_build/cross/\{WindowsX64.name()}/native/release/build/moonrockz/\{product.exe_stem()}"
   @fs.mkdir(dir, recursive=true)
-  @fs.write_file("\{dir}/\{exe_stem}.exe", read_bytes(exe))
-  println("✅ Wrote \{dir}/\{exe_stem}.exe")
+  @fs.write_file("\{dir}/\{product.exe_stem()}.exe", read_bytes(exe))
+  println("✅ Wrote \{dir}/\{product.exe_stem()}.exe")
 }
 
 ///|
@@ -380,25 +452,29 @@ async fn read_bytes(path : String) -> Bytes {
 }
 
 ///|
-async fn wasm_output(backend : WasmBackend) -> String {
-  single_match("_build/\{backend.name()}/release/build/**/\{exe_stem}.wasm")
+async fn wasm_output(product : Product, backend : WasmBackend) -> String {
+  single_match(
+    "_build/\{backend.name()}/release/build/**/\{product.exe_stem()}.wasm",
+  )
 }
 
 ///|
-async fn pack() -> Unit {
+async fn pack(product : Product) -> Unit {
+  let dist_dir = product.dist_dir()
   if @fs.exists(dist_dir) {
     @fs.rmdir(dist_dir, recursive=true)
   }
   @fs.mkdir(dist_dir, recursive=true)
   let written : Array[(String, Bytes)] = []
   for target in dist_targets {
-    if target == WindowsX64 && @shell.glob(cross_pattern(target)).is_empty() {
+    if target == WindowsX64 &&
+      @shell.glob(cross_pattern(product, target)).is_empty() {
       fail_with(
-        "I found no binary for \{target.name()}. Build it on Windows with `mise run build:windows`, or download the windows-x64-exe artifact of the Release workflow.",
+        "I found no binary for \{target.name()}. Build it on Windows with `mise run \{product.windows_task()}`, or download the \{product.windows_artifact()} artifact of the release workflow.",
       )
     }
-    let exe = read_bytes(single_match(cross_pattern(target)))
-    let name = binary_name(target)
+    let exe = read_bytes(single_match(cross_pattern(product, target)))
+    let name = binary_name(product, target)
     let archive = if is_windows(target) {
       zip_file(name, exe) catch {
         error => {
@@ -409,36 +485,62 @@ async fn pack() -> Unit {
     } else {
       gzip_bytes(ustar_file(name, exe))
     }
-    written.push((archive_name(target), archive))
+    written.push((archive_name(product, target), archive))
   }
-  written.push((wasm_name, read_bytes(wasm_output(Wasm))))
-  written.push((wasm_gc_name, read_bytes(wasm_output(WasmGc))))
+  if product.has_wasm() {
+    written.push((wasm_name, read_bytes(wasm_output(product, Wasm))))
+    written.push((wasm_gc_name, read_bytes(wasm_output(product, WasmGc))))
+  }
   for file in written {
     @fs.write_file("\{dist_dir}/\{file.0}", file.1)
   }
   @fs.write_file("\{dist_dir}/\{checksums_name}", checksums_text(written))
   let missing = missing_outputs(
-    expected_outputs(),
+    expected_outputs(product),
     @fs.readdir(dist_dir),
   )
   if !missing.is_empty() {
     fail_with("dist/ lacks: \{missing.join(", ")}")
   }
-  println("✅ Wrote \{expected_outputs().length()} files to \{dist_dir}/")
+  println("✅ Wrote \{expected_outputs(product).length()} files to \{dist_dir}/")
+}
+
+///|
+/// A step of the script.
+enum Step {
+  BuildAndPack
+  Build
+  BuildWindows
+  Pack
+}
+
+///|
+/// Parse the arguments once into a step and a product, or `None` for a usage error.
+fn parse_args(args : ArrayView[String]) -> (Step, Product)? {
+  let (step, rest) = match args {
+    ["build", .. rest] => (Build, rest)
+    ["build-windows", .. rest] => (BuildWindows, rest)
+    ["pack", .. rest] => (Pack, rest)
+    rest => (BuildAndPack, rest)
+  }
+  match rest {
+    [] => Some((step, Cli))
+    ["tools"] => Some((step, Tools))
+    _ => None
+  }
 }
 
 ///|
 async fn main {
-  let args = @env.args()[1:]
-  match args {
-    [] => {
-      build()
-      pack()
+  match parse_args(@env.args()[1:]) {
+    Some((BuildAndPack, product)) => {
+      build(product)
+      pack(product)
     }
-    ["build"] => build()
-    ["build-windows"] => build_windows()
-    ["pack"] => pack()
-    _ => {
+    Some((Build, product)) => build(product)
+    Some((BuildWindows, product)) => build_windows(product)
+    Some((Pack, product)) => pack(product)
+    None => {
       eprintln(usage)
       ExitCode::Usage.exit()
     }
@@ -448,6 +550,8 @@ async fn main {
 ///|
 /// Scenario state for `features/dist.feature`.
 struct DistWorld {
+  mut product : Product
+  mut parsed : String
   mut target : DistTarget?
   mut os : String?
   files : Array[(String, Bytes)]
@@ -458,7 +562,16 @@ struct DistWorld {
 
 ///|
 fn DistWorld::new() -> DistWorld {
-  { target: None, os: None, files: [], expected: [], present: [], tar: b"" }
+  {
+    product: Cli,
+    parsed: "",
+    target: None,
+    os: None,
+    files: [],
+    expected: [],
+    present: [],
+    tar: b"",
+  }
 }
 
 ///|
@@ -477,13 +590,46 @@ impl @moonspec.World for DistWorld with fn configure(self, setup) {
   setup.given1("the target {string}", fn(target : String) {
     self.target = DistTarget::parse(target)
   })
+  setup.given0("the tools product", fn() { self.product = Tools })
+  setup.then1("the outputs are {string}", fn(names : String) raise {
+    @expect.expect(expected_outputs(self.product).join(",")).to_equal(names)
+  })
+  setup.then1("the dist directory is {string}", fn(dir : String) raise {
+    @expect.expect(self.product.dist_dir()).to_equal(dir)
+  })
+  setup.when1("I parse the arguments {string}", fn(text : String) {
+    let args = if text == "" {
+      []
+    } else {
+      text.split(" ").map(a => a.to_owned()).collect()
+    }
+    self.parsed = match parse_args(args[:]) {
+      Some((step, product)) => {
+        let step = match step {
+          BuildAndPack => "BuildAndPack"
+          Build => "Build"
+          BuildWindows => "BuildWindows"
+          Pack => "Pack"
+        }
+        let product = match product {
+          Cli => "Cli"
+          Tools => "Tools"
+        }
+        "\{step} \{product}"
+      }
+      None => "usage error"
+    }
+  })
+  setup.then1("the step and the product are {string}", fn(expected : String) raise {
+    @expect.expect(self.parsed).to_equal(expected)
+  })
   setup.then2("the archive is {string} and the binary is {string}", fn(
     archive : String,
     binary : String,
   ) raise {
     guard self.target is Some(target) else { fail("not a target") }
-    @expect.expect(archive_name(target)).to_equal(archive)
-    @expect.expect(binary_name(target)).to_equal(binary)
+    @expect.expect(archive_name(self.product, target)).to_equal(archive)
+    @expect.expect(binary_name(self.product, target)).to_equal(binary)
   })
   setup.then1("the text {string} names no target", fn(text : String) raise {
     @expect.expect(DistTarget::parse(text) is None).to_equal(true)

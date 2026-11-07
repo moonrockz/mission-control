@@ -6,18 +6,27 @@ import {
 }
 
 // Values
-pub async fn check(@openspec-ext.RepositoryPath) -> Unit
+pub async fn check(@openspec-ext.RepositoryPath, @openspec-ext.CheckLevel) -> CheckReport
 
-pub async fn install(@openspec-ext.RepositoryPath) -> Unit
+pub async fn install(@openspec-ext.RepositoryPath, @openspec-ext.Tool) -> Unit
+
+pub async fn isolated_init(async (String, Map[String, String]) -> Int32) -> Unit
 
 pub async fn setup(@openspec-ext.RepositoryPath) -> Unit
 
+pub fn setup_preferences() -> Json
+
 // Errors
 pub suberror InstallError {
-  Conflict(String)
-  InvalidLock(String)
+  Symlink(String)
+  LocalEdit(@openspec-ext.BundleFile)
+  EditedRetired(@openspec-ext.RetiredFile)
+  UnsupportedLock
+  OpenSpecVersion
   SetupFailed(Int32)
+  CheckFailed(Array[@openspec-ext.Problem])
 }
+pub fn InstallError::message(Self) -> String
 #deprecated
 pub fn InstallError::output(Self, &Logger) -> Unit
 #deprecated
@@ -25,6 +34,10 @@ pub fn InstallError::to_string(Self) -> String
 pub impl Show for InstallError
 
 // Types and methods
+pub struct CheckReport {
+  root : String
+  problems : Array[@openspec-ext.Problem]
+}
 
 // Type aliases
 

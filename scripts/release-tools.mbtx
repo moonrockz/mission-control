@@ -1,0 +1,904 @@
+----
+import {
+  "moonbitlang/async@0.22.5",
+  "moonbitlang/async@0.22.5/fs",
+  "moonbitlang/async@0.22.5/process",
+  "moonbitlang/x@0.5.5/sys",
+  "moonbitlang/core/env",
+  "moonrockz/moonspec@0.11.0",
+  "moonrockz/expect@0.6.1",
+}
+----
+
+///|
+/// Plan and make a release of the tools CLI (`apps/tools`), separately from the main CLI.
+///
+/// The tools CLI has its own version (`apps/tools/moon.mod`), its own tags (`tools-vX.Y.Z`) and its own
+/// changelog (`apps/tools/CHANGELOG.md`). Its GitHub release holds the five archives and `checksums.txt` of
+/// `dist-tools/`, and is never marked as the latest release, so `releases/latest` stays on the main CLI.
+///
+/// - `plan` decides what a run of `.github/workflows/release-tools.yml` does, from GITHUB_EVENT_NAME,
+///   GITHUB_REF_TYPE, GITHUB_REF_NAME and DRY_RUN. It writes release, dry_run, version and tag to GITHUB_OUTPUT.
+/// - `notes X.Y.Z` prints the release notes: the changelog section, the mise entries and the attestation check.
+/// - `github X.Y.Z` creates the GitHub release, or uploads the assets that it lacks (needs GITHUB_SHA and
+///   RUNNER_TEMP, with the notes in `$RUNNER_TEMP/notes.md`).
+/// - `status` checks that the tools version, its tag and its release agree, and that no tools release is latest.
+///
+/// Usage: `moonx scripts/release-tools.mbtx plan | notes X.Y.Z | github X.Y.Z | status`.
+
+///|
+/// The exit codes of the task scripts: 0 for success, 1 for a failure and 2
+/// for a usage error. A script that succeeds ends `main` normally. Each script
+/// keeps this copy, and `scripts/test-scripts.mbtx` checks that the copies are
+/// equal.
+enum ExitCode {
+  Failure
+  Usage
+}
+
+///|
+/// Ends the script with this exit code.
+fn ExitCode::exit(self : ExitCode) -> Unit {
+  @sys.exit(
+    match self {
+      Failure => 1
+      Usage => 2
+    },
+  )
+}
+// End of the exit codes.
+
+///|
+let usage : String = "Usage: release-tools.mbtx plan | notes X.Y.Z | github X.Y.Z | status"
+
+///|
+/// The GitHub repository of the releases.
+let repository : String = "moonrockz/mission-control"
+
+///|
+/// The workflow that builds, attests and releases the tools CLI.
+let workflow_path : String = ".github/workflows/release-tools.yml"
+
+///|
+let tools_mod : String = "apps/tools/moon.mod"
+
+///|
+let changelog_path : String = "apps/tools/CHANGELOG.md"
+
+///|
+let dist_dir : String = "dist-tools"
+
+///|
+/// The prefix of the tools tags. The main CLI uses `v`.
+let tag_prefix : String = "tools-v"
+
+///|
+/// A `major.minor.patch` version: each part is 1 to 9 digits with no leading
+/// zero. `scripts/release.mbtx` and `scripts/versions.mbtx` keep the same
+/// copy, and a scenario of `features/versions.feature` checks that the copies
+/// are equal.
+struct Version {
+  major : Int
+  minor : Int
+  patch : Int
+} derive(Eq, Compare, Debug)
+
+///|
+impl Show for Version with fn output(self, logger) {
+  logger.write_string("\{self.major}.\{self.minor}.\{self.patch}")
+}
+
+///|
+/// One part of a version: 1 to 9 digits with no leading zero.
+fn version_part(text : StringView) -> Int? {
+  guard text.length() > 0 &&
+    text.length() <= 9 &&
+    !(text.length() > 1 && text.has_prefix("0")) else {
+    return None
+  }
+  let mut n = 0
+  for c in text {
+    guard c >= '0' && c <= '9' else { return None }
+    n = n * 10 + (c.to_int() - '0'.to_int())
+  }
+  Some(n)
+}
+
+///|
+/// Reads `N.N.N`, or gives `None` for any other text.
+fn Version::parse(text : StringView) -> Version? {
+  match text.split(".").collect() {
+    [major, minor, patch] =>
+      match (version_part(major), version_part(minor), version_part(patch)) {
+        (Some(major), Some(minor), Some(patch)) => Some({ major, minor, patch })
+        _ => None
+      }
+    _ => None
+  }
+}
+// End of the version.
+
+///|
+fn tag_of(version : Version) -> String {
+  "\{tag_prefix}\{version}"
+}
+
+///|
+/// The `version = "..."` value of a moon.mod file.
+fn mod_version(moon_mod : String) -> String? {
+  for line in moon_mod.split("\n") {
+    if line.has_prefix("version = \"") {
+      let rest = line[11:]
+      if rest.find("\"") is Some(end) {
+        return Some(rest[:end].to_owned())
+      }
+    }
+  }
+  None
+}
+
+///|
+/// The release assets, in release order. `dist-tools/` has exactly these.
+let archives : Array[String] = [
+  "mission-control-tools-linux-x64.tar.gz", "mission-control-tools-linux-arm64.tar.gz",
+  "mission-control-tools-darwin-arm64.tar.gz", "mission-control-tools-darwin-x64.tar.gz",
+  "mission-control-tools-windows-x64.zip",
+]
+
+///|
+fn release_assets() -> Array[String] {
+  let names = archives.copy()
+  names.push("checksums.txt")
+  names
+}
+
+///|
+/// The mise platforms and the archive of each. Windows on Arm runs the x64 build under emulation.
+let mise_platforms : Array[(String, String)] = [
+  ("linux-x64", "mission-control-tools-linux-x64.tar.gz"),
+  ("linux-arm64", "mission-control-tools-linux-arm64.tar.gz"),
+  ("macos-arm64", "mission-control-tools-darwin-arm64.tar.gz"),
+  ("macos-x64", "mission-control-tools-darwin-x64.tar.gz"),
+  ("windows-x64", "mission-control-tools-windows-x64.zip"),
+  ("windows-arm64", "mission-control-tools-windows-x64.zip"),
+]
+
+///|
+/// The platform table of a mise entry whose table name is `key`.
+fn platform_lines(key : String) -> String {
+  let lines = ["[tools.\{key}.platforms]"]
+  for entry in mise_platforms {
+    if entry.0 == "windows-arm64" {
+      lines.push(
+        "# No Windows arm64 build; Windows on Arm runs the x64 build under emulation.",
+      )
+    }
+    lines.push("\{entry.0} = { asset_pattern = \"\{entry.1}\" }")
+  }
+  lines.join("\n")
+}
+
+///|
+/// The mise entry for a repository that installs only the tools CLI. Renovate's mise manager can bump it:
+/// it reads the `github` backend and turns `version_prefix` into `extractVersion`.
+fn mise_entry(version : Version) -> String {
+  let key = "\"github:\{repository}\""
+  "[tools.\{key}]\nversion = \"\{version}\"\nversion_prefix = \"\{tag_prefix}\"\n\n" +
+  platform_lines(key)
+}
+
+///|
+/// The mise entry for a repository that also installs the main CLI from `github:moonrockz/mission-control`.
+/// mise needs a `[tool_alias]` name for the second tool of one repository. Renovate does not read aliases.
+fn mise_alias_entry(version : Version) -> String {
+  "[tool_alias]\nmission-control-tools = \"github:\{repository}\"\n\n[tools.mission-control-tools]\nversion = \"\{version}\"\nversion_prefix = \"\{tag_prefix}\"\n\n" +
+  platform_lines("mission-control-tools")
+}
+
+///|
+/// The command that checks the build provenance of a downloaded archive.
+fn attestation_command(asset : String) -> String {
+  "gh attestation verify \{asset} --repo \{repository} --signer-workflow \{repository}/\{workflow_path}"
+}
+
+///|
+/// The start of the comment that a new changelog section has where the highlights go.
+let highlights_marker : String = "<!-- Highlights:"
+
+///|
+/// The body of the section `## [<version>] ...`, without its heading, or `None` without such a section.
+fn changelog_section(changelog : String, version : Version) -> String? {
+  let heading = "## [\{version}]"
+  let body : Array[String] = []
+  let mut inside = false
+  let mut found = false
+  for line in changelog.split("\n") {
+    if line.has_prefix("## [") {
+      if inside {
+        break
+      }
+      inside = line.has_prefix(heading)
+      found = found || inside
+      continue
+    }
+    if inside {
+      body.push(line.to_owned())
+    }
+  }
+  if found {
+    Some(body.join("\n").trim().to_owned())
+  } else {
+    None
+  }
+}
+
+///|
+/// The state of the changelog section of a version.
+enum ChangelogState {
+  NoSection
+  Placeholder
+  Ready
+} derive(Eq, Debug)
+
+///|
+fn ChangelogState::of_section(section : String?) -> ChangelogState {
+  match section {
+    None => NoSection
+    Some(text) => if text.contains(highlights_marker) { Placeholder } else { Ready }
+  }
+}
+
+///|
+/// The GitHub release notes: the changelog section, the mise entries and the attestation check.
+fn release_notes(version : Version, section : String) -> String {
+  [
+    section, "", "## Install with mise", "", "Add this entry to `.config/mise/config.toml` and run `mise install`. mise downloads the archive of the platform from the `\{tag_of(version)}` release and checks it against the GitHub asset digest and its attestation.",
+    "", "```toml", mise_entry(version), "```", "", "A repository that also installs the main `mission-control` CLI from `github:\{repository}` needs an alias for the tools CLI. Renovate does not bump this form.",
+    "", "```toml", mise_alias_entry(version), "```", "", "## Verify a download",
+    "", "Each archive and `checksums.txt` has a GitHub build provenance attestation from `\{workflow_path}`:",
+    "", "```shell", attestation_command("mission-control-tools-linux-x64.tar.gz"),
+    "sha256sum -c checksums.txt", "```", "", "The executable is at the root of each archive. The migration steps for a repository that keeps a copy of `scripts/openspec-ext.mbtx` are in [apps/tools/README.md](https://github.com/\{repository}/blob/\{tag_of(version)}/apps/tools/README.md).",
+  ].join("\n") +
+  "\n"
+}
+
+///|
+/// The state of the GitHub release of a version.
+enum ReleaseState {
+  Missing
+  Incomplete
+  Complete
+} derive(Eq, Debug)
+
+///|
+fn missing_names(
+  expected : Array[String],
+  present : Array[String],
+) -> Array[String] {
+  expected.filter(name => !present.contains(name))
+}
+
+///|
+fn ReleaseState::of(
+  exists~ : Bool,
+  draft~ : Bool,
+  assets~ : Array[String],
+) -> ReleaseState {
+  if !exists {
+    Missing
+  } else if draft || !missing_names(release_assets(), assets).is_empty() {
+    Incomplete
+  } else {
+    Complete
+  }
+}
+
+///|
+/// Raised when the inputs of a run name a value that the script does not know.
+suberror InputError {
+  /// An event other than `push` or `workflow_dispatch`. The workflow has no pull request trigger.
+  UnknownEvent(String)
+  UnknownRefType(String)
+  UnknownDryRun(String)
+  /// A tag that is not `tools-v` and a version.
+  NotAToolsTag(String)
+}
+
+///|
+fn InputError::message(self : InputError) -> String {
+  match self {
+    UnknownEvent(event) =>
+      "the event `\{event}` is not push or workflow_dispatch"
+    UnknownRefType(ref_type) =>
+      "the ref type `\{ref_type}` is not branch or tag"
+    UnknownDryRun(text) => "the dry_run input `\{text}` is not true or false"
+    NotAToolsTag(name) => "the tag `\{name}` is not \{tag_prefix} and a version"
+  }
+}
+
+///|
+/// What started a run.
+enum RunTrigger {
+  /// A manual run with `dry_run`. It only checks.
+  DryRun
+  /// A push to main, or a manual run without `dry_run`. It can release.
+  Push
+} derive(Eq, Debug)
+
+///|
+fn RunTrigger::parse(
+  event : String,
+  dry_run : String,
+) -> RunTrigger raise InputError {
+  let dry = match dry_run {
+    "true" => true
+    "false" | "" => false
+    _ => raise UnknownDryRun(dry_run)
+  }
+  match event {
+    "push" | "workflow_dispatch" => if dry { DryRun } else { Push }
+    _ => raise UnknownEvent(event)
+  }
+}
+
+///|
+/// The ref of a run: a branch, or a tools tag such as `tools-v0.1.0`.
+enum GitRef {
+  Branch(String)
+  Tag(Version)
+} derive(Eq, Debug)
+
+///|
+fn GitRef::parse(ref_type : String, ref_name : String) -> GitRef raise InputError {
+  match ref_type {
+    "branch" => Branch(ref_name)
+    "tag" =>
+      match ref_name.strip_prefix(tag_prefix).bind(Version::parse) {
+        Some(version) => Tag(version)
+        None => raise NotAToolsTag(ref_name)
+      }
+    _ => raise UnknownRefType(ref_type)
+  }
+}
+
+///|
+fn GitRef::name(self : GitRef) -> String {
+  match self {
+    Branch(name) => name
+    Tag(version) => tag_of(version)
+  }
+}
+
+///|
+enum MainState {
+  OnMain
+  OffMain
+} derive(Eq, Debug)
+
+///|
+/// What a run does.
+enum Plan {
+  Release(Version)
+  DryRun(Version)
+  Skip(String)
+} derive(Eq, Debug)
+
+///|
+/// Why a run cannot release.
+suberror PlanError {
+  TagMismatch(tag~ : Version, version~ : Version)
+  NotOnMain(String)
+  HighlightsPlaceholder(Version)
+}
+
+///|
+fn PlanError::message(self : PlanError) -> String {
+  match self {
+    TagMismatch(tag~, version~) =>
+      "tag \{tag_of(tag)} does not match \{tools_mod} version \{version}"
+    NotOnMain(name) => "\{name} is not on main"
+    HighlightsPlaceholder(version) =>
+      "the \{changelog_path} section for \{version} still has the highlights placeholder"
+  }
+}
+
+///|
+/// Decide whether a run releases. A dry run only checks. Any other run must be on main and name the version
+/// of `apps/tools/moon.mod`. A version with a complete release, or with no changelog section, is skipped: the
+/// first merge of a version bump without its section releases nothing.
+fn plan(
+  trigger : RunTrigger,
+  git_ref : GitRef,
+  version : Version,
+  main~ : MainState,
+  release~ : ReleaseState,
+  changelog~ : ChangelogState,
+) -> Plan raise PlanError {
+  guard trigger is Push else { return DryRun(version) }
+  match git_ref {
+    Tag(tag) if tag != version => raise TagMismatch(tag~, version~)
+    _ => ()
+  }
+  guard main is OnMain else { raise NotOnMain(git_ref.name()) }
+  if release is Complete {
+    return Skip("\{tag_of(version)} is already released")
+  }
+  match changelog {
+    NoSection =>
+      Skip(
+        "\{changelog_path} has no section for \{version}; nothing to release",
+      )
+    Placeholder => raise HighlightsPlaceholder(version)
+    Ready => Release(version)
+  }
+}
+
+///|
+/// Lines for $GITHUB_OUTPUT.
+fn plan_outputs(p : Plan) -> String {
+  match p {
+    Release(v) =>
+      "release=true\ndry_run=false\nversion=\{v}\ntag=\{tag_of(v)}\n"
+    DryRun(v) =>
+      "release=false\ndry_run=true\nversion=\{v}\ntag=\{tag_of(v)}\n"
+    Skip(_) => "release=false\ndry_run=false\n"
+  }
+}
+
+///|
+/// The `gh` commands that bring the release of `tag` to the state where it has every asset. A new release
+/// is never marked latest. A re-run uploads only the missing assets, and publishes a draft at the end.
+fn github_steps(
+  release_exists : Bool,
+  remote_assets : Array[String],
+  tag~ : String,
+  title~ : String,
+  target~ : String,
+  notes_file~ : String,
+  is_draft~ : Bool = false,
+) -> Array[Array[String]] {
+  if !release_exists {
+    let args = [
+      "release", "create", tag, "--target", target, "--title", title, "--notes-file",
+      notes_file, "--latest=false",
+    ]
+    for name in release_assets() {
+      args.push("\{dist_dir}/\{name}")
+    }
+    return [args]
+  }
+  let missing = missing_names(release_assets(), remote_assets)
+  let steps = []
+  if !missing.is_empty() {
+    let args = ["release", "upload", tag]
+    for name in missing {
+      args.push("\{dist_dir}/\{name}")
+    }
+    args.push("--clobber")
+    steps.push(args)
+  }
+  if is_draft {
+    steps.push(["release", "edit", tag, "--draft=false", "--latest=false"])
+  }
+  steps
+}
+
+///|
+fn fail_with(message : String) -> Unit {
+  eprintln("❌ \{message}")
+  ExitCode::Failure.exit()
+}
+
+///|
+async fn output_of(cmd : String, args : Array[String]) -> (Int, String) {
+  let (code, out, err) = @process.collect_output(cmd, args) catch {
+    _ => return (1, "cannot start \{cmd}")
+  }
+  (code, out.text() + err.text())
+}
+
+///|
+async fn tools_version() -> Version {
+  let text = @fs.read_file(tools_mod).text()
+  match mod_version(text).bind(v => Version::parse(v)) {
+    Some(v) => v
+    None => {
+      fail_with("\{tools_mod} has no version of the form X.Y.Z")
+      { major: 0, minor: 0, patch: 0 }
+    }
+  }
+}
+
+///|
+async fn read_changelog() -> String {
+  if @fs.exists(changelog_path) {
+    @fs.read_file(changelog_path).text()
+  } else {
+    ""
+  }
+}
+
+///|
+/// Whether the release exists, its asset names and whether it is a draft.
+async fn inspect_release(tag : String) -> (Bool, Array[String], Bool) {
+  let (code, out) = output_of("gh", [
+    "release", "view", tag, "--repo", repository, "--json", "isDraft,assets", "--jq",
+    ".isDraft, (.assets[].name)",
+  ])
+  if code == 0 {
+    let lines = out.split("\n").filter(n => n.trim() != "").map(n => n.trim().to_owned()).collect()
+    let is_draft = lines.length() > 0 && lines[0] == "true"
+    return (true, lines.filter(n => n != "true" && n != "false"), is_draft)
+  }
+  if out.to_lower().contains("release not found") {
+    return (false, [], false)
+  }
+  fail_with("`gh release view \{tag}` failed: \{out.trim()}")
+  (false, [], false)
+}
+
+///|
+async fn run_plan() -> Unit {
+  let version = tools_version()
+  let event = @env.get_env_var("GITHUB_EVENT_NAME").unwrap_or("")
+  let ref_type = @env.get_env_var("GITHUB_REF_TYPE").unwrap_or("")
+  let ref_name = @env.get_env_var("GITHUB_REF_NAME").unwrap_or("")
+  let dry_run = @env.get_env_var("DRY_RUN").unwrap_or("")
+  let (trigger, git_ref) = try
+    (RunTrigger::parse(event, dry_run), GitRef::parse(ref_type, ref_name))
+  catch {
+    e => {
+      fail_with(e.message())
+      return
+    }
+  }
+  let changelog = ChangelogState::of_section(
+    changelog_section(read_changelog(), version),
+  )
+  let mut main = OffMain
+  let mut release = Missing
+  if trigger is Push {
+    let (fetch_code, fetch_out) = output_of("git", [
+      "fetch", "--quiet", "origin", "main",
+    ])
+    if fetch_code != 0 {
+      fail_with("`git fetch origin main` failed: \{fetch_out.trim()}")
+    }
+    let (code, out) = output_of("git", [
+      "merge-base", "--is-ancestor", "HEAD", "origin/main",
+    ])
+    main = match code {
+      0 => OnMain
+      1 => OffMain
+      _ => {
+        fail_with("cannot tell whether \{ref_name} is on main: \{out.trim()}")
+        OffMain
+      }
+    }
+    let (exists, assets, draft) = inspect_release(tag_of(version))
+    release = ReleaseState::of(exists~, draft~, assets~)
+  }
+  let p = plan(trigger, git_ref, version, main~, release~, changelog~) catch {
+    error => {
+      fail_with(error.message())
+      return
+    }
+  }
+  match p {
+    Release(v) => println("Release \{tag_of(v)}")
+    DryRun(v) => println("Dry run of \{tag_of(v)}: nothing is released")
+    Skip(reason) => println(reason)
+  }
+  match @env.get_env_var("GITHUB_OUTPUT") {
+    Some(path) if path != "" =>
+      @fs.write_file(path, plan_outputs(p), append=true)
+    _ => println(plan_outputs(p).trim_end())
+  }
+}
+
+///|
+async fn notes(version : Version) -> Unit {
+  match changelog_section(read_changelog(), version) {
+    Some(section) => println(release_notes(version, section).trim_end())
+    None => fail_with("\{changelog_path} has no section for \{version}")
+  }
+}
+
+///|
+async fn github(version : Version) -> Unit {
+  let tag = tag_of(version)
+  let target = @env.get_env_var("GITHUB_SHA").unwrap_or("")
+  let temp = @env.get_env_var("RUNNER_TEMP").unwrap_or("")
+  if target == "" || temp == "" {
+    fail_with("GITHUB_SHA and RUNNER_TEMP must be set")
+  }
+  let notes_file = "\{temp}/notes.md"
+  if !@fs.exists(notes_file) {
+    fail_with("\{notes_file} does not exist; write the release notes first")
+  }
+  let lacking = missing_names(release_assets(), @fs.readdir(dist_dir))
+  if !lacking.is_empty() {
+    fail_with("\{dist_dir}/ lacks: \{lacking.join(", ")}")
+  }
+  for _ in 0..<3 {
+    let (exists, remote, draft) = inspect_release(tag)
+    let steps = github_steps(
+      exists,
+      remote,
+      tag~,
+      title="mission-control-tools \{version}",
+      target~,
+      notes_file~,
+      is_draft=draft,
+    )
+    if steps.is_empty() {
+      println("The GitHub release \{tag} has all \{release_assets().length()} assets.")
+      return
+    }
+    for args in steps {
+      let full = args.copy()
+      full.push("--repo")
+      full.push(repository)
+      let (code, out) = output_of("gh", full)
+      if code != 0 {
+        eprintln("`gh \{args[0]} \{args[1]}` failed: \{out.trim()}; I read the release again")
+        break
+      }
+      println("done: gh \{args[0]} \{args[1]} \{tag}")
+    }
+  }
+  fail_with("the GitHub release \{tag} is still not complete")
+}
+
+///|
+/// One line of the status report.
+enum Finding {
+  Good(String)
+  Bad(String)
+}
+
+///|
+async fn status() -> Unit {
+  let version = tools_version()
+  let tag = tag_of(version)
+  let findings = []
+  let (tag_code, _) = output_of("git", [
+    "rev-parse", "--verify", "--quiet", "refs/tags/\{tag}",
+  ])
+  let (exists, assets, draft) = inspect_release(tag)
+  let state = ReleaseState::of(exists~, draft~, assets~)
+  match (tag_code == 0, state) {
+    (_, Complete) => findings.push(Good("\{tag} is released with every asset"))
+    (false, Missing) =>
+      findings.push(
+        Good("\{tag} is not released yet; merge its \{changelog_path} section to release it"),
+      )
+    _ =>
+      findings.push(
+        Bad(
+          "\{tag} has a tag or a release that is not complete; run `gh workflow run release-tools.yml` on main",
+        ),
+      )
+  }
+  let (latest_code, latest) = output_of("gh", [
+    "api", "repos/\{repository}/releases/latest", "--jq", ".tag_name",
+  ])
+  if latest_code == 0 && latest.trim().has_prefix(tag_prefix) {
+    findings.push(
+      Bad(
+        "\{latest.trim()} is the latest release; run `gh release edit <main CLI tag> --latest` for the main CLI",
+      ),
+    )
+  }
+  let mut failed = false
+  for finding in findings {
+    match finding {
+      Good(text) => println("✅ \{text}")
+      Bad(text) => {
+        failed = true
+        println("❌ \{text}")
+      }
+    }
+  }
+  if failed {
+    ExitCode::Failure.exit()
+  }
+}
+
+///|
+async fn main {
+  match @env.args()[1:] {
+    ["plan"] => run_plan()
+    ["status"] => status()
+    ["notes", v] =>
+      match Version::parse(v) {
+        Some(version) => notes(version)
+        None => fail_with("\{v} is not a version of the form X.Y.Z")
+      }
+    ["github", v] =>
+      match Version::parse(v) {
+        Some(version) => github(version)
+        None => fail_with("\{v} is not a version of the form X.Y.Z")
+      }
+    _ => {
+      eprintln(usage)
+      ExitCode::Usage.exit()
+    }
+  }
+}
+
+///|
+/// Scenario state for `features/release_tools.feature`.
+struct ReleaseToolsWorld {
+  /// The texts of this script and `scripts/release.mbtx`. A step cannot read a file.
+  own_source : String
+  release_source : String
+  mut trigger : RunTrigger
+  mut git_ref : GitRef
+  mut main : MainState
+  mut release : ReleaseState
+  mut changelog : String
+  mut result : String
+  mut steps : Array[Array[String]]
+}
+
+///|
+fn version_of(text : String) -> Version raise {
+  match Version::parse(text) {
+    Some(v) => v
+    None => fail("not a version: \{text}")
+  }
+}
+
+///|
+fn plan_name(r : Result[Plan, String]) -> String {
+  match r {
+    Ok(Release(v)) => "release \{v}"
+    Ok(DryRun(v)) => "dry run \{v}"
+    Ok(Skip(reason)) => "skip: \{reason}"
+    Err(message) => "error: \{message}"
+  }
+}
+
+///|
+fn shared_block(source : String, start : String, end : String) -> String? {
+  guard source.find(start) is Some(from) else { return None }
+  guard source[from:].find(end) is Some(length) else { return None }
+  Some(source[from:from + length + end.length()].to_owned())
+}
+
+///|
+impl @moonspec.World for ReleaseToolsWorld with fn configure(self, setup) {
+  setup.given2("a run of {string} with dry_run {string}", fn(
+    event : String,
+    dry_run : String,
+  ) raise {
+    self.trigger = RunTrigger::parse(event, dry_run) catch {
+      e => fail(e.message())
+    }
+  })
+  setup.given2("the ref {string} {string}", fn(
+    ref_type : String,
+    ref_name : String,
+  ) raise {
+    self.git_ref = GitRef::parse(ref_type, ref_name) catch {
+      e => fail(e.message())
+    }
+  })
+  setup.given0("the commit is not on main", fn() { self.main = OffMain })
+  setup.given0("the release is complete", fn() { self.release = Complete })
+  setup.given1("the changelog:", fn(doc : @moonspec.DocString) {
+    self.changelog = doc.content
+  })
+  setup.when1("the plan runs for version {string}", fn(version : String) raise {
+    let v = version_of(version)
+    let changelog = ChangelogState::of_section(changelog_section(self.changelog, v))
+    let result = try {
+      Ok(
+        plan(
+          self.trigger,
+          self.git_ref,
+          v,
+          main=self.main,
+          release=self.release,
+          changelog~,
+        ),
+      )
+    } catch {
+      e => Err(e.message())
+    }
+    self.result = plan_name(result)
+  })
+  setup.then1("the plan is {string}", fn(expected : String) raise {
+    @expect.expect(self.result).to_equal(expected)
+  })
+  setup.then3("the inputs {string} and {string} are refused with {string}", fn(
+    event : String,
+    ref_name : String,
+    message : String,
+  ) raise {
+    let actual = try {
+      let _ = RunTrigger::parse(event, "")
+      let _ = GitRef::parse("tag", ref_name)
+      "accepted"
+    } catch {
+      e => e.message()
+    }
+    @expect.expect(actual).to_equal(message)
+  })
+  setup.then2("the outputs of a release of {string} are:", fn(
+    version : String,
+    doc : @moonspec.DocString,
+  ) raise {
+    @expect.expect(plan_outputs(Release(version_of(version)))).to_equal(
+      doc.content + "\n",
+    )
+  })
+  setup.when0("the release steps run with no release", fn() {
+    self.steps = github_steps(
+      false,
+      [],
+      tag="tools-v0.1.0",
+      title="mission-control-tools 0.1.0",
+      target="abc",
+      notes_file="notes.md",
+    )
+  })
+  setup.when1("the release steps run with the remote assets {string}", fn(
+    names : String,
+  ) {
+    self.steps = github_steps(
+      true,
+      names.split(",").map(n => n.to_owned()).collect(),
+      tag="tools-v0.1.0",
+      title="mission-control-tools 0.1.0",
+      target="abc",
+      notes_file="notes.md",
+    )
+  })
+  setup.then1("the steps are:", fn(doc : @moonspec.DocString) raise {
+    @expect.expect(self.steps.map(s => s.join(" ")).join("\n")).to_equal(
+      doc.content,
+    )
+  })
+  setup.then2("the notes of {string} contain:", fn(
+    version : String,
+    doc : @moonspec.DocString,
+  ) raise {
+    let v = version_of(version)
+    let text = release_notes(v, "Highlights.")
+    if !text.contains(doc.content) {
+      fail("the notes lack:\n\{doc.content}\n\nnotes:\n\{text}")
+    }
+  })
+  setup.then0("the version block is the one in release.mbtx", fn() raise {
+    let start = "/// A `major.minor.patch` version: each part"
+    let end = "// End of the version."
+    @expect.expect(shared_block(self.own_source, start, end)).to_equal(
+      shared_block(self.release_source, start, end),
+    )
+  })
+}
+
+///|
+async test "release tools feature" {
+  let own_source = @fs.read_file("release-tools.mbtx").text()
+  let release_source = @fs.read_file("release.mbtx").text()
+  @moonspec.run_or_fail(
+    () => ReleaseToolsWorld::{
+      own_source,
+      release_source,
+      trigger: Push,
+      git_ref: Branch("main"),
+      main: OnMain,
+      release: Missing,
+      changelog: "",
+      result: "",
+      steps: [],
+    },
+    @moonspec.RunOptions::new([
+      @moonspec.FeatureSource::File("features/release_tools.feature"),
+    ]),
+  )
+  |> ignore
+}

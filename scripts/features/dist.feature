@@ -74,3 +74,40 @@ Feature: Release outputs
       | 511  | 2048   |
       | 512  | 2048   |
       | 513  | 2560   |
+
+  Scenario Outline: Name the archive and the binary of each tools target
+    Given the tools product
+    And the target "<target>"
+    Then the archive is "<archive>" and the binary is "<binary>"
+
+    Examples:
+      | target       | archive                                   | binary                    |
+      | linux-x64    | mission-control-tools-linux-x64.tar.gz    | mission-control-tools     |
+      | linux-arm64  | mission-control-tools-linux-arm64.tar.gz  | mission-control-tools     |
+      | darwin-arm64 | mission-control-tools-darwin-arm64.tar.gz | mission-control-tools     |
+      | darwin-x64   | mission-control-tools-darwin-x64.tar.gz   | mission-control-tools     |
+      | windows-x64  | mission-control-tools-windows-x64.zip     | mission-control-tools.exe |
+
+  Scenario: The CLI release keeps its eight outputs in dist
+    Then the outputs are "mission-control-linux-x64.tar.gz,mission-control-linux-arm64.tar.gz,mission-control-darwin-arm64.tar.gz,mission-control-darwin-x64.tar.gz,mission-control-windows-x64.zip,mission-control.wasm,mission-control-gc.wasm,checksums.txt"
+    And the dist directory is "dist"
+
+  Scenario: The tools release has five archives and checksums, and no wasm files
+    Given the tools product
+    Then the outputs are "mission-control-tools-linux-x64.tar.gz,mission-control-tools-linux-arm64.tar.gz,mission-control-tools-darwin-arm64.tar.gz,mission-control-tools-darwin-x64.tar.gz,mission-control-tools-windows-x64.zip,checksums.txt"
+    And the dist directory is "dist-tools"
+
+  Scenario Outline: Parse the step and the product
+    When I parse the arguments "<args>"
+    Then the step and the product are "<result>"
+
+    Examples:
+      | args                | result               |
+      |                     | BuildAndPack Cli     |
+      | tools               | BuildAndPack Tools   |
+      | build               | Build Cli            |
+      | pack tools          | Pack Tools           |
+      | build-windows tools | BuildWindows Tools   |
+      | pack cli            | usage error          |
+      | tools pack          | usage error          |
+      | build tools extra   | usage error          |

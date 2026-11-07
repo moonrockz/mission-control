@@ -12,7 +12,10 @@ import {
 ///|
 /// Check or set one version across the workspace.
 ///
-/// All modules in `moon.work` share one version. The root `moon.mod` is the source of truth.
+/// All modules in `moon.work` share one version. The root `moon.mod` is the source of truth. The tools CLI
+/// (`apps/tools`) is the one exception: it has its own version family, with `apps/tools/moon.mod` as the
+/// source of truth, because it is released separately under `tools-vX.Y.Z` tags. Its imports of other
+/// workspace modules still follow the workspace version.
 /// `check [X.Y.Z]` lists each place that has another version. The default for X.Y.Z is the root version.
 /// `set X.Y.Z` rewrites the places in line edits, so the formatting does not change, and prints each file it
 /// changed. The places are the `version` of each `moon.mod`, the sibling imports (`"<module>@X.Y.Z"` for a
@@ -21,8 +24,11 @@ import {
 ///
 /// The script reads `moon.mod` and `moon.work` with line matching. This is enough and adds no dependency.
 ///
-/// Usage: `mise run validate:versions`, or `moonx scripts/versions.mbtx check [X.Y.Z]`
-/// or `moonx scripts/versions.mbtx set X.Y.Z`. The script exits with a non-zero code on failure.
+/// `check-tools [X.Y.Z]` checks the tools family only. `set-tools X.Y.Z` changes the tools family only.
+///
+/// Usage: `mise run validate:versions`, or `moonx scripts/versions.mbtx check [X.Y.Z]`,
+/// `moonx scripts/versions.mbtx set X.Y.Z`, `check-tools [X.Y.Z]` or `set-tools X.Y.Z`.
+/// The script exits with a non-zero code on failure.
 
 ///|
 /// The exit codes of the task scripts: 0 for success, 1 for a failure and 2
@@ -47,14 +53,13 @@ fn ExitCode::exit(self : ExitCode) -> Unit {
 // End of the exit codes.
 
 ///|
-let usage : String = "Usage: versions.mbtx check [X.Y.Z] | set X.Y.Z"
+let usage : String = "Usage: versions.mbtx check [X.Y.Z] | set X.Y.Z | check-tools [X.Y.Z] | set-tools X.Y.Z"
 
 ///|
 /// The source files that hold a version string, with the text that comes right before the version.
 /// The text ends with the opening quote. Only a string with this text before it counts, so another
 /// version-like string in the same file (for example a specification version) is not touched.
 let version_files : Array[(String, String)] = [
-  ("openspec/extensions.lock.json", "\"version\": \""),
   ("pkgs/contracts/contract.mbt", "let current_version : String = \""),
   (
     "apps/cli/cli_wbtest.mbt", "inspect(@contracts.version(), content=\"",
@@ -66,6 +71,19 @@ let version_files : Array[(String, String)] = [
   (
     "apps/desktop/shell_wbtest.mbt", "inspect(version_reply().version, content=\"",
   ),
+]
+
+///|
+/// The `moon.mod` of the tools CLI. Its version line belongs to the tools family.
+let tools_mod : String = "apps/tools/moon.mod"
+
+///|
+/// The source files that hold the tools version, with the text that comes right before it. The
+/// extension lock records the version of the tools CLI that wrote it.
+let tools_version_files : Array[(String, String)] = [
+  ("apps/tools/version.mbt", "let tools_version : String = \""),
+  ("apps/tools/cli_wbtest.mbt", "inspect(version(), content=\""),
+  ("openspec/extensions.lock.json", "\"version\": \""),
 ]
 
 ///|
@@ -289,6 +307,11 @@ fn head_of(path : String) -> String {
       return entry.1
     }
   }
+  for entry in tools_version_files {
+    if entry.0 == path {
+      return entry.1
+    }
+  }
   "\""
 }
 
@@ -302,20 +325,20 @@ fn set_source_version(path : String, text : String, version : String) -> String 
 /// The lines `<path>: found X, expected Y` for each version in `files` that is not `expected`.
 /// A file is `(path, text)`. A `moon.mod` file is checked for its version and its sibling imports.
 /// The sibling modules are the other `moon.mod` files in `files`. Any other file is checked for the
-/// version strings that follow the text of `version_files`.
-fn mismatches(files : Array[(String, String)], expected : String) -> Array[String] {
-  let siblings = []
-  for file in files {
-    if file.0.has_suffix("moon.mod") && mod_name(file.1) is Some(name) {
-      siblings.push(name)
-    }
-  }
+/// version strings that follow the text of `version_files`. A `moon.mod` in `independent` has its own
+/// version family: its version line is not checked, its sibling imports are, and imports of it are not.
+fn mismatches(
+  files : Array[(String, String)],
+  expected : String,
+  independent~ : Array[String] = [],
+) -> Array[String] {
+  let siblings = sibling_names(files, independent)
   let lines = []
   for file in files {
     let (path, text) = file
     let found : Array[String] = if path.has_suffix("moon.mod") {
       let versions = []
-      if mod_version(text) is Some(v) {
+      if !independent.contains(path) && mod_version(text) is Some(v) {
         versions.push(v)
       }
       for place in sibling_places(text, siblings) {
@@ -324,6 +347,53 @@ fn mismatches(files : Array[(String, String)], expected : String) -> Array[Strin
       versions
     } else {
       versions_after(text, head_of(path)).map(place => place.2)
+    }
+    for v in found {
+      if v != expected {
+        lines.push("\{path}: found \{v}, expected \{expected}")
+      }
+    }
+  }
+  lines
+}
+
+///|
+/// The names of the workspace modules whose version is the workspace version.
+fn sibling_names(
+  files : Array[(String, String)],
+  independent : Array[String],
+) -> Array[String] {
+  let siblings = []
+  for file in files {
+    if file.0.has_suffix("moon.mod") &&
+      !independent.contains(file.0) &&
+      mod_name(file.1) is Some(name) {
+      siblings.push(name)
+    }
+  }
+  siblings
+}
+
+///|
+/// The lines `<path>: found X, expected Y` for the tools family: the version line of a `moon.mod`, and
+/// the version strings of any other file after the text of `tools_version_files`.
+fn tools_mismatches(
+  files : Array[(String, String)],
+  expected : String,
+) -> Array[String] {
+  let lines = []
+  for file in files {
+    let (path, text) = file
+    let found : Array[String] = if path.has_suffix("moon.mod") {
+      match mod_version(text) {
+        Some(v) => [v]
+        None => ["none"]
+      }
+    } else {
+      versions_after(text, head_of(path)).map(place => place.2)
+    }
+    if found.is_empty() {
+      lines.push("\{path}: found no version, expected \{expected}")
     }
     for v in found {
       if v != expected {
@@ -398,7 +468,7 @@ async fn check(expected : Version?) -> Unit {
         }
       }
   }
-  let bad = mismatches(files, expected)
+  let bad = mismatches(files, expected, independent=[tools_mod])
   if !bad.is_empty() {
     for line in bad {
       eprintln(line)
@@ -406,21 +476,78 @@ async fn check(expected : Version?) -> Unit {
     fail_with("\{bad.length()} version(s) differ from \{expected}.")
   }
   println("✅ All versions are \{expected}")
+  check_tools(None)
+}
+
+///|
+/// Every file that holds the tools version, as `(path, text)`. The `moon.mod` comes first.
+async fn tools_files() -> Array[(String, String)] {
+  let files = [(tools_mod, read_text(tools_mod))]
+  for entry in tools_version_files {
+    files.push((entry.0, read_text(entry.0)))
+  }
+  files
+}
+
+///|
+async fn check_tools(expected : Version?) -> Unit {
+  let files = tools_files()
+  let expected = match expected {
+    Some(v) => "\{v}"
+    None =>
+      match mod_version(files[0].1).bind(text => Version::parse(text)) {
+        Some(v) => "\{v}"
+        None => {
+          fail_with("\{tools_mod} has no version of the form X.Y.Z.")
+          ""
+        }
+      }
+  }
+  let bad = tools_mismatches(files, expected)
+  if !bad.is_empty() {
+    for line in bad {
+      eprintln(line)
+    }
+    fail_with("\{bad.length()} tools version(s) differ from \{expected}.")
+  }
+  println("✅ All tools versions are \{expected}")
+}
+
+///|
+async fn set_tools(version : Version) -> Unit {
+  let version = "\{version}"
+  for file in tools_files() {
+    let (path, text) = file
+    let updated = if path.has_suffix("moon.mod") {
+      match set_mod_version(text, version) {
+        Some(t) => t
+        None => {
+          fail_with("\{path} has no version line.")
+          text
+        }
+      }
+    } else {
+      set_source_version(path, text, version)
+    }
+    if updated != text {
+      @fs.write_file(path, updated)
+      println("✏️  \{path}")
+    }
+  }
+  println("✅ Set the tools version to \{version}")
 }
 
 ///|
 async fn set(version : Version) -> Unit {
   let version = "\{version}"
   let files = workspace_files()
-  let siblings = []
-  for file in files {
-    if file.0.has_suffix("moon.mod") && mod_name(file.1) is Some(name) {
-      siblings.push(name)
-    }
-  }
+  let siblings = sibling_names(files, [tools_mod])
   for file in files {
     let (path, text) = file
-    let updated = if path.has_suffix("moon.mod") {
+    let updated = if path == tools_mod {
+      // The tools CLI keeps its own version; only its imports of workspace modules change.
+      set_sibling_imports(text, siblings, version)
+    } else if path.has_suffix("moon.mod") {
       match set_mod_version(text, version) {
         Some(t) => set_sibling_imports(t, siblings, version)
         None => {
@@ -451,6 +578,17 @@ async fn main {
     ["set", v] =>
       match Version::parse(v) {
         Some(version) => set(version)
+        None => fail_with("\{v} is not a version of the form X.Y.Z.")
+      }
+    ["check-tools"] => check_tools(None)
+    ["check-tools", v] =>
+      match Version::parse(v) {
+        Some(version) => check_tools(Some(version))
+        None => fail_with("\{v} is not a version of the form X.Y.Z.")
+      }
+    ["set-tools", v] =>
+      match Version::parse(v) {
+        Some(version) => set_tools(version)
         None => fail_with("\{v} is not a version of the form X.Y.Z.")
       }
     _ => {
@@ -528,6 +666,17 @@ impl @moonspec.World for VersionsWorld with fn configure(self, setup) {
   })
   setup.when1("I look for versions other than {string}", fn(expected : String) {
     self.found = mismatches(self.files, expected)
+  })
+  setup.when2(
+    "I look for versions other than {string} with the independent module {string}",
+    fn(expected : String, independent : String) {
+      self.found = mismatches(self.files, expected, independent=[independent])
+    },
+  )
+  setup.when1("I look for tools versions other than {string}", fn(
+    expected : String,
+  ) {
+    self.found = tools_mismatches(self.files, expected)
   })
   setup.when1("I set the versions of the files to {string}", fn(version : String) {
     self.result = self.files

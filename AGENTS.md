@@ -129,7 +129,10 @@ skill. Report these as problems:
 - `apps/openspec-ext` owns the portable html-design schema and templates. Edit `bundle.mbt`, then run
   `mise run openspec:install`; do not edit managed files under `openspec/schemas/html-design/`.
 - `mise run openspec:check` verifies the extension lock and snapshot. `mise run openspec:setup`
-  regenerates skills with isolated global preferences. See `apps/openspec-ext/README.md`.
+  regenerates skills with isolated global preferences. Both run `apps/tools` from source. See
+  `apps/openspec-ext/README.md`.
+- `apps/tools` (`moonrockz/mission-control-tools`) is the `mission-control-tools` command that consumers pin
+  with mise. Its migration guide for consumers is `apps/tools/README.md`.
 - New designs are standalone `design.html` with inline CSS. Existing spec-driven changes keep `design.md`.
 - Repository tracking policy belongs in this file and project config, not the shared bundle.
 
@@ -151,7 +154,7 @@ skill. Report these as problems:
 Mission Control publishes to mooncakes.io and GitHub Releases, and records every release in `CHANGELOG.md`. The published modules are `moonrockz/mission-control-contracts`, `moonrockz/mdc`, `moonrockz/ears`, `moonrockz/okf`, `moonrockz/mission-control-cli`, `moonrockz/mission-control-web` and `moonrockz/mission-control-desktop`. The next release also includes `moonrockz/openspec-ext`.
 
 - `mise run release:status` checks that main, the tags, the GitHub release and mooncakes.io agree. Each problem it prints names the command that fixes it.
-- All modules share one version. The root `moon.mod` is the source of truth. `mise run validate:versions` fails when a module, a sibling import or the contract version text (`current_version` in `pkgs/contracts`) has another version. `moonx scripts/versions.mbtx set X.Y.Z` rewrites them. The first release is `0.0.1`.
+- All modules except `apps/tools` share one version. The root `moon.mod` is the source of truth. `mise run validate:versions` fails when a module, a sibling import or the contract version text (`current_version` in `pkgs/contracts`) has another version. `moonx scripts/versions.mbtx set X.Y.Z` rewrites them. The first release is `0.0.1`.
 - To release, run `mise run release:prepare [X.Y.Z]` on a clean working tree. It computes the next version with git-cliff (`cliff.toml`), sets the version everywhere, prepends the section to `CHANGELOG.md`, commits `chore(release): vX.Y.Z` on `release/vX.Y.Z`, pushes it and opens a draft pull request. `--local` stops before the push.
 - Replace the highlights comment in `CHANGELOG.md` with a few sentences. Push, then run `mise run release:refresh`. Then merge. Do not bump the version in another pull request.
 - The merge changes `moon.mod` on main, so the Release workflow (`.github/workflows/release.yml`) runs. The jobs are `plan`, `validate`, `build-windows`, `build`, `smoke`, `publish` and `release`.
@@ -160,5 +163,12 @@ Mission Control publishes to mooncakes.io and GitHub Releases, and records every
 - A pull request that changes a release file, and a manual run with `dry_run`, run `plan`, `validate`, `build-windows`, `build` and `smoke` only. They never publish and never create a release.
 - **Re-run failed jobs.** After a transient failure, use "Re-run failed jobs" on the run. `publish` skips a version that is already published. `release` uploads only the missing assets.
 - Write commit and pull request titles for the changelog: the squash-merge title is the changelog line.
+
+The tools CLI (`apps/tools`) is released separately, as binaries only (not on mooncakes.io):
+
+- Its version is in `apps/tools/moon.mod`, not the root. `mise run validate:versions` checks both families; `moonx scripts/versions.mbtx set` does not change the tools family, and `set-tools X.Y.Z` changes only that family.
+- Its tags are `tools-vX.Y.Z` and its changelog is `apps/tools/CHANGELOG.md`. A merge that changes either file on main runs `.github/workflows/release-tools.yml`, which releases a version that has a changelog section with highlights and no complete release. A tools release is never marked latest.
+- The workflow has no pull request trigger. Use `gh workflow run release-tools.yml -f dry_run=true` for a dry run; it builds, attests and smoke checks all five platforms.
+- `mise run release:tools-status` checks the tag, the release and the latest release. The steps are in `apps/tools/README.md`.
 
 The two copies of the publish list, in `scripts/publish.mbtx` and `scripts/release.mbtx`, must stay equal. A script test checks that.

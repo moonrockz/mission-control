@@ -2,6 +2,7 @@ import {
   "moonbitlang/async",
   "moonbitlang/core/json",
   "moonbitlang/async/fs",
+  "moonrockz/mission-control-contracts" @contracts,
   "moonrockz/openspec-ext" @extension,
   "moonrockz/openspec-ext/host",
   "moonrockz/moonspec",
