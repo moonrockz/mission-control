@@ -90,9 +90,10 @@ runtime with `moonbitlang/core/async`, so it needs the `async/runtime_internal`
 package of the core library. MoonBit 0.10.18 is the first release that has that
 package. On 0.10.17+d971670cd, the script stops with
 `Cannot find import 'moonbitlang/core/async'`. The script runs on the `wasm`
-target, which is the default for a standalone script, and on `native`. It does
-not build for `wasm-gc` or `js`, because `moonbitlang/async/fs` has no backend
-for those targets.
+target, which is the default for a standalone script. It also runs on `native`
+with the system C compiler, but not with `moonrockz/zig-cross@0.3.2` (see
+below). It does not build for `wasm-gc` or `js`, because `moonbitlang/async/fs`
+has no backend for those targets.
 
 The packaged host uses the module dependencies declared in `moon.mod`, which
 keeps `moonbitlang/async@0.22.5`. The workspace resolves one async version, and
