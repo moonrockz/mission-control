@@ -63,7 +63,8 @@ pub fn LockError::to_string(Self) -> String
 pub impl Show for LockError
 
 pub suberror OpenSpecVersionError {
-  UnsupportedOpenSpec(String)
+  InvalidOpenSpecVersion(String)
+  UnsupportedOpenSpec(@mission-control-contracts.Version)
 }
 pub fn OpenSpecVersionError::message(Self) -> String
 #deprecated
