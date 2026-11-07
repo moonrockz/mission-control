@@ -621,9 +621,9 @@ async fn github(version : Version) -> Unit {
   if !lacking.is_empty() {
     fail_with("\{dist_dir}/ lacks: \{lacking.join(", ")}")
   }
-  for _ in 0..<3 {
-    let (exists, remote, draft) = inspect_release(tag)
-    let steps = github_steps(
+  let complete = complete_release(
+    () => inspect_release(tag),
+    (exists, remote, draft) => github_steps(
       exists,
       remote,
       tag~,
@@ -631,24 +631,53 @@ async fn github(version : Version) -> Unit {
       target~,
       notes_file~,
       is_draft=draft,
-    )
-    if steps.is_empty() {
-      println("The GitHub release \{tag} has all \{release_assets().length()} assets.")
-      return
-    }
-    for args in steps {
+    ),
+    args => {
       let full = args.copy()
       full.push("--repo")
       full.push(repository)
       let (code, out) = output_of("gh", full)
       if code != 0 {
-        eprintln("`gh \{args[0]} \{args[1]}` failed: \{out.trim()}; I read the release again")
-        break
+        eprintln(
+          "`gh \{args[0]} \{args[1]}` failed: \{out.trim()}; I read the release again",
+        )
+        return false
       }
       println("done: gh \{args[0]} \{args[1]} \{tag}")
+      true
+    },
+  )
+  if complete {
+    println("The GitHub release \{tag} has all \{release_assets().length()} assets.")
+  } else {
+    fail_with("the GitHub release \{tag} is still not complete")
+  }
+}
+
+///|
+/// Run the steps of `steps_for` up to three rounds, and read the release before each round and once
+/// after the last one, so a round that finishes the work counts. `inspect` gives whether the release
+/// exists, its asset names and whether it is a draft; `run` runs one `gh` command and gives whether
+/// it succeeded. A failed command ends its round. The result is whether the release is complete.
+async fn complete_release(
+  inspect : async () -> (Bool, Array[String], Bool),
+  steps_for : (Bool, Array[String], Bool) -> Array[Array[String]],
+  run : async (Array[String]) -> Bool,
+) -> Bool {
+  for _ in 0..<3 {
+    let (exists, remote, draft) = inspect()
+    let steps = steps_for(exists, remote, draft)
+    if steps.is_empty() {
+      return true
+    }
+    for args in steps {
+      if !run(args) {
+        break
+      }
     }
   }
-  fail_with("the GitHub release \{tag} is still not complete")
+  let (exists, remote, draft) = inspect()
+  steps_for(exists, remote, draft).is_empty()
 }
 
 ///|
@@ -902,4 +931,50 @@ async test "release tools feature" {
     ]),
   )
   |> ignore
+}
+
+///|
+/// A fake GitHub release for `complete_release`: each `run` call fails until `failures` reaches 0,
+/// and a successful `release create` makes the release complete.
+struct FakeRelease {
+  mut failures : Int
+  mut exists : Bool
+  mut runs : Int
+}
+
+///|
+async fn run_fake(
+  failures : Int,
+) -> (Bool, Int) {
+  let fake = FakeRelease::{ failures, exists: false, runs: 0 }
+  let complete = complete_release(
+    () => if fake.exists { (true, release_assets(), false) } else { (false, [], false) },
+    (exists, remote, draft) => github_steps(
+      exists,
+      remote,
+      tag="tools-v0.1.0",
+      title="mission-control-tools 0.1.0",
+      target="abc",
+      notes_file="notes.md",
+      is_draft=draft,
+    ),
+    _ => {
+      fake.runs += 1
+      if fake.failures > 0 {
+        fake.failures -= 1
+        false
+      } else {
+        fake.exists = true
+        true
+      }
+    },
+  )
+  (complete, fake.runs)
+}
+
+///|
+async test "a release that the last round completes counts as complete" {
+  @expect.expect(run_fake(0)).to_equal((true, 1))
+  @expect.expect(run_fake(2)).to_equal((true, 3))
+  @expect.expect(run_fake(3)).to_equal((false, 3))
 }
