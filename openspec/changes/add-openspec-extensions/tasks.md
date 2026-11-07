@@ -16,7 +16,7 @@ Bead: moonbase-gid
 
 Bead: moonbase-agl
 
-- [x] 1.6 Move the bundled script and the extension module to `moonbitlang/async@0.22.7` and keep MoonBit 0.10.18; verify `moon test --deny-warn` of the script on `wasm` and `native`, the app tests, the extension lock check and a consumer `openspec:verify` on 0.10.18.
+- [x] 1.6 Move the bundled script and the extension module to `moonbitlang/async@0.22.7`, keep MoonBit 0.10.18 and make 0.10.18 the supported toolchain of the script in the spec; verify `moon test --deny-warn` of the script on `wasm` and `native`, the app tests, the extension lock check and a consumer `openspec:verify` on 0.10.18.
 
 ## 2. Repository adoption
 
