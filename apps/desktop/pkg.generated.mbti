@@ -1,0 +1,24 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonrockz/mission-control-desktop"
+
+import {
+  "moonbit-community/proton_contract",
+}
+
+// Values
+pub fn document() -> String
+
+pub fn version_command() -> @proton_contract.Command[@proton_contract.EmptyRequest, VersionReply]
+
+pub fn version_reply() -> VersionReply
+
+// Errors
+
+// Types and methods
+pub struct VersionReply {
+  version : String
+}
+
+// Type aliases
+
+// Traits

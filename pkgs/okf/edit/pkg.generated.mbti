@@ -1,0 +1,145 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonrockz/okf/edit"
+
+import {
+  "moonbitlang/core/debug",
+  "moonrockz/okf",
+}
+
+// Values
+pub fn add_index_entry(String, SectionName, IndexEntryLine) -> EditResult raise EditError
+
+pub fn add_log_entry(String, @okf.LogDate, String, label? : String) -> EditResult raise EditError
+
+pub fn check_new_concept_path(@okf.Bundle, String) -> @okf.BundlePath raise PlanError
+
+pub fn new_concept_text(@okf.ConceptType, String, String, fields? : ArrayView[(@okf.FieldKey, RawYaml)], template? : @okf.Template) -> String
+
+pub fn plan_add_concept(@okf.Bundle, String, @okf.ConceptType, String, String, @okf.LogDate, fields? : ArrayView[(@okf.FieldKey, RawYaml)], section? : SectionName, template? : @okf.Template) -> EditPlan raise PlanError
+
+pub fn plan_add_missing_entries(@okf.Bundle, SectionName) -> EditPlan raise PlanError
+
+pub fn plan_refresh_descriptions(@okf.Bundle) -> EditPlan raise PlanError
+
+pub fn plan_transition(@okf.Register, @okf.Record, @okf.StateName, extra? : ArrayView[(@okf.FieldKey, RawYaml)]) -> EditPlan raise PlanError
+
+pub fn refresh_index_entry(String, String, String) -> EditResult raise EditError
+
+pub fn remove_key(String, @okf.FieldKey) -> EditResult raise EditError
+
+pub fn replace_region(String, String, String) -> EditResult raise EditError
+
+pub fn set_key(String, @okf.FieldKey, String) -> EditResult raise EditError
+
+pub fn set_list_key(String, @okf.FieldKey, ArrayView[String]) -> EditResult raise EditError
+
+pub fn set_raw_keys(String, ArrayView[(@okf.FieldKey, RawYaml?)]) -> EditResult raise EditError
+
+pub fn target_index(@okf.Bundle, @okf.BundlePath) -> @okf.BundlePath?
+
+pub fn yaml_scalar(String) -> String
+
+// Errors
+pub(all) suberror EditError {
+  BrokenFrontmatter
+  NoEntry(String)
+  NoRegion(String)
+  InvalidValue(String)
+  LineBreak(field~ : String, text~ : String)
+  BlankText(field~ : String, text~ : String)
+} derive(Eq, @debug.Debug)
+pub fn EditError::equal(Self, Self) -> Bool
+pub fn EditError::not_equal(Self, Self) -> Bool
+pub fn EditError::to_repr(Self) -> @debug.Repr
+
+pub(all) suberror PlanError {
+  PathRefused(PathRefusal)
+  EditFailed(EditError)
+  TransitionRefused(TransitionRefusal)
+} derive(@debug.Debug)
+pub fn PlanError::to_repr(Self) -> @debug.Repr
+
+// Types and methods
+type EditPlan
+pub fn EditPlan::EditPlan(ArrayView[FileChange]) -> Self
+pub fn EditPlan::apply_to(Self, @okf.DocumentSet) -> @okf.DocumentSet
+pub fn EditPlan::changes(Self) -> ReadOnlyArray[FileChange]
+pub fn EditPlan::is_empty(Self) -> Bool
+pub fn EditPlan::render(Self) -> String
+pub fn EditPlan::then(Self, Self) -> Self
+
+pub(all) struct EditResult {
+  text : String
+  changed : Bool
+} derive(Eq, @debug.Debug)
+pub fn EditResult::equal(Self, Self) -> Bool
+pub fn EditResult::not_equal(Self, Self) -> Bool
+pub fn EditResult::to_repr(Self) -> @debug.Repr
+
+pub(all) enum FileChange {
+  Create(path~ : @okf.StorePath, text~ : String)
+  CreateBinary(path~ : @okf.StorePath, bytes~ : Bytes)
+  Update(path~ : @okf.StorePath, before~ : String, after~ : String)
+  Delete(path~ : @okf.StorePath)
+} derive(Eq, @debug.Debug)
+pub fn FileChange::equal(Self, Self) -> Bool
+pub fn FileChange::not_equal(Self, Self) -> Bool
+pub fn FileChange::path(Self) -> @okf.StorePath
+pub fn FileChange::to_repr(Self) -> @debug.Repr
+
+type IndexEntryLine derive(Eq, Hash, @debug.Debug)
+pub fn IndexEntryLine::IndexEntryLine(String, String, description? : String) -> Self raise EditError
+pub fn IndexEntryLine::equal(Self, Self) -> Bool
+pub fn IndexEntryLine::hash(Self) -> Int32
+pub fn IndexEntryLine::hash_combine(Self, Hasher) -> Unit
+pub fn IndexEntryLine::not_equal(Self, Self) -> Bool
+pub fn IndexEntryLine::output(Self, &Logger) -> Unit
+pub fn IndexEntryLine::to_repr(Self) -> @debug.Repr
+pub fn IndexEntryLine::to_string(Self) -> String
+pub impl Show for IndexEntryLine
+
+pub(all) enum PathRefusal {
+  ReservedName(String)
+  EscapesBundle(String)
+  AlreadyExists(String)
+  NotMarkdown(String)
+} derive(Eq, @debug.Debug)
+pub fn PathRefusal::equal(Self, Self) -> Bool
+pub fn PathRefusal::not_equal(Self, Self) -> Bool
+pub fn PathRefusal::to_repr(Self) -> @debug.Repr
+
+type RawYaml derive(Eq, Hash, @debug.Debug)
+pub fn RawYaml::RawYaml(String) -> Self raise EditError
+pub fn RawYaml::equal(Self, Self) -> Bool
+pub fn RawYaml::hash(Self) -> Int32
+pub fn RawYaml::hash_combine(Self, Hasher) -> Unit
+pub fn RawYaml::list(ArrayView[String]) -> Self
+pub fn RawYaml::not_equal(Self, Self) -> Bool
+pub fn RawYaml::output(Self, &Logger) -> Unit
+pub fn RawYaml::scalar(String) -> Self
+pub fn RawYaml::to_repr(Self) -> @debug.Repr
+pub fn RawYaml::to_string(Self) -> String
+pub impl Show for RawYaml
+
+type SectionName derive(Eq, Hash, @debug.Debug)
+pub fn SectionName::SectionName(String) -> Self raise EditError
+pub fn SectionName::equal(Self, Self) -> Bool
+pub fn SectionName::hash(Self) -> Int32
+pub fn SectionName::hash_combine(Self, Hasher) -> Unit
+pub fn SectionName::not_equal(Self, Self) -> Bool
+pub fn SectionName::output(Self, &Logger) -> Unit
+pub fn SectionName::to_repr(Self) -> @debug.Repr
+pub fn SectionName::to_string(Self) -> String
+pub impl Show for SectionName
+
+pub(all) enum TransitionRefusal {
+  Refused(@okf.TransitionDenial)
+  NoStateKey(register~ : @okf.RegisterName)
+  StateKeyInExtra(@okf.FieldKey)
+  PreviewInvalid(@okf.MetadataError)
+} derive(@debug.Debug)
+pub fn TransitionRefusal::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits

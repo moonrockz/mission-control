@@ -1,0 +1,22 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonrockz/okf/conformance"
+
+import {
+  "moonrockz/okf",
+  "moonrockz/okf/provider",
+}
+
+// Values
+pub async fn check_index(&@provider.IndexProvider) -> Unit
+
+pub async fn check_search(&@provider.SearchProvider, async (@okf.Knowledge) -> Unit) -> Unit
+
+pub async fn check_store(&@provider.DocumentStore, prefix? : @okf.StoreDir) -> Unit
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

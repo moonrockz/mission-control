@@ -1,0 +1,19 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonrockz/mission-control-web"
+
+import {
+  "moonbit-community/rabbita",
+  "moonbit-community/rabbita/html",
+}
+
+// Values
+pub fn app() -> @rabbita.Val[@html.Html]
+
+// Errors
+
+// Types and methods
+type Msg
+
+// Type aliases
+
+// Traits

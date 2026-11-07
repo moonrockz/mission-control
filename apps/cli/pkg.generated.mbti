@@ -1,0 +1,34 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonrockz/mission-control-cli"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn run(Array[String]) -> Run
+
+pub fn usage() -> String
+
+// Errors
+pub(all) suberror ExitCodeError {
+  InvalidExitCode(Int32)
+} derive(Eq, @debug.Debug)
+
+// Types and methods
+type ExitCode derive(Eq, Hash, @debug.Debug)
+pub fn ExitCode::ExitCode(Int32) -> Self raise ExitCodeError
+pub fn ExitCode::failure() -> Self
+pub fn ExitCode::success() -> Self
+pub fn ExitCode::to_int(Self) -> Int32
+pub fn ExitCode::usage() -> Self
+
+pub enum Run {
+  Text(String)
+  Unknown(String)
+}
+pub fn Run::exit_code(Self) -> ExitCode
+
+// Type aliases
+
+// Traits

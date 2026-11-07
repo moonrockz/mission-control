@@ -74,10 +74,14 @@ configuration directory. Setup does not read or write the managed <code>html-des
 <h3 id="ver-1">VER-1. A type for a supported OpenSpec version</h3>
 <p>The pure package <code>moonrockz/openspec-ext</code> gets <code>SupportedOpenSpec</code>, a struct
 with a private <code>@contracts.Version</code>. Its smart constructor parses the text with
-<code>@contracts.Version</code> (three numbers, no leading zeros) and then requires 1.14.3 or major 1
-and minor 16. A failure is the typed <code>OpenSpecVersionError::UnsupportedOpenSpec(text)</code>.
-The constant <code>supported_openspec</code> (<code>"1.14.3 or 1.16.x"</code>) gives the text for the
-message.</p>
+<code>@contracts.Version</code> (three numbers, no leading zeros) and then requires that an entry of a
+private support table accepts the version. The table is <code>[Exact(1, 14, 3), Series(1, 16)]</code>:
+an exact release, or every patch release of a minor series. The error has one case for each rule:
+<code>OpenSpecVersionError::InvalidOpenSpecVersion(String)</code> holds a text that is not
+<code>X.Y.Z</code>, and <code>OpenSpecVersionError::UnsupportedOpenSpec(@contracts.Version)</code> holds a
+version that no table entry accepts. The constant <code>supported_openspec</code>
+(<code>"1.14.3 or 1.16.x"</code>) is made from the same table, so the rule and the message text cannot
+differ.</p>
 <pre><code class="language-moonbit">pub fn SupportedOpenSpec::SupportedOpenSpec(
   text : String,
 ) -&gt; SupportedOpenSpec raise OpenSpecVersionError</code></pre>

@@ -1,0 +1,28 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonrockz/okf/fs"
+
+import {
+  "moonrockz/okf",
+  "moonrockz/okf/provider",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+type FsStore
+pub fn FsStore::FsStore(@provider.StoreRoot) -> Self
+pub async fn FsStore::delete(Self, @okf.StorePath) -> Unit raise @provider.StoreError
+pub async fn FsStore::list(Self, @okf.StoreDir) -> Array[@provider.StoreEntry] raise @provider.StoreError
+pub async fn FsStore::modified(Self, @okf.StorePath) -> @okf.Instant? raise @provider.StoreError
+pub async fn FsStore::read_bytes(Self, @okf.StorePath) -> Bytes raise @provider.StoreError
+pub async fn FsStore::read_text(Self, @okf.StorePath) -> String raise @provider.StoreError
+pub fn FsStore::root(Self) -> @provider.StoreRoot
+pub async fn FsStore::write_bytes(Self, @okf.StorePath, Bytes) -> Unit raise @provider.StoreError
+pub async fn FsStore::write_text(Self, @okf.StorePath, String) -> Unit raise @provider.StoreError
+pub impl @provider.DocumentStore for FsStore
+
+// Type aliases
+
+// Traits

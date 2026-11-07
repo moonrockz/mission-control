@@ -1,0 +1,273 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonrockz/ears"
+
+import {
+  "moonbitlang/core/debug",
+  "moonrockz/mdc",
+}
+
+// Values
+pub fn from_mdc(@mdc.Document, dialects? : ArrayView[&Dialect]) -> Specification
+
+pub let keywords : ReadOnlyArray[Keyword]
+
+pub fn openspec_dialect() -> Lexicon
+
+pub fn parse(String, dialects? : ArrayView[&Dialect]) -> Requirement raise ParseError
+
+pub fn parse_block(String, dialects? : ArrayView[&Dialect]) -> Specification
+
+pub fn parse_markdown(String, strict? : Bool, file? : String, dialects? : ArrayView[&Dialect]) -> Specification raise @mdc.ParseError
+
+pub fn parse_text(String, dialects? : ArrayView[&Dialect]) -> Specification
+
+// Errors
+pub(all) suberror LexiconError {
+  InvalidWord(String)
+  InvalidPhrase(String)
+  InvalidHeadingPrefix(String)
+  InvalidHeadingLevel(Int32)
+  InvalidLexiconFile(line~ : Int32, message~ : String)
+  UnknownKey(key~ : String, line~ : Int32)
+  WrongType(key~ : String, line~ : Int32, expected~ : ValueKind)
+  InvalidEntry(key~ : String, line~ : Int32, error~ : LexiconError)
+} derive(Eq, @debug.Debug)
+pub fn LexiconError::equal(Self, Self) -> Bool
+pub fn LexiconError::not_equal(Self, Self) -> Bool
+pub fn LexiconError::to_repr(Self) -> @debug.Repr
+
+pub(all) suberror ParseError {
+  EmptyRequirement
+  ExpectedSystem(at~ : SentencePosition)
+  MissingShall(at~ : SentencePosition)
+  MissingResponse(at~ : SentencePosition)
+  EmptyClause(keyword~ : Keyword, at~ : SentencePosition)
+  MissingSeparator(at~ : SentencePosition)
+  MissingThen(at~ : SentencePosition)
+  InvalidClauseOrder(at~ : SentencePosition)
+  UnresolvedPronoun(pronoun~ : Word, at~ : SentencePosition)
+} derive(Eq, @debug.Debug)
+pub fn ParseError::equal(Self, Self) -> Bool
+pub fn ParseError::not_equal(Self, Self) -> Bool
+pub fn ParseError::position(Self) -> SentencePosition?
+pub fn ParseError::to_repr(Self) -> @debug.Repr
+
+pub(all) suberror PositionError {
+  NegativeOffset(Int32)
+} derive(Eq, @debug.Debug)
+pub fn PositionError::equal(Self, Self) -> Bool
+pub fn PositionError::not_equal(Self, Self) -> Bool
+pub fn PositionError::to_repr(Self) -> @debug.Repr
+
+// Types and methods
+type Diagnostic derive(Eq, @debug.Debug)
+pub fn Diagnostic::equal(Self, Self) -> Bool
+pub fn Diagnostic::error(Self) -> ParseError
+pub fn Diagnostic::not_equal(Self, Self) -> Bool
+pub fn Diagnostic::origin(Self) -> Origin
+pub fn Diagnostic::text(Self) -> String
+pub fn Diagnostic::to_repr(Self) -> @debug.Repr
+
+type HeadingPrefix derive(Eq, Hash, @debug.Debug)
+pub fn HeadingPrefix::HeadingPrefix(String) -> Self raise LexiconError
+pub fn HeadingPrefix::equal(Self, Self) -> Bool
+pub fn HeadingPrefix::hash(Self) -> Int32
+pub fn HeadingPrefix::hash_combine(Self, Hasher) -> Unit
+pub fn HeadingPrefix::not_equal(Self, Self) -> Bool
+pub fn HeadingPrefix::to_repr(Self) -> @debug.Repr
+pub fn HeadingPrefix::to_string(Self) -> String
+
+type HeadingRule derive(Eq, Hash, @debug.Debug)
+pub fn HeadingRule::HeadingRule(@mdc.HeadingLevel, HeadingPrefix) -> Self
+pub fn HeadingRule::equal(Self, Self) -> Bool
+pub fn HeadingRule::hash(Self) -> Int32
+pub fn HeadingRule::hash_combine(Self, Hasher) -> Unit
+pub fn HeadingRule::level(Self) -> @mdc.HeadingLevel
+pub fn HeadingRule::not_equal(Self, Self) -> Bool
+pub fn HeadingRule::prefix(Self) -> HeadingPrefix
+pub fn HeadingRule::to_repr(Self) -> @debug.Repr
+
+pub(all) enum Keyword {
+  Where
+  While
+  When
+  If
+} derive(Eq, Hash, @debug.Debug)
+pub fn Keyword::equal(Self, Self) -> Bool
+pub fn Keyword::hash(Self) -> Int32
+pub fn Keyword::hash_combine(Self, Hasher) -> Unit
+pub fn Keyword::not_equal(Self, Self) -> Bool
+pub fn Keyword::output(Self, &Logger) -> Unit
+pub fn Keyword::to_repr(Self) -> @debug.Repr
+pub fn Keyword::to_string(Self) -> String
+pub fn Keyword::word(Self) -> String
+pub impl Show for Keyword
+
+type Lexicon derive(Eq, @debug.Debug)
+pub fn Lexicon::Lexicon(name? : String, modals? : ArrayView[Word], determiners? : ArrayView[Word], pronouns? : ArrayView[Word], systems? : ArrayView[Phrase], lead_ins? : ArrayView[Phrase], headings? : ArrayView[HeadingRule]) -> Self
+pub fn Lexicon::determiners(Self) -> Array[Word]
+pub fn Lexicon::equal(Self, Self) -> Bool
+pub fn Lexicon::from_yaml(String) -> Self raise LexiconError
+pub fn Lexicon::headings(Self) -> Array[HeadingRule]
+pub fn Lexicon::lead_ins(Self) -> Array[Phrase]
+pub fn Lexicon::modals(Self) -> Array[Word]
+pub fn Lexicon::name(Self) -> String
+pub fn Lexicon::not_equal(Self, Self) -> Bool
+pub fn Lexicon::pronouns(Self) -> Array[Word]
+pub fn Lexicon::system_nouns(Self) -> Array[Phrase]
+pub fn Lexicon::to_repr(Self) -> @debug.Repr
+pub impl Dialect for Lexicon
+
+pub struct Modal {
+  verb : Word
+  negated : Bool
+} derive(Eq, @debug.Debug)
+pub fn Modal::equal(Self, Self) -> Bool
+pub fn Modal::not_equal(Self, Self) -> Bool
+pub fn Modal::to_repr(Self) -> @debug.Repr
+
+type Occurrence derive(Eq, @debug.Debug)
+pub fn Occurrence::equal(Self, Self) -> Bool
+pub fn Occurrence::not_equal(Self, Self) -> Bool
+pub fn Occurrence::origin(Self) -> Origin
+pub fn Occurrence::requirement(Self) -> Requirement
+pub fn Occurrence::to_repr(Self) -> @debug.Repr
+
+pub enum Origin {
+  Text(@mdc.SourceRange)
+  Markdown(path~ : @mdc.NodePath, span~ : @mdc.SourceRange?)
+} derive(Eq, @debug.Debug)
+pub fn Origin::equal(Self, Self) -> Bool
+pub fn Origin::not_equal(Self, Self) -> Bool
+pub fn Origin::to_repr(Self) -> @debug.Repr
+
+pub(all) enum Pattern {
+  Ubiquitous
+  StateDriven
+  EventDriven
+  OptionalFeature
+  UnwantedBehaviour
+  Complex
+} derive(Eq, @debug.Debug)
+pub fn Pattern::equal(Self, Self) -> Bool
+pub fn Pattern::not_equal(Self, Self) -> Bool
+pub fn Pattern::to_repr(Self) -> @debug.Repr
+
+type Phrase
+pub fn Phrase::Phrase(String) -> Self raise LexiconError
+pub fn Phrase::equal(Self, Self) -> Bool
+pub fn Phrase::hash(Self) -> Int32
+pub fn Phrase::hash_combine(Self, Hasher) -> Unit
+pub fn Phrase::lower(Self) -> String
+pub fn Phrase::not_equal(Self, Self) -> Bool
+pub fn Phrase::output(Self, &Logger) -> Unit
+pub fn Phrase::to_repr(Self) -> @debug.Repr
+pub fn Phrase::to_string(Self) -> String
+pub impl Eq for Phrase
+pub impl Hash for Phrase
+pub impl Show for Phrase
+pub impl @debug.Debug for Phrase
+
+type Requirement derive(Eq, @debug.Debug)
+pub fn Requirement::Requirement(String) -> Self raise ParseError
+pub fn Requirement::equal(Self, Self) -> Bool
+pub fn Requirement::feature(Self) -> String?
+pub fn Requirement::lead_in(Self) -> String?
+pub fn Requirement::modal(Self) -> Modal
+pub fn Requirement::not_equal(Self, Self) -> Bool
+pub fn Requirement::opener(Self) -> Word?
+pub fn Requirement::pattern(Self) -> Pattern
+pub fn Requirement::preconditions(Self) -> ReadOnlyArray[String]
+pub fn Requirement::resolved_system(Self) -> String?
+pub fn Requirement::response(Self) -> String
+pub fn Requirement::subject(Self) -> Subject
+pub fn Requirement::system(Self) -> String?
+pub fn Requirement::to_repr(Self) -> @debug.Repr
+pub fn Requirement::to_string(Self) -> String
+pub fn Requirement::trigger(Self) -> Trigger?
+
+type RequirementBlock derive(@debug.Debug)
+pub fn RequirementBlock::diagnostics(Self) -> ReadOnlyArray[Diagnostic]
+pub fn RequirementBlock::heading(Self) -> @mdc.SourceRange?
+pub fn RequirementBlock::name(Self) -> String
+pub fn RequirementBlock::requirements(Self) -> ReadOnlyArray[Occurrence]
+pub fn RequirementBlock::to_repr(Self) -> @debug.Repr
+
+type SentencePosition derive(Compare, Eq, Hash, @debug.Debug)
+pub fn SentencePosition::SentencePosition(Int32) -> Self raise PositionError
+pub fn SentencePosition::compare(Self, Self) -> Int32
+pub fn SentencePosition::equal(Self, Self) -> Bool
+pub fn SentencePosition::hash(Self) -> Int32
+pub fn SentencePosition::hash_combine(Self, Hasher) -> Unit
+pub fn SentencePosition::not_equal(Self, Self) -> Bool
+pub fn SentencePosition::offset(Self) -> Int32
+pub fn SentencePosition::op_ge(Self, Self) -> Bool
+pub fn SentencePosition::op_gt(Self, Self) -> Bool
+pub fn SentencePosition::op_le(Self, Self) -> Bool
+pub fn SentencePosition::op_lt(Self, Self) -> Bool
+pub fn SentencePosition::output(Self, &Logger) -> Unit
+pub fn SentencePosition::to_repr(Self) -> @debug.Repr
+pub fn SentencePosition::to_string(Self) -> String
+pub impl Show for SentencePosition
+
+type Specification derive(@debug.Debug)
+pub fn Specification::blocks(Self) -> ReadOnlyArray[RequirementBlock]
+pub fn Specification::diagnostics(Self) -> ReadOnlyArray[Diagnostic]
+pub fn Specification::document(Self) -> @mdc.Document?
+pub fn Specification::requirements(Self) -> ReadOnlyArray[Occurrence]
+pub fn Specification::to_repr(Self) -> @debug.Repr
+
+pub enum Subject {
+  Determined(opener~ : Word, system~ : String)
+  Noun(String)
+  Pronoun(opener~ : Word, resolved~ : String?)
+} derive(Eq, @debug.Debug)
+pub fn Subject::equal(Self, Self) -> Bool
+pub fn Subject::not_equal(Self, Self) -> Bool
+pub fn Subject::to_repr(Self) -> @debug.Repr
+
+pub enum Trigger {
+  Event(String)
+  Unwanted(String)
+} derive(Eq, @debug.Debug)
+pub fn Trigger::equal(Self, Self) -> Bool
+pub fn Trigger::not_equal(Self, Self) -> Bool
+pub fn Trigger::to_repr(Self) -> @debug.Repr
+
+pub(all) enum ValueKind {
+  Text
+  List
+  Mapping
+  Number
+} derive(Eq, @debug.Debug)
+pub fn ValueKind::equal(Self, Self) -> Bool
+pub fn ValueKind::not_equal(Self, Self) -> Bool
+pub fn ValueKind::to_repr(Self) -> @debug.Repr
+
+type Word
+pub fn Word::Word(String) -> Self raise LexiconError
+pub fn Word::equal(Self, Self) -> Bool
+pub fn Word::hash(Self) -> Int32
+pub fn Word::hash_combine(Self, Hasher) -> Unit
+pub fn Word::lower(Self) -> String
+pub fn Word::not_equal(Self, Self) -> Bool
+pub fn Word::output(Self, &Logger) -> Unit
+pub fn Word::to_repr(Self) -> @debug.Repr
+pub fn Word::to_string(Self) -> String
+pub impl Eq for Word
+pub impl Hash for Word
+pub impl Show for Word
+pub impl @debug.Debug for Word
+
+// Type aliases
+
+// Traits
+pub(open) trait Dialect {
+  fn name(Self) -> String
+  fn modals(Self) -> Array[Word] = _
+  fn determiners(Self) -> Array[Word] = _
+  fn pronouns(Self) -> Array[Word] = _
+  fn system_nouns(Self) -> Array[Phrase] = _
+  fn lead_ins(Self) -> Array[Phrase] = _
+  fn headings(Self) -> Array[HeadingRule] = _
+}
