@@ -159,3 +159,10 @@ The OpenSpec profile SHALL report each requirement sentence of a main spec, of a
 #### Scenario: Sentence not in EARS form
 - **WHEN** a requirement text has the sentence `Fast responses are important.`
 - **THEN** validation reports `openspec-requirement-not-ears` for that sentence and its line
+
+### Requirement: Preserve custom schema files
+WHEN a caller loads, imports or exports an OpenSpec tree with custom schemas, the OpenSpec profile SHALL retain all files under schemas as assets, including Markdown templates, without changing their content.
+
+#### Scenario: Schema template round trip
+- **WHEN** a tree contains schemas/html-design/templates/proposal.md and its schema definition
+- **THEN** import and export retain both files byte for byte and do not require concept frontmatter on the template
