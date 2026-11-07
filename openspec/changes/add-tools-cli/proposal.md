@@ -16,7 +16,8 @@ On 2026-11-07 Damian decided that the OpenSpec commands do not go into the main 
 - **BREAKING** (for consumers): the lock changes to format 2. It records the tool module and the tool version. `install` reads a format 1 lock, removes the two retired files when they are not edited, and writes format 2.
 - Move the setup step from the script into the binary. It still runs `openspec init` with an isolated configuration directory.
 - Remove `apps/openspec-ext/cmd`. `moonrockz/openspec-ext` stays a library (the bundle and the host I/O). The tools CLI is its only command.
-- Release the tools CLI separately from the main CLI: its own version, the tag family `tools-vX.Y.Z`, five native archives and `checksums.txt`, and a GitHub workflow that has a dry run. The release notes give the exact mise `[tools]` entry, with a checksum for each platform. Windows arm64 uses the Windows x64 archive.
+- Release the tools CLI separately from the main CLI: its own version, the tag family `tools-vX.Y.Z`, five native archives and `checksums.txt`, GitHub artifact attestations for each of these six files, and a GitHub workflow that has a dry run. A tools release is never marked as the latest release, so `releases/latest` stays on the main CLI.
+- The release notes give the exact mise `[tools]` entry: the `github:` backend with `version_prefix = "tools-v"` and an asset pattern for each platform, which Renovate can bump. mise checks each download against the GitHub asset digest and the attestations. Windows arm64 uses the Windows x64 archive. The notes and the migration document also give the `gh attestation verify` command with `--signer-workflow`.
 - Exclude `apps/tools` from the shared workspace version. `scripts/versions.mbtx` checks and sets the tools version as a second version family.
 - Migrate Mission Control itself: its `openspec:*` tasks run the tools CLI from source, and its lock moves to format 2.
 - Document the consumer migration in `apps/tools/README.md`.
@@ -26,7 +27,7 @@ Out of scope:
 - Changes in consumer repositories. This change documents the steps and proves them in a scratch clone of finos/morphir only.
 - Changes to the main `mission-control` CLI, its release assets or its version.
 - Publication of `moonrockz/mission-control-tools` to mooncakes.io. The binary is the distribution.
-- Artifact attestations. The main release has none; the tools release matches it.
+- Attestations for the main CLI release. Only the tools release gets them in this change.
 - A wasm build of the tools CLI. `moonbitlang/async` file and process support needs a native host.
 
 ## Capabilities

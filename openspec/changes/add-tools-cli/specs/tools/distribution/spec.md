@@ -64,13 +64,38 @@ WHEN `apps/tools/CHANGELOG.md` has no section for the version, the tools release
 - **WHEN** the change that adds `apps/tools/moon.mod` merges and the changelog has no 0.1.0 section
 - **THEN** the workflow plans no release and creates no tag
 
+### Requirement: Artifact attestations
+WHEN the tools release workflow builds the release assets, the tools release workflow SHALL create a GitHub build provenance attestation for each archive and for `checksums.txt`, signed by the workflow `.github/workflows/release-tools.yml`, in dry runs and in releases.
+
+#### Scenario: Verify an archive
+- **WHEN** a user runs `gh attestation verify mission-control-tools-linux-x64.tar.gz --repo moonrockz/mission-control --signer-workflow moonrockz/mission-control/.github/workflows/release-tools.yml`
+- **THEN** the command reports a verified attestation
+
+#### Scenario: Smoke check verifies the attestation
+- **WHEN** the smoke job of a platform runs
+- **THEN** it verifies the attestation of its archive with `gh attestation verify` and `--signer-workflow` before it runs the binary
+
+### Requirement: Latest release stays on the main CLI
+WHEN the tools release workflow creates a GitHub release, the tools release workflow SHALL NOT mark it as the latest release.
+
+#### Scenario: Stable main CLI download URL
+- **WHEN** `tools-v0.1.0` is released after `v0.1.0`
+- **THEN** `releases/latest/download/mission-control-linux-x64.tar.gz` still downloads the main CLI
+
 ### Requirement: Consumer mise entry
-WHEN the tools release workflow creates a release, the release notes SHALL contain a mise `[tools]` entry for the `http` backend that pins the exact version and gives the URL and the `sha256` checksum of the archive for linux-x64, linux-arm64, macos-arm64, macos-x64, windows-x64 and windows-arm64, where windows-arm64 uses the Windows x64 archive.
+WHEN the tools release workflow creates a release, the release notes SHALL contain a mise `[tools]` entry for the `github:` backend of `moonrockz/mission-control` with the exact version, `version_prefix = "tools-v"` and a version-free asset pattern for linux-x64, linux-arm64, macos-arm64, macos-x64, windows-x64 and windows-arm64, where windows-arm64 uses the Windows x64 archive.
 
 #### Scenario: Install with the entry
 - **WHEN** a consumer copies the entry into `.config/mise/config.toml` and runs `mise install`
-- **THEN** mise downloads the archive of the platform, verifies its checksum and puts `mission-control-tools` on the path
+- **THEN** mise downloads the archive of the platform from the `tools-v` release, checks it against the GitHub asset digest and the attestation, and puts `mission-control-tools` on the path
 
-#### Scenario: Changed archive
-- **WHEN** the downloaded archive has another SHA-256 than the entry gives
-- **THEN** `mise install` fails and installs nothing
+#### Scenario: Renovate bump
+- **WHEN** Renovate reads the entry
+- **THEN** it reads only `tools-v` releases and proposes the next tools version without a change to the asset patterns
+
+### Requirement: Entry next to the main CLI
+WHEN a consumer also installs the main CLI from `github:moonrockz/mission-control`, the release notes SHALL give a second form of the entry that uses a `[tool_alias]` name for the tools CLI.
+
+#### Scenario: Both tools in one file
+- **WHEN** a consumer declares the main CLI and the alias form of the tools CLI in one mise file
+- **THEN** `mise install` installs both, each from its own tag family

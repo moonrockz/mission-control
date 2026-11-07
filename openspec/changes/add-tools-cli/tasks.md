@@ -24,14 +24,14 @@ Bead: moonbase-4ca
 - [ ] 3.1 Add the tools version family to `scripts/versions.mbtx` (`check` covers both families, `set` the workspace only, `set-tools` the tools only) with feature scenarios on each side of the family boundary; verify `mise run validate:versions` and `mise run test:scripts`.
 - [ ] 3.2 Add the `tools` product to `scripts/dist.mbtx` without a change to the CLI outputs; verify feature scenarios for the tools asset names, and a local cross-build and pack of `dist-tools/` with `checksums.txt`.
 - [ ] 3.3 Add `scripts/release-tools.mbtx` (`plan`, `notes`, `github`, `status`) with typed inputs and feature scenarios for each plan outcome and the generated mise entry; verify `mise run test:scripts` and a local `plan` with `DRY_RUN=true`.
-- [ ] 3.4 Add `.github/workflows/release-tools.yml` with no pull request or merge queue trigger, and `apps/tools/CHANGELOG.md`; verify `mise run lint` (yamllint) and that the main Release workflow tag filter excludes `tools-v`.
-- [ ] 3.5 Prove the mise entry with `file://` URLs to the local archives and their checksums: `mise install` succeeds, a changed checksum fails; record the commands in `apps/tools/README.md`.
+- [ ] 3.4 Add `.github/workflows/release-tools.yml` with no pull request or merge queue trigger, `actions/attest@v4` for the six assets in the build job, `gh attestation verify --signer-workflow` in each smoke job, `--latest=false` on release create, and `apps/tools/CHANGELOG.md`; verify `mise run lint` (yamllint) and that the main Release workflow tag filter excludes `tools-v`.
+- [ ] 3.5 Generate the `github:` mise entry (plain and alias forms) and the `gh attestation verify` command in the release notes; verify feature scenarios of the notes text, and record the mise 2026.11.3 test of the backend mechanism in the design.
 
 ## 4. Consumer migration
 
 Bead: moonbase-4ca
 
-- [ ] 4.1 Write the consumer migration in `apps/tools/README.md` (mise entry, tasks, install, removals, lock) and link it from the root README and AGENTS.md; verify the links and the examples against the commands.
+- [ ] 4.1 Write the consumer migration in `apps/tools/README.md` (mise entry, attestation check, tasks, install, removals, lock) and link it from the root README and AGENTS.md; verify the links and the examples against the commands.
 - [ ] 4.2 In a scratch clone of finos/morphir, apply the migration with the locally built binary and run `mise run openspec:verify`; verify that it passes and that nothing is pushed.
 
 ## 5. Integration
@@ -43,6 +43,6 @@ Bead: moonbase-4ca
 ## Workflow follow-up
 
 - Archive `add-openspec-extensions` before this change, because this change modifies its capability.
-- After approval and merge, run `gh workflow run release-tools.yml -f dry_run=true` and check all five smoke jobs, including Windows.
+- After approval and merge, run `gh workflow run release-tools.yml -f dry_run=true` and check the attestation step and all five smoke jobs, including Windows.
 - The first release (`tools-v0.1.0`) needs Damian's approval: a pull request that adds the 0.1.0 section to `apps/tools/CHANGELOG.md`.
 - After the release, migrate the consumers in their own repositories.
