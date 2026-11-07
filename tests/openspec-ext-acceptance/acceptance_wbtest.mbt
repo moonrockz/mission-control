@@ -192,7 +192,7 @@ async fn messages(
   repository : @extension.RepositoryPath,
   level : @extension.CheckLevel,
 ) -> Array[String] {
-  @host.check(repository, level).problems.map(p => p.message())
+  @host.check(repository, level).problems().map(p => p.message())
 }
 
 ///|
@@ -255,9 +255,9 @@ async test "a check reads the repository it names and writes nothing" {
   let after = @fs.read_file("\{root}/openspec/extensions.lock.json").text()
   let config = @fs.read_file("\{root}/openspec/config.yaml").text()
   @expect.expect_all(s => {
-    s.expect(report.root).to_equal(resolved)
+    s.expect(report.root()).to_equal(resolved)
     s
-    .expect(report.problems.map(p => p.code()))
+    .expect(report.problems().map(p => p.code()))
     .to_equal(["tool-version", "schema"])
     s.expect(after).to_equal(before)
     s.expect(config).to_equal("schema: spec-driven\n")
@@ -453,4 +453,101 @@ async test "setup isolates its config and removes it after the process returns" 
     error => "\{error}"
   }
   @expect.expect(failed).to_equal("OpenSpec integration setup failed: 3")
+}
+
+///|
+async test "setup refuses another OpenSpec version and runs no init" {
+  let root = @fs.tmpdir(prefix="openspec-ext-setup")
+  defer @fs.rmdir(root, recursive=true)
+  let repository = @extension.RepositoryPath(root)
+  @host.install(repository, tool("0.1.0"))
+  let mut runs = 0
+  let refused = try {
+    @host.setup_with(repository, _ => Some("1.13.0"), (_, _, _) => {
+      runs += 1
+      0
+    })
+    ""
+  } catch {
+    error => "\{error}"
+  }
+  @expect.expect_all(s => {
+    s.expect(refused).to_equal("Setup requires OpenSpec 1.14.3")
+    s.expect(runs).to_equal(0)
+  })
+  let missing = try {
+    @host.setup_with(repository, _ => None, (_, _, _) => 0)
+    ""
+  } catch {
+    error => "\{error}"
+  }
+  @expect.expect(missing).to_equal("Setup requires OpenSpec 1.14.3")
+  let mut seen_root = ""
+  @host.setup_with(repository, _ => Some("1.14.3"), (r, _, environment) => {
+    seen_root = r
+    guard environment.get("OPENSPEC_TELEMETRY") is Some("0") else { return 9 }
+    0
+  })
+  @expect.expect(seen_root).to_equal(@fs.realpath(root))
+}
+
+///|
+async test "setup stops on a snapshot problem before it asks for the OpenSpec version" {
+  let root = @fs.tmpdir(prefix="openspec-ext-setup-drift")
+  defer @fs.rmdir(root, recursive=true)
+  let repository = @extension.RepositoryPath(root)
+  @host.install(repository, tool("0.1.0"))
+  @fs.write_file("\{root}/openspec/config.yaml", "schema: spec-driven\n")
+  let mut asked = false
+  let message = try {
+    @host.setup_with(
+      repository,
+      _ => {
+        asked = true
+        Some("1.14.3")
+      },
+      (_, _, _) => 0,
+    )
+    ""
+  } catch {
+    error => "\{error}"
+  }
+  @expect.expect_all(s => {
+    s.expect(message).to_equal("Default schema must be html-design")
+    s.expect(asked).to_be_false()
+  })
+}
+
+///|
+async test "an unsupported lock names its rule in the install error" {
+  let root = @fs.tmpdir(prefix="openspec-ext-badlock")
+  defer @fs.rmdir(root, recursive=true)
+  @fs.mkdir("\{root}/openspec", recursive=true)
+  @fs.write_file(
+    "\{root}/openspec/extensions.lock.json",
+    "{\"format\": 7, \"extension\": \"html-design\"}",
+  )
+  let message = try {
+    @host.install(@extension.RepositoryPath(root), tool("0.1.0"))
+    ""
+  } catch {
+    error => "\{error}"
+  }
+  @expect.expect(message).to_equal(
+    "Unsupported extension lock (the lock format 7 is not 1 or 2); restore it from version control",
+  )
+}
+
+///|
+async test "a linked scripts folder does not stop an install that retires nothing" {
+  let root = @fs.tmpdir(prefix="openspec-ext-scripts-link")
+  defer @fs.rmdir(root, recursive=true)
+  let elsewhere = @fs.tmpdir(prefix="openspec-ext-scripts-target")
+  defer @fs.rmdir(elsewhere, recursive=true)
+  @fs.write_file("\{elsewhere}/openspec-ext.mbtx", "my own script")
+  @fs.symlink(target=elsewhere, "\{root}/scripts")
+  @host.install(@extension.RepositoryPath(root), tool("0.1.0"))
+  @expect.expect(@fs.read_file("\{elsewhere}/openspec-ext.mbtx").text()).to_equal(
+    "my own script",
+  )
 }

@@ -28,6 +28,7 @@ pub fn RepositoryPath::RepositoryPath(
 }
 
 ///|
+/// The path as the user gave it.
 pub fn RepositoryPath::text(self : RepositoryPath) -> String {
   self.value
 }
@@ -65,6 +66,7 @@ pub fn Tool::Tool(
 }
 
 ///|
+/// The module name, such as `moonrockz/mission-control-tools`.
 pub fn Tool::module_name(self : Tool) -> String {
   self.module_name
 }
@@ -79,6 +81,7 @@ pub fn Tool::name(self : Tool) -> String {
 }
 
 ///|
+/// The version of the tool.
 pub fn Tool::version(self : Tool) -> @contracts.Version {
   self.version
 }
@@ -94,6 +97,7 @@ pub struct FileDigest {
 pub extend FileDigest with Eq::{equal, not_equal}
 
 ///|
+/// Parse 64 lower-case hexadecimal characters.
 pub fn FileDigest::FileDigest(
   value : String,
 ) -> FileDigest raise ExtensionError {
@@ -105,11 +109,13 @@ pub fn FileDigest::FileDigest(
 }
 
 ///|
+/// The 64 hexadecimal characters.
 pub fn FileDigest::text(self : FileDigest) -> String {
   self.value
 }
 
 ///|
+/// The SHA-256 of the UTF-8 bytes of `text`.
 pub fn digest(text : String) -> FileDigest {
   { value: @crypto.bytes_to_hex_string(@crypto.sha256(@utf8.encode(text))), }
 }
@@ -128,11 +134,13 @@ pub(all) enum RetiredFile {
 pub extend RetiredFile with Eq::{equal, not_equal}
 
 ///|
+/// Every retired file, in a fixed order.
 pub fn retired_files() -> Array[RetiredFile] {
   [Script, ScriptFeature]
 }
 
 ///|
+/// The fixed repository-relative path of the retired file.
 pub fn RetiredFile::path(self : RetiredFile) -> String {
   match self {
     Script => "scripts/openspec-ext.mbtx"
@@ -148,11 +156,13 @@ pub struct LockedFiles {
 }
 
 ///|
+/// The digest that the lock records for `path`, if any.
 pub fn LockedFiles::get(self : LockedFiles, path : String) -> FileDigest? {
   self.digests.get(path)
 }
 
 ///|
+/// The number of recorded digests.
 pub fn LockedFiles::length(self : LockedFiles) -> Int32 {
   self.digests.length()
 }
@@ -167,6 +177,7 @@ pub enum Lock {
 }
 
 ///|
+/// The digests of either format.
 pub fn Lock::files(self : Lock) -> LockedFiles {
   match self {
     Legacy(files) | Current(_, files) => files
@@ -174,49 +185,113 @@ pub fn Lock::files(self : Lock) -> LockedFiles {
 }
 
 ///|
+/// The repository-relative path of the ownership lock.
 pub let lock_path : String = "openspec/extensions.lock.json"
 
 ///|
+/// The repository-relative path of the OpenSpec project config.
 pub let config_path : String = "openspec/config.yaml"
 
 ///|
-fn locked_files(hashes : Map[String, Json]) -> LockedFiles? {
-  let digests = Map([])
-  for path, value in hashes {
-    guard value is String(text) else { return None }
-    let parsed = FileDigest(text) catch { _ => return None }
-    digests.set(path, parsed)
-  }
-  Some({ digests, })
+/// Why lock text is not a supported lock. Each case names the rule that the text breaks.
+pub suberror LockError {
+  /// The text is not JSON.
+  Syntax
+  /// The JSON is not an object, or a required field is missing or has another type.
+  MissingField(String)
+  /// The `format` is not 1 or 2.
+  UnknownFormat(String)
+  /// The `extension` is not `html-design`.
+  WrongExtension(String)
+  /// A format 1 lock names another module than `moonrockz/openspec-ext`.
+  WrongModule(String)
+  /// A format 2 lock names a tool that is not `owner/name`.
+  InvalidToolName(String)
+  /// The `version` is not `X.Y.Z`.
+  InvalidVersion(String)
+  /// The digest of this path is not a lower-case SHA-256.
+  InvalidDigest(String)
 }
 
 ///|
-/// Parse lock text at the boundary. `None` means an unsupported or malformed lock.
-pub fn parse_lock(text : String) -> Lock? {
-  let json = @json.parse(text) catch { _ => return None }
-  match json {
-    {
-      "format": 1,
-      "extension": "html-design",
-      "module": "moonrockz/openspec-ext",
-      "version": String(_),
-      "files": Object(hashes),
-      ..
-    } => locked_files(hashes).map(files => Legacy(files))
-    {
-      "format": 2,
-      "extension": "html-design",
-      "tool": String(module_name),
-      "version": String(version),
-      "files": Object(hashes),
-      ..
-    } => {
-      let tool = Tool(module_name, @contracts.Version::Version(version)) catch {
-        _ => return None
-      }
-      locked_files(hashes).map(files => Current(tool, files))
+/// A message that names the rule.
+pub fn LockError::message(self : LockError) -> String {
+  match self {
+    Syntax => "the lock is not JSON"
+    MissingField(name) => "the lock has no valid field `\{name}`"
+    UnknownFormat(text) => "the lock format \{text} is not 1 or 2"
+    WrongExtension(text) => "the lock extension \{text} is not html-design"
+    WrongModule(text) =>
+      "the format 1 lock module \{text} is not moonrockz/openspec-ext"
+    InvalidToolName(text) => "the lock tool \{text} is not owner/name"
+    InvalidVersion(text) => "the lock version \{text} is not X.Y.Z"
+    InvalidDigest(path) => "the lock digest of \{path} is not a SHA-256"
+  }
+}
+
+///|
+pub impl Show for LockError with fn output(self, logger) {
+  logger.write_string(self.message())
+}
+
+///|
+#deprecated
+pub extend LockError with Show::{output, to_string}
+
+///|
+fn string_field(
+  fields : Map[String, Json],
+  name : String,
+) -> String raise LockError {
+  match fields.get(name) {
+    Some(String(text)) => text
+    _ => raise MissingField(name)
+  }
+}
+
+///|
+fn locked_files(fields : Map[String, Json]) -> LockedFiles raise LockError {
+  guard fields.get("files") is Some(Object(hashes)) else {
+    raise MissingField("files")
+  }
+  let digests = Map([])
+  for path, value in hashes {
+    guard value is String(text) else { raise InvalidDigest(path) }
+    let parsed = FileDigest(text) catch { _ => raise InvalidDigest(path) }
+    digests.set(path, parsed)
+  }
+  { digests, }
+}
+
+///|
+/// Parse lock text at the boundary into a format 1 or a format 2 lock.
+pub fn parse_lock(text : String) -> Lock raise LockError {
+  let json = @json.parse(text) catch { _ => raise Syntax }
+  guard json is Object(fields) else { raise MissingField("format") }
+  let legacy = match fields.get("format") {
+    Some(Number(1.0, ..)) => true
+    Some(Number(2.0, ..)) => false
+    Some(other) => raise UnknownFormat(other.stringify())
+    None => raise MissingField("format")
+  }
+  let extension = string_field(fields, "extension")
+  guard extension == "html-design" else { raise WrongExtension(extension) }
+  let version = string_field(fields, "version")
+  if legacy {
+    let module_name = string_field(fields, "module")
+    guard module_name == "moonrockz/openspec-ext" else {
+      raise WrongModule(module_name)
     }
-    _ => None
+    Legacy(locked_files(fields))
+  } else {
+    let module_name = string_field(fields, "tool")
+    let parsed = @contracts.Version::Version(version) catch {
+      _ => raise InvalidVersion(version)
+    }
+    let tool = Tool(module_name, parsed) catch {
+      _ => raise InvalidToolName(module_name)
+    }
+    Current(tool, locked_files(fields))
   }
 }
 
@@ -288,6 +363,7 @@ pub fn configure(source : String) -> String raise ExtensionError {
 }
 
 ///|
+/// The config that install writes into a repository that has none.
 pub fn initial_config() -> String {
   "schema: html-design\ngithubCopilot:\n  cloudAgent: false\ncontext: |\n  Follow AGENTS.md and README.md for repository conventions and local tracking.\n"
 }
@@ -349,6 +425,7 @@ pub enum Input {
 pub extend Input with Eq::{equal, not_equal}
 
 ///|
+/// The repository-relative path of the input.
 pub fn Input::path(self : Input) -> String {
   match self {
     LockFile => lock_path
@@ -452,16 +529,17 @@ pub fn check_snapshot(
       None
     }
     Some(text) =>
-      match parse_lock(text) {
-        None => {
+      try parse_lock(text) catch {
+        _ => {
           problems.push(UnsupportedLock)
           None
         }
-        Some(Legacy(_)) => {
+      } noraise {
+        Legacy(_) => {
           problems.push(LegacyLock)
           None
         }
-        Some(Current(tool, locked)) => Some((tool, locked))
+        Current(tool, locked) => Some((tool, locked))
       }
   }
   if parsed is Some((recorded, locked)) {

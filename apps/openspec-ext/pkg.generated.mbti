@@ -24,7 +24,7 @@ pub let lock_path : String
 
 pub fn lock_text(Tool) -> String
 
-pub fn parse_lock(String) -> Lock?
+pub fn parse_lock(String) -> Lock raise LockError
 
 pub fn retired_files() -> Array[RetiredFile]
 
@@ -42,6 +42,23 @@ pub fn ExtensionError::output(Self, &Logger) -> Unit
 #deprecated
 pub fn ExtensionError::to_string(Self) -> String
 pub impl Show for ExtensionError
+
+pub suberror LockError {
+  Syntax
+  MissingField(String)
+  UnknownFormat(String)
+  WrongExtension(String)
+  WrongModule(String)
+  InvalidToolName(String)
+  InvalidVersion(String)
+  InvalidDigest(String)
+}
+pub fn LockError::message(Self) -> String
+#deprecated
+pub fn LockError::output(Self, &Logger) -> Unit
+#deprecated
+pub fn LockError::to_string(Self) -> String
+pub impl Show for LockError
 
 // Types and methods
 pub(all) enum BundleFile {

@@ -15,7 +15,8 @@ old `scripts/openspec-ext.mbtx` copy.
 | `moonrockz/openspec-ext` | The bundle files, the config migration, the typed lock (format 1 and 2), the retired files and the pure snapshot and bundle checks. No I/O. | wasm, wasm-gc, js, native |
 | `moonrockz/openspec-ext/host` | `install`, `check` and `setup`: file reads and writes, symlink guards, the retirement of old files and the isolated `openspec init`. | wasm, native |
 
-The host uses `moonbitlang/async` file and process support, which has no JS or wasm-gc backend.
+The host uses `moonbitlang/async` file and process support, which has no JS or wasm-gc backend. The wasm
+build runs under `moonrun` (`moon run`), which supplies the file system host.
 
 ## Files and updates
 

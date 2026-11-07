@@ -16,12 +16,14 @@ pub async fn setup(@openspec-ext.RepositoryPath) -> Unit
 
 pub fn setup_preferences() -> Json
 
+pub async fn setup_with(@openspec-ext.RepositoryPath, async (String) -> String?, async (String, String, Map[String, String]) -> Int32) -> Unit
+
 // Errors
 pub suberror InstallError {
   Symlink(String)
   LocalEdit(@openspec-ext.BundleFile)
   EditedRetired(@openspec-ext.RetiredFile)
-  UnsupportedLock
+  UnsupportedLock(@openspec-ext.LockError)
   OpenSpecVersion
   SetupFailed(Int32)
   CheckFailed(Array[@openspec-ext.Problem])
@@ -35,9 +37,10 @@ pub impl Show for InstallError
 
 // Types and methods
 pub struct CheckReport {
-  root : String
-  problems : Array[@openspec-ext.Problem]
+  // private fields
 }
+pub fn CheckReport::problems(Self) -> Array[@openspec-ext.Problem]
+pub fn CheckReport::root(Self) -> String
 
 // Type aliases
 

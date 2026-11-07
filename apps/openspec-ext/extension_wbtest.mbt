@@ -132,7 +132,7 @@ test "format 2 lock records the tool and parses back" {
     fail("unexpected lock: \{text}")
   }
   assert_eq(hashes.length(), 7)
-  guard parse_lock(text) is Some(Current(recorded, locked)) else {
+  guard parse_lock(text) is Current(recorded, locked) else {
     fail("lock does not parse")
   }
   assert_true(recorded == tool("0.3.1"))
@@ -145,7 +145,7 @@ test "format 2 lock records the tool and parses back" {
 ///|
 test "format 1 locks parse as legacy and malformed locks do not parse" {
   let legacy = "{\"format\": 1, \"extension\": \"html-design\", \"module\": \"moonrockz/openspec-ext\", \"version\": \"0.1.0\", \"files\": {\"scripts/openspec-ext.mbtx\": \"\{"a".repeat(64)}\"}}"
-  guard parse_lock(legacy) is Some(Legacy(files)) else {
+  guard parse_lock(legacy) is Legacy(files) else {
     fail("legacy lock does not parse")
   }
   assert_eq(
@@ -153,27 +153,63 @@ test "format 1 locks parse as legacy and malformed locks do not parse" {
     Some("a".repeat(64)),
   )
   let good = lock_text(tool("0.1.0"))
-  for
-    text in [
-      "",
-      "{",
-      "{}",
-      "[]",
+  let cases : Array[(String, String)] = [
+    ("", "the lock is not JSON"),
+    ("{", "the lock is not JSON"),
+    ("[]", "the lock has no valid field `format`"),
+    ("{}", "the lock has no valid field `format`"),
+    (
       good.replace(old="\"format\": 2", new="\"format\": 3"),
+      "the lock format 3 is not 1 or 2",
+    ),
+    (
+      good.replace(old="\"format\": 2", new="\"format\": \"2\""),
+      "the lock format \"2\" is not 1 or 2",
+    ),
+    (
       good.replace(old="html-design\"", new="other\""),
+      "the lock extension other is not html-design",
+    ),
+    (
       good.replace(old="\"version\": \"0.1.0\"", new="\"version\": \"0.1\""),
+      "the lock version 0.1 is not X.Y.Z",
+    ),
+    (
       good.replace(old="moonrockz/mission-control-tools", new="Bad Tool"),
+      "the lock tool Bad Tool is not owner/name",
+    ),
+    (
+      good.replace(old="\"tool\"", new="\"module\""),
+      "the lock has no valid field `tool`",
+    ),
+    (
       good.replace(old=digest(BundleFile::Notice.content()).text(), new="XYZ"),
+      "the lock digest of openspec/schemas/html-design/NOTICE is not a SHA-256",
+    ),
+    (
       legacy.replace(old="moonrockz/openspec-ext", new="moonrockz/other"),
-    ] {
-    assert_true(parse_lock(text) is None)
+      "the format 1 lock module moonrockz/other is not moonrockz/openspec-ext",
+    ),
+    (
+      legacy.replace(old="\"files\": {", new="\"other\": {"),
+      "the lock has no valid field `files`",
+    ),
+  ]
+  for case in cases {
+    let message = try {
+      let _ = parse_lock(case.0)
+      "parsed"
+    } catch {
+      error => error.message()
+    }
+    assert_eq(message, case.1)
   }
 }
 
 ///|
 test "retired files are deleted only with the previous digest" {
   let recorded = "{\"format\": 1, \"extension\": \"html-design\", \"module\": \"moonrockz/openspec-ext\", \"version\": \"0.1.0\", \"files\": {\"scripts/openspec-ext.mbtx\": \"\{digest("old script").text()}\"}}"
-  let previous = parse_lock(recorded)
+  let previous = Some(parse_lock(recorded))
   assert_true(retirement(Script, None, previous) is Absent)
   assert_true(retirement(Script, Some("old script"), previous) is Delete)
   assert_true(retirement(Script, Some("edited script"), previous) is Edited)

@@ -7,6 +7,8 @@ import {
 }
 
 // Values
+pub fn check_error_outcome(String, String, CheckScope, Format) -> Outcome
+
 pub fn check_level(CheckScope) -> @openspec-ext.CheckLevel
 
 pub fn check_outcome(String, Array[@openspec-ext.Problem], CheckScope, Format) -> Outcome
@@ -37,6 +39,7 @@ pub suberror UsageError {
   UnknownOption(String)
   RepeatedOption(String)
   ExtraArgument(String)
+  UnexpectedArgument(String)
   MissingCommand
   InvalidRepository(String)
 }
@@ -90,10 +93,11 @@ pub enum OpenSpecCommand {
 }
 
 pub struct Outcome {
-  stdout : Array[String]
-  stderr : Array[String]
-  exit_code : ExitCode
+  // private fields
 }
+pub fn Outcome::exit_code(Self) -> ExitCode
+pub fn Outcome::stderr(Self) -> Array[String]
+pub fn Outcome::stdout(Self) -> Array[String]
 
 // Type aliases
 

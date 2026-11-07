@@ -130,7 +130,7 @@ Feature: Release the tools CLI
   Scenario: The notes give the attestation check with the signer workflow
     Then the notes of "0.1.0" contain:
       """
-      gh attestation verify mission-control-tools-linux-x64.tar.gz --repo moonrockz/mission-control --signer-workflow moonrockz/mission-control/.github/workflows/release-tools.yml
+      gh attestation verify mission-control-tools-linux-x64.tar.gz --repo moonrockz/mission-control --signer-workflow moonrockz/mission-control/.github/workflows/release-tools.yml --source-ref refs/heads/main
       """
 
   Scenario: The version type is the one of the main release script

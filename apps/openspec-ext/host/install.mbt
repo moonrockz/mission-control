@@ -4,13 +4,14 @@ pub suberror InstallError {
   Symlink(String)
   LocalEdit(@extension.BundleFile)
   EditedRetired(@extension.RetiredFile)
-  UnsupportedLock
+  UnsupportedLock(@extension.LockError)
   OpenSpecVersion
   SetupFailed(Int32)
   CheckFailed(Array[@extension.Problem])
 }
 
 ///|
+/// The message of the error, as the CLI prints it.
 pub fn InstallError::message(self : InstallError) -> String {
   match self {
     Symlink(path) => "Refusing symlink destination: \{path}"
@@ -18,8 +19,8 @@ pub fn InstallError::message(self : InstallError) -> String {
       "Local or unmanaged file: \{file.path()}. Review and move it aside before installing."
     EditedRetired(file) =>
       "Edited retired file: \{file.path()}. Review it and remove it before installing."
-    UnsupportedLock =>
-      "Unsupported extension lock; restore it from version control"
+    UnsupportedLock(reason) =>
+      "Unsupported extension lock (\{reason.message()}); restore it from version control"
     OpenSpecVersion => "Setup requires OpenSpec \{openspec_version}"
     SetupFailed(code) => "OpenSpec integration setup failed: \{code}"
     CheckFailed(problems) => problems.map(p => p.message()).iter().join("\n")
@@ -53,10 +54,24 @@ async fn read_optional(path : String) -> String? {
 }
 
 ///|
-/// The result of a check: the resolved repository root and the problems, in report order.
+/// The result of a check: the resolved repository root and the problems, in report order. The
+/// fields are private, so a report cannot change after the check.
 pub struct CheckReport {
-  root : String
-  problems : Array[@extension.Problem]
+  priv root : String
+  priv problems : Array[@extension.Problem]
+}
+
+///|
+/// The absolute repository root that the check resolved. It is the operating system's answer to
+/// `realpath` of the given path, so it has no rules of its own to parse.
+pub fn CheckReport::root(self : CheckReport) -> String {
+  self.root
+}
+
+///|
+/// A copy of the problems, in report order.
+pub fn CheckReport::problems(self : CheckReport) -> Array[@extension.Problem] {
+  self.problems.copy()
 }
 
 ///|
@@ -116,10 +131,11 @@ pub async fn install(
   let previous = match read_optional("\{root}/\{@extension.lock_path}") {
     None => None
     Some(text) =>
-      match @extension.parse_lock(text) {
-        Some(lock) => Some(lock)
-        None => raise UnsupportedLock
-      }
+      Some(
+        @extension.parse_lock(text) catch {
+          reason => raise UnsupportedLock(reason)
+        },
+      )
   }
   for file in @extension.files() {
     safe_path(root, file.path())
@@ -133,14 +149,17 @@ pub async fn install(
   }
   let retire = []
   for file in @extension.retired_files() {
-    safe_path(root, file.path())
     match
       @extension.retirement(
         file,
         read_optional("\{root}/\{file.path()}"),
         previous,
       ) {
-      Delete => retire.push(file)
+      Delete => {
+        // Only a file that will be deleted needs the guard: never delete through a link.
+        safe_path(root, file.path())
+        retire.push(file)
+      }
       Edited => raise EditedRetired(file)
       Absent | Unmanaged => ()
     }
@@ -214,23 +233,27 @@ pub async fn isolated_init(
 let setup_tools : String = "agents,codex,claude,github-copilot,cursor,grok,gemini,opencode"
 
 ///|
-/// Check the snapshot, require the supported OpenSpec CLI, and generate the core skills with
-/// isolated preferences. User preferences are untouched. Setup does not install.
-pub async fn setup(repository : @extension.RepositoryPath) -> Unit {
-  let report = check(repository, Snapshot)
-  guard report.problems.is_empty() else { raise CheckFailed(report.problems) }
-  let root = report.root
+/// The version that `openspec --version` prints in `root`, or `None` when it cannot run.
+async fn openspec_version_in(root : String) -> String? {
   let (code, output, _) = @process.collect_output(
     "openspec",
     ["--version"],
     cwd=root,
   ) catch {
-    _ => raise OpenSpecVersion
+    _ => return None
   }
-  guard code == 0 && output.text().trim() == openspec_version else {
-    raise OpenSpecVersion
+  if code == 0 {
+    Some(output.text().trim().to_owned())
+  } else {
+    None
   }
-  isolated_init(async fn(_, environment) {
+}
+
+///|
+/// Check the snapshot, require the supported OpenSpec CLI, and generate the core skills with
+/// isolated preferences. User preferences are untouched. Setup does not install.
+pub async fn setup(repository : @extension.RepositoryPath) -> Unit {
+  setup_with(repository, openspec_version_in, (root, _, environment) => {
     @process.run(
       "openspec",
       ["init", "--tools", setup_tools, "--profile", "core", "--no-animation"],
@@ -240,6 +263,23 @@ pub async fn setup(repository : @extension.RepositoryPath) -> Unit {
       stderr=@stdio.stderr,
     )
   })
+}
+
+///|
+/// `setup` with its two processes passed in: `version_in(root)` gives the OpenSpec CLI version,
+/// and `run_init(root, home, environment)` runs `openspec init`. Tests pass both.
+pub async fn setup_with(
+  repository : @extension.RepositoryPath,
+  version_in : async (String) -> String?,
+  run_init : async (String, String, Map[String, String]) -> Int32,
+) -> Unit {
+  let report = check(repository, Snapshot)
+  guard report.problems.is_empty() else { raise CheckFailed(report.problems) }
+  let root = report.root
+  guard version_in(root) == Some(openspec_version) else {
+    raise OpenSpecVersion
+  }
+  isolated_init((home, environment) => run_init(root, home, environment))
 }
 
 ///|

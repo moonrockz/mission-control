@@ -11,6 +11,7 @@ pub(all) enum ExitCode {
 pub extend ExitCode with Eq::{equal, not_equal}
 
 ///|
+/// The number that the process exits with.
 pub fn ExitCode::to_int(self : ExitCode) -> Int32 {
   match self {
     Success => 0
@@ -44,6 +45,7 @@ pub(all) enum CheckScope {
 pub extend CheckScope with Eq::{equal, not_equal}
 
 ///|
+/// A command of the `openspec` group.
 pub enum OpenSpecCommand {
   Check(CheckScope, Format)
   Install
@@ -65,11 +67,13 @@ pub suberror UsageError {
   UnknownOption(String)
   RepeatedOption(String)
   ExtraArgument(String)
+  UnexpectedArgument(String)
   MissingCommand
   InvalidRepository(String)
 }
 
 ///|
+/// The message that follows `mission-control-tools: ` on standard error.
 pub fn UsageError::message(self : UsageError) -> String {
   match self {
     UnknownCommand(name) => "unknown command '\{name}'"
@@ -77,12 +81,14 @@ pub fn UsageError::message(self : UsageError) -> String {
     RepeatedOption(name) => "option '\{name}' is given more than one time"
     ExtraArgument(text) =>
       "expected at most one repository path, found '\{text}'"
+    UnexpectedArgument(text) => "version takes no argument, found '\{text}'"
     MissingCommand => "openspec needs a command: check, install or setup"
     InvalidRepository(message) => message
   }
 }
 
 ///|
+/// The help text.
 pub fn usage() -> String {
   [
     "Usage: mission-control-tools <command>", "", "Commands:", "  version [--json]                                 Print the tools version",
@@ -139,7 +145,7 @@ pub fn parse(args : ArrayView[String]) -> Command raise UsageError {
     ["version", .. rest] | ["--version", .. rest] => {
       let (options, path) = options_and_path(rest, ["--json"])
       if path is Some(extra) {
-        raise ExtraArgument(extra)
+        raise UnexpectedArgument(extra)
       }
       Version(format_of(options))
     }
@@ -172,11 +178,30 @@ pub fn parse(args : ArrayView[String]) -> Command raise UsageError {
 }
 
 ///|
-/// What the shell prints and how it exits. The core decides; `main` only writes.
+/// What the shell prints and how it exits. The core decides; `main` only writes. The fields are
+/// private, so only this package makes an outcome.
 pub struct Outcome {
-  stdout : Array[String]
-  stderr : Array[String]
-  exit_code : ExitCode
+  priv stdout : Array[String]
+  priv stderr : Array[String]
+  priv exit_code : ExitCode
+}
+
+///|
+/// A copy of the lines for standard output.
+pub fn Outcome::stdout(self : Outcome) -> Array[String] {
+  self.stdout.copy()
+}
+
+///|
+/// A copy of the lines for standard error.
+pub fn Outcome::stderr(self : Outcome) -> Array[String] {
+  self.stderr.copy()
+}
+
+///|
+/// The exit code.
+pub fn Outcome::exit_code(self : Outcome) -> ExitCode {
+  self.exit_code
 }
 
 ///|
@@ -185,6 +210,7 @@ pub struct Outcome {
 let problem_prefix : String = "openspec-ext: "
 
 ///|
+/// A usage error: the message and the help text on standard error, exit code 2.
 pub fn usage_outcome(error : UsageError) -> Outcome {
   {
     stdout: [],
@@ -194,11 +220,13 @@ pub fn usage_outcome(error : UsageError) -> Outcome {
 }
 
 ///|
+/// The help text on standard output.
 pub fn help_outcome() -> Outcome {
   { stdout: [usage()], stderr: [], exit_code: Success, }
 }
 
 ///|
+/// The version, as text or as one JSON object.
 pub fn version_outcome(format : Format) -> Outcome {
   let t = tool()
   let line = match format {
@@ -233,6 +261,36 @@ fn problem_json(problem : @extension.Problem) -> Json {
   }
   fields.set("message", Json(problem.message()))
   Json(fields)
+}
+
+///|
+/// A check that could not read the repository, such as a missing directory or a symlink
+/// destination. In JSON the report has `"ok": false` and one problem with the code `error`.
+pub fn check_error_outcome(
+  repository : String,
+  message : String,
+  scope : CheckScope,
+  format : Format,
+) -> Outcome {
+  match format {
+    Text => failure_outcome([message])
+    JsonReport => {
+      let t = tool()
+      let report : Json = {
+        "tool": t.name(),
+        "version": t.version().to_string(),
+        "command": "openspec check",
+        "level": match scope {
+          Snapshot => "snapshot"
+          Bundle => "bundle"
+        },
+        "repository": repository,
+        "ok": false,
+        "problems": [{ "code": "error", "message": message }],
+      }
+      { stdout: [report.stringify()], stderr: [], exit_code: Failure, }
+    }
+  }
 }
 
 ///|
@@ -271,6 +329,7 @@ pub fn check_outcome(
 }
 
 ///|
+/// The success line of install.
 pub fn install_outcome() -> Outcome {
   let t = tool()
   {
@@ -281,6 +340,7 @@ pub fn install_outcome() -> Outcome {
 }
 
 ///|
+/// The success line of setup, which is the line of the snapshot check.
 pub fn setup_outcome() -> Outcome {
   { stdout: ["html-design snapshot: OK"], stderr: [], exit_code: Success, }
 }

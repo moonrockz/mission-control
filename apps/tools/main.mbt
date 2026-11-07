@@ -5,8 +5,16 @@ async fn execute(command : Command) -> Outcome {
     Help => help_outcome()
     Version(format) => version_outcome(format)
     OpenSpec(Check(scope, format), repository) => {
-      let report = @host.check(repository, check_level(scope))
-      check_outcome(report.root, report.problems, scope, format)
+      let report = @host.check(repository, check_level(scope)) catch {
+        error =>
+          return check_error_outcome(
+            repository.text(),
+            "\{error}",
+            scope,
+            format,
+          )
+      }
+      check_outcome(report.root(), report.problems(), scope, format)
     }
     OpenSpec(Install, repository) => {
       @host.install(repository, tool())

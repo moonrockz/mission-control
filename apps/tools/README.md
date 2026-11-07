@@ -57,9 +57,13 @@ The release workflow attests each archive and `checksums.txt` with GitHub build 
 ```shell
 gh attestation verify mission-control-tools-linux-x64.tar.gz \
   --repo moonrockz/mission-control \
-  --signer-workflow moonrockz/mission-control/.github/workflows/release-tools.yml
+  --signer-workflow moonrockz/mission-control/.github/workflows/release-tools.yml \
+  --source-ref refs/heads/main
 sha256sum -c checksums.txt
 ```
+
+`--source-ref refs/heads/main` accepts only an archive that the workflow built from main. A dry run from
+another branch also attests its archives, and this option rejects them.
 
 The executable is at the root of each archive.
 

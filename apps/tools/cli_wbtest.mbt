@@ -60,10 +60,7 @@ test "usage errors name the argument" {
       ["openspec", "check", "--json", "--json"],
       "option '--json' is given more than one time",
     ),
-    (
-      ["version", "extra"],
-      "expected at most one repository path, found 'extra'",
-    ),
+    (["version", "extra"], "version takes no argument, found 'extra'"),
     (["version", "--bundle"], "unknown option '--bundle'"),
     (
       ["openspec", "check", ""],
@@ -186,4 +183,26 @@ async test "execute installs and checks another directory, and reports JSON" {
     is { "ok": False, "problems": [{ "code": "drift", .. }], .. } else {
     fail("unexpected report: \{report.stdout[0]}")
   }
+}
+
+///|
+async test "check --json reports a repository that cannot be read as JSON" {
+  let missing = @extension.RepositoryPath("/no/such/mission-control-tools/repo")
+  let report = execute(OpenSpec(Check(Bundle, JsonReport), missing))
+  assert_true(report.exit_code is Failure)
+  assert_eq(report.stderr, [])
+  guard @json.parse(report.stdout[0])
+    is {
+      "ok": False,
+      "level": "bundle",
+      "repository": "/no/such/mission-control-tools/repo",
+      "problems": [{ "code": "error", .. }],
+      ..
+    } else {
+    fail("unexpected report: \{report.stdout[0]}")
+  }
+  let text = execute(OpenSpec(Check(Snapshot, Text), missing))
+  assert_true(text.exit_code is Failure)
+  assert_eq(text.stdout, [])
+  assert_true(text.stderr[0].has_prefix("openspec-ext: "))
 }

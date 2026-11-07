@@ -189,6 +189,9 @@ jobs:
     runs-on: ${{ matrix.runner }}
     needs: [plan, build]
     timeout-minutes: 10
+    permissions:
+      contents: read
+      attestations: read
     strategy:
       fail-fast: false
       matrix:

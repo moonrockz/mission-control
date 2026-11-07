@@ -28,8 +28,8 @@ import {
 /// and `checksums.txt`. With no argument, the script runs `build` and then `pack`.
 ///
 /// A second argument `tools` selects the tools CLI (`apps/tools`) in place of the main CLI. Its outputs are the
-/// five `mission-control-tools-*` archives and `checksums.txt` in `dist-tools/`; it has no wasm files, because
-/// its file and process I/O needs a native host.
+/// five `mission-control-tools-*` archives and `checksums.txt` in `dist-tools/`. It has no wasm files: its wasm
+/// build runs only under `moonrun`, which supplies the file system host, so consumers need a native binary.
 ///
 /// Usage: `mise run build:release`, `mise run release:assets`, `mise run build:tools`, or
 /// `moonx scripts/dist.mbtx [build|build-windows|pack] [tools]`.
@@ -124,7 +124,7 @@ fn Product::windows_artifact(self : Product) -> String {
 }
 
 ///|
-/// Whether the release has the two wasm files. The tools CLI needs native file and process I/O.
+/// Whether the release has the two wasm files. The wasm build of the tools CLI needs `moonrun` as its host.
 fn Product::has_wasm(self : Product) -> Bool {
   self is Cli
 }
@@ -500,7 +500,7 @@ async fn pack(product : Product) -> Unit {
     @fs.readdir(dist_dir),
   )
   if !missing.is_empty() {
-    fail_with("dist/ lacks: \{missing.join(", ")}")
+    fail_with("\{dist_dir}/ lacks: \{missing.join(", ")}")
   }
   println("✅ Wrote \{expected_outputs(product).length()} files to \{dist_dir}/")
 }

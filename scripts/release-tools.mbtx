@@ -196,9 +196,10 @@ fn mise_alias_entry(version : Version) -> String {
 }
 
 ///|
-/// The command that checks the build provenance of a downloaded archive.
+/// The command that checks the build provenance of a downloaded archive. `--source-ref` accepts only a
+/// build from main, so an attested dry run from another branch does not pass.
 fn attestation_command(asset : String) -> String {
-  "gh attestation verify \{asset} --repo \{repository} --signer-workflow \{repository}/\{workflow_path}"
+  "gh attestation verify \{asset} --repo \{repository} --signer-workflow \{repository}/\{workflow_path} --source-ref refs/heads/main"
 }
 
 ///|
