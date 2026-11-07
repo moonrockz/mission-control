@@ -10,6 +10,14 @@ fn spec_docs(
 }
 
 ///|
+/// Whether the spec document belongs to an archived change. An archived change is history: the
+/// main specs have moved on since it was archived, so the checks that OpenSpec runs when it
+/// archives a change do not apply to it again.
+fn in_archived_change(doc : @okf.Document) -> Bool {
+  doc.metadata().text("state").bind(ChangeState::parse) is Some(Archived)
+}
+
+///|
 fn all_requirements(model : SpecModel) -> Array[Requirement] {
   let out = model.requirements.iter().collect()
   for d in model.deltas {
@@ -132,6 +140,7 @@ fn check_modified_unknown(
   let out = []
   for pair in spec_docs(ctx) {
     guard type_of(pair.1) is Some(SpecDelta) else { continue }
+    guard !in_archived_change(pair.1) else { continue }
     guard model_of(pair.1, dialects) is Some(m) else { continue }
     guard mains.get(m.capability) is Some(main) else { continue }
     for d in m.deltas {
@@ -163,6 +172,7 @@ fn check_unknown_capability(
   let out = []
   for pair in spec_docs(ctx) {
     guard type_of(pair.1) is Some(SpecDelta) else { continue }
+    guard !in_archived_change(pair.1) else { continue }
     guard model_of(pair.1, dialects) is Some(m) else { continue }
     if !mains.contains(m.capability) &&
       m.deltas.iter().any(d => !(d.op is Added)) {

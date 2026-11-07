@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>check-archived-deltas-as-history: design</title>
+<meta name="color-scheme" content="light dark">
+<style>
+:root { color-scheme: light dark; --bg: #fafafa; --fg: #18212f; --muted: #526071;
+  --line: #cbd5e1; --panel: #eef2f6; --link: #075caa; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #111827; --fg: #e5e7eb; --muted: #b0bdce;
+    --line: #475569; --panel: #1e293b; --link: #8cc8ff; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 1rem/1.6 system-ui, sans-serif; }
+main { max-width: 70rem; margin: auto; padding: clamp(1rem, 4vw, 3rem); }
+h1, h2, h3 { line-height: 1.25; overflow-wrap: anywhere; }
+h2 { margin-top: 2rem; border-bottom: 1px solid var(--line); padding-bottom: .4rem; }
+a { color: var(--link); }
+a:focus-visible { outline: 3px solid var(--link); outline-offset: 3px; }
+.meta { color: var(--muted); }
+.toc, pre, details { background: var(--panel); border: 1px solid var(--line);
+  border-radius: .4rem; padding: 1rem; }
+code { font-family: ui-monospace, monospace; overflow-wrap: anywhere; }
+pre { overflow-x: auto; } pre code { overflow-wrap: normal; }
+table { border-collapse: collapse; width: 100%; }
+th, td { border: 1px solid var(--line); padding: .6rem; text-align: left;
+  overflow-wrap: anywhere; }
+svg { max-width: 100%; height: auto; }
+@media print { main { max-width: none; padding: 0; } pre, tr { break-inside: avoid; } }
+</style>
+</head>
+<body>
+<main>
+<h1>check-archived-deltas-as-history: design</h1>
+<p class="meta">OpenSpec change check-archived-deltas-as-history | 2026-11-07 | done</p>
+
+<nav class="toc" aria-label="Contents">
+<ul>
+<li><a href="#context">Context</a></li>
+<li><a href="#decisions">Decisions</a></li>
+<li><a href="#risks">Risks and trade-offs</a></li>
+</ul>
+</nav>
+
+<h2 id="context">Context</h2>
+<p>See <a href="proposal.md">proposal.md</a>. <code>pkgs/okf/openspec/checks.mbt</code> runs <code>check_modified_unknown</code> and <code>check_unknown_capability</code> on every spec delta. <code>check_not_ears</code> in <code>ears.mbt</code> already skips a document whose <code>state</code> is <code>archived</code>.</p>
+
+<h2 id="decisions">Decisions</h2>
+<h3 id="chk-1">CHK-1. Skip archived deltas in the two archive-time rules</h3>
+<p>A helper <code>in_archived_change(doc)</code> reads the <code>state</code> metadata, as the EARS rule does, and both rules skip such a delta. Alternative: skip only REMOVED requirements of archived changes. Rejected: a MODIFIED requirement of an old archived change fails the same way after a later rename or removal; OpenSpec itself runs these checks only at archive time.</p>
+
+<h2 id="risks">Risks and trade-offs</h2>
+<table>
+<thead><tr><th>Risk</th><th>Mitigation</th></tr></thead>
+<tbody><tr><td>A wrong delta in an archived change is no longer reported.</td><td>OpenSpec refuses such a delta when it archives, and the rules still check every active change.</td></tr></tbody>
+</table>
+
+</main>
+</body>
+</html>

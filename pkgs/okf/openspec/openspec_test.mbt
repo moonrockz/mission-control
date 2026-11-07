@@ -227,6 +227,33 @@ test "the OpenSpec checks find each problem" {
 }
 
 ///|
+test "an archived change is history for the archive-time checks" {
+  let removed = "## REMOVED Requirements\n\n### Requirement: Gone\nThe system SHALL go.\n\n#### Scenario: Z\n- **WHEN** a\n- **THEN** b\n"
+  let modified = "## MODIFIED Requirements\n\n### Requirement: Missing\nThe system SHALL work.\n\n#### Scenario: Z\n- **WHEN** a\n- **THEN** b\n"
+  let archived = tree()
+    .with_entry({
+      path: @okf.StorePath(
+        "openspec/changes/archive/2026-11-07-old/specs/okf/documents/spec.md",
+      ),
+      content: Text(removed + "\n" + modified),
+    })
+    .with_entry({
+      path: @okf.StorePath(
+        "openspec/changes/archive/2026-11-07-old/specs/nothing/spec.md",
+      ),
+      content: Text(removed),
+    })
+  let rules = findings(archived)
+  assert_false(rules.contains("openspec-modified-unknown"))
+  assert_false(rules.contains("openspec-delta-unknown-capability"))
+  let active = tree().with_entry({
+    path: @okf.StorePath("openspec/changes/new/specs/okf/documents/spec.md"),
+    content: Text(removed),
+  })
+  assert_true(findings(active).contains("openspec-modified-unknown"))
+}
+
+///|
 test "import creates native concepts, an index and a log" {
   let plan = @openspec.import_openspec(
     tree(),
