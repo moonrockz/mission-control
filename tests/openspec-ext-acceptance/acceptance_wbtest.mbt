@@ -483,34 +483,48 @@ async test "setup refuses another OpenSpec version and runs no init" {
   defer @fs.rmdir(root, recursive=true)
   let repository = @extension.RepositoryPath(root)
   @host.install(repository, tool("0.1.0"))
-  let mut runs = 0
-  let refused = try {
-    @host.setup_with(repository, _ => Some("1.13.0"), (_, _, _) => {
-      runs += 1
+  for
+    found in [
+      Some("1.13.0"),
+      Some("1.14.2"),
+      Some("1.15.0"),
+      Some("1.17.0"),
+      Some("1.16"),
+      Some("1.16.1-beta.1"),
+      None,
+    ] {
+    let mut runs = 0
+    let refused = try {
+      @host.setup_with(repository, _ => found, (_, _, _) => {
+        runs += 1
+        0
+      })
+      ""
+    } catch {
+      error => "\{error}"
+    }
+    @expect.expect_all(s => {
+      s.expect(refused).to_equal("Setup requires OpenSpec 1.14.3 or 1.16.x")
+      s.expect(runs).to_equal(0)
+    })
+  }
+}
+
+///|
+async test "setup runs init for OpenSpec 1.14.3 and 1.16 patch releases" {
+  let root = @fs.tmpdir(prefix="openspec-ext-setup-supported")
+  defer @fs.rmdir(root, recursive=true)
+  let repository = @extension.RepositoryPath(root)
+  @host.install(repository, tool("0.1.0"))
+  for version in ["1.14.3", "1.16.0", "1.16.1"] {
+    let mut seen_root = ""
+    @host.setup_with(repository, _ => Some(version), (r, _, environment) => {
+      seen_root = r
+      guard environment.get("OPENSPEC_TELEMETRY") is Some("0") else { return 9 }
       0
     })
-    ""
-  } catch {
-    error => "\{error}"
+    @expect.expect(seen_root).to_equal(@fs.realpath(root))
   }
-  @expect.expect_all(s => {
-    s.expect(refused).to_equal("Setup requires OpenSpec 1.14.3")
-    s.expect(runs).to_equal(0)
-  })
-  let missing = try {
-    @host.setup_with(repository, _ => None, (_, _, _) => 0)
-    ""
-  } catch {
-    error => "\{error}"
-  }
-  @expect.expect(missing).to_equal("Setup requires OpenSpec 1.14.3")
-  let mut seen_root = ""
-  @host.setup_with(repository, _ => Some("1.14.3"), (r, _, environment) => {
-    seen_root = r
-    guard environment.get("OPENSPEC_TELEMETRY") is Some("0") else { return 9 }
-    0
-  })
-  @expect.expect(seen_root).to_equal(@fs.realpath(root))
 }
 
 ///|

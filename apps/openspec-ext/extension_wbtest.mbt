@@ -282,3 +282,31 @@ test "the snapshot level ignores the tool version and the bundle level reports i
   )
   assert_eq(problems.map(p => p.code()), ["tool-version"])
 }
+
+///|
+test "setup supports OpenSpec 1.14.3 and each 1.16 patch release" {
+  for text in ["1.14.3", "1.16.0", "1.16.1", "1.16.9", "1.16.123"] {
+    assert_eq(SupportedOpenSpec(text).version().to_string(), text)
+  }
+  for
+    text in [
+      "1.14.2", "1.14.4", "1.13.0", "1.15.0", "1.15.9", "1.17.0", "2.16.0", "0.16.0",
+      "1.016.0", "1.16", "1.16.1-beta.1", "v1.16.1", " 1.16.1", "1.16.1\n", "",
+    ] {
+    let refused = try {
+      let _ = SupportedOpenSpec(text)
+      None
+    } catch {
+      UnsupportedOpenSpec(found) => Some(found)
+    }
+    assert_eq(refused, Some(text))
+  }
+  assert_eq(supported_openspec, "1.14.3 or 1.16.x")
+  let message = try {
+    let _ = SupportedOpenSpec("1.15.0")
+    ""
+  } catch {
+    error => error.message()
+  }
+  assert_eq(message, "OpenSpec 1.15.0 is not 1.14.3 or 1.16.x")
+}

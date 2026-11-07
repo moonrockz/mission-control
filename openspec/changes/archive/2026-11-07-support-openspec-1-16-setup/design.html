@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>support-openspec-1-16-setup: design</title>
+<meta name="color-scheme" content="light dark">
+<style>
+:root { color-scheme: light dark; --bg: #fafafa; --fg: #18212f; --muted: #526071;
+  --line: #cbd5e1; --panel: #eef2f6; --link: #075caa; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #111827; --fg: #e5e7eb; --muted: #b0bdce;
+    --line: #475569; --panel: #1e293b; --link: #8cc8ff; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 1rem/1.6 system-ui, sans-serif; }
+main { max-width: 70rem; margin: auto; padding: clamp(1rem, 4vw, 3rem); }
+h1, h2, h3 { line-height: 1.25; overflow-wrap: anywhere; }
+h2 { margin-top: 2rem; border-bottom: 1px solid var(--line); padding-bottom: .4rem; }
+a { color: var(--link); }
+a:focus-visible { outline: 3px solid var(--link); outline-offset: 3px; }
+.meta { color: var(--muted); }
+.toc, pre, details { background: var(--panel); border: 1px solid var(--line);
+  border-radius: .4rem; padding: 1rem; }
+code { font-family: ui-monospace, monospace; overflow-wrap: anywhere; }
+pre { overflow-x: auto; } pre code { overflow-wrap: normal; }
+table { border-collapse: collapse; width: 100%; }
+th, td { border: 1px solid var(--line); padding: .6rem; text-align: left;
+  overflow-wrap: anywhere; }
+svg { max-width: 100%; height: auto; }
+@media print { main { max-width: none; padding: 0; } pre, tr { break-inside: avoid; } }
+</style>
+</head>
+<body>
+<main>
+<h1>support-openspec-1-16-setup: design</h1>
+<p class="meta">OpenSpec change support-openspec-1-16-setup | 2026-11-07 | archived | bead moonbase-v0j</p>
+
+<nav class="toc" aria-label="Contents">
+<ul>
+<li><a href="#context">Context</a></li>
+<li><a href="#goals">Goals and non-goals</a></li>
+<li><a href="#decisions">Decisions</a>
+  <ul>
+  <li><a href="#ver-1">VER-1. A type for a supported OpenSpec version</a></li>
+  <li><a href="#ver-2">VER-2. 1.16 as a patch series</a></li>
+  <li><a href="#ver-3">VER-3. Proof before support</a></li>
+  </ul>
+</li>
+<li><a href="#risks">Risks and trade-offs</a></li>
+<li><a href="#migration">Migration plan</a></li>
+</ul>
+</nav>
+
+<h2 id="context">Context</h2>
+<p>See <a href="proposal.md">proposal.md</a> (Why). Today <code>setup_with</code> in
+<code>apps/openspec-ext/host/install.mbt</code> compares the text of <code>openspec --version</code>
+with the constant <code>"1.14.3"</code>. A mismatch raises <code>InstallError::OpenSpecVersion</code>,
+and the tools CLI prints <code>openspec-ext: Setup requires OpenSpec 1.14.3</code> and exits with 1.
+Setup then runs <code>openspec init --tools … --profile core --no-animation</code> with an isolated
+configuration directory. Setup does not read or write the managed <code>html-design</code> files.</p>
+
+<h2 id="goals">Goals and non-goals</h2>
+<ul>
+<li>Goal: setup accepts 1.14.3 and 1.16.x, and the rule is in one typed place in the pure package.</li>
+<li>Goal: the version text is parsed one time, at the boundary where <code>openspec --version</code> returns.</li>
+<li>Non-goal: a configurable version list. Each supported version needs a proof (<a href="#ver-3">VER-3</a>), so a release of the tools CLI adds it.</li>
+<li>Non-goal: the found version in the refusal message. The message stays one fixed text, as the spec gives it.</li>
+</ul>
+
+<h2 id="decisions">Decisions</h2>
+
+<h3 id="ver-1">VER-1. A type for a supported OpenSpec version</h3>
+<p>The pure package <code>moonrockz/openspec-ext</code> gets <code>SupportedOpenSpec</code>, a struct
+with a private <code>@contracts.Version</code>. Its smart constructor parses the text with
+<code>@contracts.Version</code> (three numbers, no leading zeros) and then requires 1.14.3 or major 1
+and minor 16. A failure is the typed <code>OpenSpecVersionError::UnsupportedOpenSpec(text)</code>.
+The constant <code>supported_openspec</code> (<code>"1.14.3 or 1.16.x"</code>) gives the text for the
+message.</p>
+<pre><code class="language-moonbit">pub fn SupportedOpenSpec::SupportedOpenSpec(
+  text : String,
+) -&gt; SupportedOpenSpec raise OpenSpecVersionError</code></pre>
+<p><code>setup_with</code> keeps its signature: the injected <code>version_in</code> still returns the
+raw text or <code>None</code>, because that is the process boundary. <code>setup_with</code> parses it
+into <code>SupportedOpenSpec</code> and maps a failure or <code>None</code> to
+<code>InstallError::OpenSpecVersion</code>.</p>
+<p>Alternative: a list of exact version strings in <code>host</code>. Rejected: it keeps the rule as a
+string compare in the I/O package, and a 1.16 patch release would need a tools release.</p>
+
+<h3 id="ver-2">VER-2. 1.16 as a patch series</h3>
+<p>Setup accepts every 1.16 patch release, not only 1.16.0 and 1.16.1. finos/morphir-scala and
+finos/morphir-gleam already pin different 1.16 patches, and Renovate moves them. OpenSpec patch
+releases fix validation and do not change the schema format or the <code>init</code> options that setup
+uses. 1.14 stays exact (1.14.3), because Mission Control and the other consumers pin it and the
+earlier 1.14 patches were not tested. 1.15 is not accepted: no consumer pins it and it was not tested.</p>
+<p>Alternative: accept exact 1.16.0 and 1.16.1 only. Rejected: the next 1.16 patch would break
+<code>openspec:setup</code> for these consumers until a tools release.</p>
+
+<h3 id="ver-3">VER-3. Proof before support</h3>
+<p>The test of 2026-11-07 ran each of OpenSpec 1.14.3, 1.16.0 and 1.16.1 against a copy of
+Mission Control:</p>
+<table>
+<thead><tr><th>Check</th><th>1.14.3</th><th>1.16.0</th><th>1.16.1</th></tr></thead>
+<tbody>
+<tr><td><code>openspec schema validate html-design</code></td><td>pass</td><td>pass</td><td>pass</td></tr>
+<tr><td><code>openspec schema which html-design</code> source</td><td>project</td><td>project</td><td>project</td></tr>
+<tr><td><code>openspec templates</code> and <code>instructions</code> for the four artifacts</td><td>repository files</td><td>same output</td><td>same output</td></tr>
+<tr><td>Change made from the templates, <code>validate --strict</code></td><td>pass</td><td>pass</td><td>pass</td></tr>
+<tr><td>Isolated <code>openspec init</code> (core profile, eight tools)</td><td>no diff</td><td><code>generatedBy</code> only</td><td><code>generatedBy</code> only</td></tr>
+<tr><td><code>openspec validate --all --strict</code> after init</td><td>pass</td><td>pass</td><td>pass</td></tr>
+<tr><td><code>mission-control-tools openspec check --bundle</code> after init</td><td>pass</td><td>pass</td><td>pass</td></tr>
+</tbody>
+</table>
+<p>The automated tests inject the version text, so they do not need an OpenSpec install. Before the
+merge, the same proof runs again through the built <code>mission-control-tools openspec setup</code>
+with 1.16.0 and 1.16.1. No CI job is added.</p>
+
+<h2 id="risks">Risks and trade-offs</h2>
+<ul>
+<li>[A later 1.16 patch changes the init output or the schema rules] → <code>openspec check --bundle</code>
+and <code>openspec validate --all --strict</code> in the consumer show it; a tools patch release can then
+narrow the series.</li>
+<li>[The refusal message changes] → Scripts that match the old text break. The tools CLI is at 0.1.x,
+and the message is for people; the exit code stays 1.</li>
+</ul>
+
+<h2 id="migration">Migration plan</h2>
+<p>Release in tools-v0.1.1. Consumers on OpenSpec 1.16.x move their mise entry to 0.1.1 and run
+<code>mission-control-tools openspec install</code> and <code>mise run openspec:setup</code>. To roll back,
+pin 0.1.0 again; 1.14.3 consumers see no change.</p>
+</main>
+</body>
+</html>
