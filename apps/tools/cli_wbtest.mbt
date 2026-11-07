@@ -1,5 +1,7 @@
 ///|
 test "the version text parses and names the tools module" {
+  // The only literal version in these tests. `versions.mbtx set-tools` rewrites it; every other
+  // expectation derives from `tools_version`, so a version bump keeps the tests green.
   assert_eq(version().to_string(), tools_version)
   assert_eq(tool().module_name(), "moonrockz/mission-control-tools")
   assert_eq(tool().name(), "mission-control-tools")
@@ -85,9 +87,11 @@ test "exit codes are 0, 1 and 2" {
 
 ///|
 test "version output in text and JSON" {
-  assert_eq(version_outcome(Text).stdout, ["mission-control-tools 0.1.0"])
+  assert_eq(version_outcome(Text).stdout, [
+    "mission-control-tools \{tools_version}",
+  ])
   assert_eq(version_outcome(JsonReport).stdout, [
-    "{\"tool\":\"mission-control-tools\",\"version\":\"0.1.0\",\"bundle\":\"html-design\"}",
+    "{\"tool\":\"mission-control-tools\",\"version\":\"\{tools_version}\",\"bundle\":\"html-design\"}",
   ])
 }
 
@@ -121,7 +125,7 @@ test "check output keeps the script lines" {
     "openspec-ext: Default schema must be html-design",
   ])
   assert_eq(install_outcome().stdout, [
-    "html-design: OK (mission-control-tools 0.1.0)",
+    "html-design: OK (mission-control-tools \{tools_version})",
   ])
 }
 
@@ -139,7 +143,7 @@ test "check JSON has the tool, the level, the repository and each problem" {
   guard json
     is {
       "tool": "mission-control-tools",
-      "version": "0.1.0",
+      "version": String(reported),
       "command": "openspec check",
       "level": "bundle",
       "repository": "/repo",
@@ -156,6 +160,7 @@ test "check JSON has the tool, the level, the repository and each problem" {
     } else {
     fail("unexpected report: \{outcome.stdout[0]}")
   }
+  assert_eq(reported, tools_version)
   let ok = @json.parse(
     check_outcome("/repo", [], Snapshot, JsonReport).stdout[0],
   )
@@ -170,7 +175,9 @@ async test "execute installs and checks another directory, and reports JSON" {
   defer @async_fs.rmdir(root, recursive=true)
   let repository = @extension.RepositoryPath(root)
   let installed = execute(OpenSpec(Install, repository))
-  assert_eq(installed.stdout, ["html-design: OK (mission-control-tools 0.1.0)"])
+  assert_eq(installed.stdout, [
+    "html-design: OK (mission-control-tools \{tools_version})",
+  ])
   let checked = execute(OpenSpec(Check(Bundle, Text), repository))
   assert_eq(checked.stdout, ["html-design snapshot: OK"])
   @async_fs.write_file(

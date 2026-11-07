@@ -2,6 +2,7 @@
 import {
   "moonbitlang/async@0.22.5",
   "moonbitlang/async@0.22.5/fs",
+  "moonbitlang/async@0.22.5/process",
   "moonbitlang/core/env",
   "moonbitlang/x@0.5.5/sys",
   "moonrockz/moonspec@0.11.0",
@@ -480,11 +481,12 @@ async fn check(expected : Version?) -> Unit {
 }
 
 ///|
-/// Every file that holds the tools version, as `(path, text)`. The `moon.mod` comes first.
-async fn tools_files() -> Array[(String, String)] {
-  let files = [(tools_mod, read_text(tools_mod))]
+/// Every file that holds the tools version, as `(path, text)`. The `moon.mod` comes first. The paths
+/// are relative to `root`, the repository root.
+async fn tools_files(root~ : String = ".") -> Array[(String, String)] {
+  let files = [(tools_mod, read_text("\{root}/\{tools_mod}"))]
   for entry in tools_version_files {
-    files.push((entry.0, read_text(entry.0)))
+    files.push((entry.0, read_text("\{root}/\{entry.0}")))
   }
   files
 }
@@ -514,9 +516,9 @@ async fn check_tools(expected : Version?) -> Unit {
 }
 
 ///|
-async fn set_tools(version : Version) -> Unit {
+async fn set_tools(version : Version, root~ : String = ".") -> Unit {
   let version = "\{version}"
-  for file in tools_files() {
+  for file in tools_files(root~) {
     let (path, text) = file
     let updated = if path.has_suffix("moon.mod") {
       match set_mod_version(text, version) {
@@ -530,7 +532,7 @@ async fn set_tools(version : Version) -> Unit {
       set_source_version(path, text, version)
     }
     if updated != text {
-      @fs.write_file(path, updated)
+      @fs.write_file("\{root}/\{path}", updated)
       println("✏️  \{path}")
     }
   }
@@ -721,4 +723,58 @@ async test "versions feature" {
     ]),
   )
   |> ignore
+}
+
+///|
+/// Copy the directory `from` to `to`, without build output.
+async fn copy_tree(from : String, to : String) -> Unit {
+  @fs.mkdir(to, recursive=true, allow_exist=true)
+  for name in @fs.readdir(from) {
+    if name == "_build" || name == ".mooncakes" {
+      continue
+    }
+    let source = "\{from}/\{name}"
+    if @fs.kind(source) is Directory {
+      copy_tree(source, "\{to}/\{name}")
+    } else {
+      @fs.write_file("\{to}/\{name}", @fs.read_file(source).binary())
+    }
+  }
+}
+
+///|
+/// The release procedure runs `set-tools` and then the tests. This test does both in a copy of the
+/// workspace members that the tools CLI needs, so every version-dependent assertion of the tools
+/// tests must follow the version that `set-tools` writes.
+async test "set-tools to a new version keeps the tools tests green" {
+  let repo = ".."
+  let copy = @fs.tmpdir(prefix="tools-bump")
+  defer @fs.rmdir(copy, recursive=true)
+  for dir in ["pkgs/contracts", "apps/openspec-ext", "apps/tools"] {
+    copy_tree("\{repo}/\{dir}", "\{copy}/\{dir}")
+  }
+  @fs.mkdir("\{copy}/openspec", recursive=true)
+  @fs.write_file(
+    "\{copy}/openspec/extensions.lock.json",
+    read_text("\{repo}/openspec/extensions.lock.json"),
+  )
+  @fs.write_file(
+    "\{copy}/moon.work",
+    "members = [\n  \"./pkgs/contracts\",\n  \"./apps/openspec-ext\",\n  \"./apps/tools\",\n]\n",
+  )
+  let bumped = Version::{ major: 9, minor: 8, patch: 7 }
+  set_tools(bumped, root=copy)
+  @expect.expect(tools_mismatches(tools_files(root=copy), "9.8.7")).to_equal(
+    [],
+  )
+  let (code, out, err) = @process.collect_output(
+    "moon",
+    ["test", "apps/tools", "--target", "wasm"],
+    cwd=copy,
+  )
+  if code != 0 {
+    fail(
+      "the tools tests fail after set-tools 9.8.7:\n\{out.text()}\n\{err.text()}",
+    )
+  }
 }
