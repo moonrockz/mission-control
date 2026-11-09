@@ -1,0 +1,2 @@
+# Managed OpenSpec snapshots must retain the bytes recorded in the ownership lock.
+openspec/schemas/html-design/** text eol=lf

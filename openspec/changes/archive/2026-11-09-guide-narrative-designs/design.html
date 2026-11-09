@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>guide-narrative-designs</title>
+<meta name="color-scheme" content="light dark">
+<style>
+:root { color-scheme: light dark; --bg: #fafafa; --fg: #18212f; --muted: #526071;
+  --line: #cbd5e1; --panel: #eef2f6; --link: #075caa; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #111827; --fg: #e5e7eb; --muted: #b0bdce;
+    --line: #475569; --panel: #1e293b; --link: #8cc8ff; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 1rem/1.6 system-ui, sans-serif; }
+main { max-width: 70rem; margin: auto; padding: clamp(1rem, 4vw, 3rem); }
+h1, h2, h3 { line-height: 1.25; overflow-wrap: anywhere; }
+h2 { margin-top: 2rem; border-bottom: 1px solid var(--line); padding-bottom: .4rem; }
+a { color: var(--link); }
+a:focus-visible { outline: 3px solid var(--link); outline-offset: 3px; }
+.meta { color: var(--muted); }
+.toc, pre, details { background: var(--panel); border: 1px solid var(--line);
+  border-radius: .4rem; padding: 1rem; }
+code { font-family: ui-monospace, monospace; overflow-wrap: anywhere; }
+pre { overflow-x: auto; } pre code { overflow-wrap: normal; }
+table { border-collapse: collapse; width: 100%; }
+th, td { border: 1px solid var(--line); padding: .6rem; text-align: left;
+  overflow-wrap: anywhere; }
+svg { max-width: 100%; height: auto; }
+@media print { main { max-width: none; padding: 0; } pre, tr { break-inside: avoid; } }
+</style>
+</head>
+<body>
+<main>
+<h1>guide-narrative-designs</h1>
+<p class="meta">Approved authoring guidance | 9 November 2026 | tools release 0.1.2</p>
+<p><a href="proposal.md">Proposal</a> · <a href="tasks.md">Tasks</a></p>
+<nav class="toc" aria-label="Contents"><ul><li><a href="#context">Context</a></li><li><a href="#goals">Goals and non-goals</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#risks">Risks and trade-offs</a></li><li><a href="#migration">Migration</a></li></ul></nav>
+<h2 id="context">Context</h2>
+<p>The bundle owns authoring instructions and templates as literals in apps/openspec-ext/bundle.mbt. The source installer generates seven managed files and an ownership lock. Consumers pin a released tools binary. See the proposal for the reader's problem.</p>
+<h2 id="goals">Goals and non-goals</h2>
+<p>Help authors explain a concrete journey, a decision's reason and the alternatives considered. Preserve the required artifact structure and normative contracts. Do not add mandatory personas, diagram counts or a new prose validator.</p>
+<h2 id="decisions">Decisions</h2>
+<h3 id="story-1">STORY-1. Connect decisions through a worked journey</h3>
+<p>A developer installs Morphir without .NET and then adds an F# frontend. At that point, the reader needs to understand why an AOT host uses a separate managed process. Carry that example into the readiness check: if the frontend fails, setup must keep the previous toolchain. The journey connects the runtime boundary and activation decision to their reasons.</p>
+<p>Guide authors to introduce constraints at the relevant decision, explain the choice and alternatives, and include significant failures and recovery. Mark proposed commands and assumptions clearly. A list of isolated decisions loses this connection; a long fictional story can hide technical facts. One paragraph and one example suffice for small work.</p>
+<h3 id="bundle-1">BUNDLE-1. Ship portable guidance through the source bundle</h3>
+<p>Put the guidance in the schema instructions and matching templates, then install the bundle from source. Update the guide and publish the next tools patch release. A local edit in a consumer would fail its checksum check and would not help other projects. Durable spec examples belong under Purpose so they survive archive; requirements and scenarios retain their existing form.</p>
+<pre><code class="language-console">bundle.mbt -> source installer -> managed snapshot and lock
+           -> tools-v0.1.2 -> consumer install -> author instructions</code></pre>
+<h2 id="risks">Risks and trade-offs</h2>
+<p>Overlong stories can obscure decisions. The guidance explicitly scales detail to the change and avoids forced personas and diagram quotas. This release changes documentation content, so existing install, drift and compatibility checks verify delivery. It does not attempt to test the quality of arbitrary generated prose.</p>
+<h2 id="migration">Migration</h2>
+<p>Set only the tools version to 0.1.2, regenerate the source snapshot and run existing checks. Land a reviewed release candidate and verify its published assets. Consumers update their pin and run the released installer. Existing designs are preserved. Reverting the consumer adoption restores the previous bundle and lock.</p>
+</main>
+</body>
+</html>

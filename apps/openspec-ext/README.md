@@ -18,6 +18,17 @@ old `scripts/openspec-ext.mbtx` copy.
 The host uses `moonbitlang/async` file and process support, which has no JS or wasm-gc backend. The wasm
 build runs under `moonrun` (`moon run`), which supplies the file system host.
 
+## Narrative designs
+
+The bundle guides authors through a concrete user or system journey. A running example connects the
+stages; each decision explains the constraint, choice, reason and alternatives. Diagrams clarify flow,
+boundaries or state transitions. Significant failures and recovery belong in the journey too.
+
+Scale the narrative to the change. A short paragraph and one example can be enough. Do not force personas,
+diagram quotas or repeated motivation. Separate observed behavior, proposed interfaces and assumptions.
+Requirements and scenarios remain normative and testable; explanatory context for a new capability goes
+under Purpose so it survives archive. Required artifact sections and decision identifiers stay intact.
+
 ## Files and updates
 
 `bundle.mbt` is the source for all shared files. Each raw multiline literal is one installed file. Change it
