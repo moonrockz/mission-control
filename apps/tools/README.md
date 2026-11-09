@@ -11,11 +11,11 @@ main `mission-control` CLI.
 
 ## Install with mise
 
-Each release lists the exact entry in its release notes. For version 0.1.1:
+Each release lists the exact entry in its release notes. For version 0.1.2:
 
 ```toml
 [tools."github:moonrockz/mission-control"]
-version = "0.1.1"
+version = "0.1.2"
 version_prefix = "tools-v"
 
 [tools."github:moonrockz/mission-control".platforms]
@@ -43,7 +43,7 @@ this version yourself:
 mission-control-tools = "github:moonrockz/mission-control"
 
 [tools.mission-control-tools]
-version = "0.1.1"
+version = "0.1.2"
 version_prefix = "tools-v"
 
 [tools.mission-control-tools.platforms]

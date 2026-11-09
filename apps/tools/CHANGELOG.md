@@ -5,6 +5,18 @@ with its highlights written releases that version when it reaches main (see `app
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-11-09
+
+The shared html-design bundle now guides authors through a concrete user or system journey. A running
+example connects the constraints, choices and reasons, with diagrams and failure/recovery paths where
+they help the reader. Small changes stay brief, and requirements and scenarios remain precise.
+
+- Proposal, spec and design instructions and templates include the narrative guidance. New capability
+  examples stay under Purpose so they survive archive. Existing designs are not rewritten.
+- Managed snapshots use LF checkouts on Windows, preserving the hashes recorded by the installer.
+- Move the consumer mise pin to 0.1.2, then run `mission-control-tools openspec install` and the bundle
+  check. CLI commands, supported OpenSpec versions and lock format 2 stay the same.
+
 ## [0.1.1] - 2026-11-07
 
 `openspec setup` now works in repositories that pin OpenSpec 1.16. Before, it accepted only 1.14.3,

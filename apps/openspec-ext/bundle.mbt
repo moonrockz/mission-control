@@ -49,6 +49,10 @@ pub fn BundleFile::content(self : BundleFile) -> String {
         #|    instruction: |
         #|      Create the proposal document that establishes WHY this change is needed.
         #|
+        #|      Ground the motivation in an observable user or system problem and intended
+        #|      outcome. Use a short concrete example when it helps; keep the detailed
+        #|      journey and technical decisions in the design.
+        #|
         #|      Sections:
         #|      - **Why**: 1-2 sentences on the problem or opportunity. What problem does this solve? Why now?
         #|      - **What Changes**: Bullet list of changes. Be specific about new capabilities, modifications, or
@@ -107,6 +111,12 @@ pub fn BundleFile::content(self : BundleFile) -> String {
         #|      Create specification files that define WHAT the system should do.
         #|
         #|      A spec is a behavior contract, not an implementation plan.
+        #|
+        #|      For unfamiliar behavior, use a brief running example or diagram to help
+        #|      readers understand the contract. Keep this explanatory material separate
+        #|      from normative requirements and testable scenarios. For a new capability,
+        #|      put durable explanatory context under Purpose so it survives archive.
+        #|      Keep the prescribed delta headings and scenario structure unchanged.
         #|
         #|      Good spec content:
         #|      - Observable behavior users or downstream systems rely on
@@ -235,6 +245,20 @@ pub fn BundleFile::content(self : BundleFile) -> String {
         #|    template: design.html
         #|    instruction: |
         #|      Create the design document that explains HOW to implement the change.
+        #|
+        #|      Use a narrative organized around a concrete user or system journey.
+        #|      Carry a consistent worked example through the relevant stages. Introduce
+        #|      constraints where they affect a decision, then explain the choice, why it
+        #|      fits, and the alternatives considered. Include significant failure and
+        #|      recovery paths. Organize the narrative around the behavior being designed,
+        #|      not the author's investigation history.
+        #|
+        #|      Use diagrams and worked examples where they clarify boundaries, state
+        #|      transitions or data flow. Distinguish observed behavior, proposed interfaces
+        #|      and assumptions. Scale this to the change: one paragraph and one example
+        #|      can suffice for a small change. Do not force personas, diagram quotas,
+        #|      extra sections or repeated motivation. Preserve required sections and
+        #|      decision identifiers, and keep normative contracts precise.
         #|
         #|      Write a standalone HTML page, not Markdown. Copy the schema's design.html
         #|      template, which has inline CSS for light and dark mode:
@@ -375,7 +399,7 @@ pub fn BundleFile::content(self : BundleFile) -> String {
         #|
         #|## Why
         #|
-        #|<!-- Explain the motivation for this change. What problem does this solve? Why now? -->
+        #|<!-- Explain the observable user or system problem and intended outcome. Add a short concrete example when helpful. Why now? -->
         #|
         #|## What Changes
         #|
@@ -417,6 +441,7 @@ pub fn BundleFile::content(self : BundleFile) -> String {
         #|
         #|## Purpose
         #|<!-- New capabilities only: one or two sentences (50+ characters) on what this capability is for. Delete this section for an existing capability. -->
+        #|<!-- Optional: add a brief running example or diagram under Purpose so it survives archive. Keep explanatory material separate from the normative requirements below. -->
         #|
         #|## ADDED Requirements
         #|
@@ -488,9 +513,9 @@ pub fn BundleFile::content(self : BundleFile) -> String {
         #|<p><strong>Non-goals:</strong> what is explicitly out of scope.</p>
         #|
         #|<h2 id="decisions">Decisions</h2>
-        #|<p>Key design decisions, each with its rationale and the alternatives considered.</p>
+        #|<p>Follow a concrete user or system journey through the decisions below. Carry one worked example through the relevant stages and use diagrams where they clarify flow or boundaries. Keep this brief for small changes.</p>
         #|<h3 id="area-1">AREA-1. Decision title</h3>
-        #|<p>The choice, why, and the alternatives considered. AREA is a 2 to 5 letter slug for the decision's area.</p>
+        #|<p>At this stage of the journey, explain the constraint, the chosen approach, why it fits and the alternatives considered. Include significant failure and recovery behavior. Distinguish observed behavior from proposed interfaces and assumptions. AREA is a 2 to 5 letter slug for the decision's area.</p>
         #|
         #|<h2 id="risks">Risks and trade-offs</h2>
         #|<table>

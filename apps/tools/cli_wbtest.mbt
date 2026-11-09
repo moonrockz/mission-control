@@ -5,7 +5,7 @@ test "the version text parses and names the tools module" {
   assert_eq(version().to_string(), tools_version)
   assert_eq(tool().module_name(), "moonrockz/mission-control-tools")
   assert_eq(tool().name(), "mission-control-tools")
-  inspect(version(), content="0.1.1")
+  inspect(version(), content="0.1.2")
 }
 
 ///|
