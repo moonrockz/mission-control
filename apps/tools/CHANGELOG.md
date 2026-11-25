@@ -5,6 +5,8 @@ with its highlights written releases that version when it reaches main (see `app
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-11-25
+
 `openspec setup` now works in repositories that pin OpenSpec 2.2. Before, it accepted only 1.14.3 and
 1.16.x. OpenSpec 2.2.0 was tested with the managed `html-design` files. The managed files and
 `openspec check` do not change.
