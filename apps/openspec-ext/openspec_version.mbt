@@ -54,18 +54,27 @@ fn Support::text(self : Support) -> String {
 }
 
 ///|
-/// The OpenSpec CLI versions that setup supports. 1.14.3, 1.16.0 and 1.16.1 were tested with the
-/// managed html-design files. Later 1.16 patch releases are accepted without that test (see the
-/// archived change support-openspec-1-16-setup, decision VER-2).
-let supported : ReadOnlyArray[Support] = [Exact(1, 14, 3), Series(1, 16)]
+/// The OpenSpec CLI versions that setup supports. 1.14.3, 1.16.0, 1.16.1 and 2.2.0 were tested
+/// with the managed html-design files. Later 1.16 and 2.2 patch releases are accepted without that
+/// test (see the archived changes support-openspec-1-16-setup, decision VER-2, and
+/// support-openspec-2-2-setup).
+let supported : ReadOnlyArray[Support] = [
+  Exact(1, 14, 3),
+  Series(1, 16),
+  Series(2, 2),
+]
 
 ///|
 /// The supported versions as the messages name them, made from the support table:
-/// `1.14.3 or 1.16.x`.
-pub let supported_openspec : String = supported
-  .iter()
-  .map(Support::text)
-  .join(" or ")
+/// `1.14.3, 1.16.x or 2.2.x`.
+pub let supported_openspec : String = {
+  let texts = supported.iter().map(Support::text).collect()
+  match texts.length() {
+    0 => ""
+    1 => texts[0]
+    n => texts[:n - 1].iter().join(", ") + " or " + texts[n - 1]
+  }
+}
 
 ///|
 /// An OpenSpec CLI version that setup supports: an entry of the support table accepts it.
@@ -94,4 +103,18 @@ pub fn SupportedOpenSpec::version(
   self : SupportedOpenSpec,
 ) -> @contracts.Version {
   self.version
+}
+
+///|
+/// The arguments that make `openspec init` keep the skills in the repository. OpenSpec 2 installs
+/// skills for every project on the machine unless `--scope project` is given; OpenSpec 1 keeps
+/// them in the repository and does not know the option.
+pub fn SupportedOpenSpec::scope_arguments(
+  self : SupportedOpenSpec,
+) -> Array[String] {
+  if self.version.major() >= 2 {
+    ["--scope", "project"]
+  } else {
+    []
+  }
 }

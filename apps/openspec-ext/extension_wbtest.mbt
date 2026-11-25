@@ -284,13 +284,17 @@ test "the snapshot level ignores the tool version and the bundle level reports i
 }
 
 ///|
-test "setup supports OpenSpec 1.14.3 and each 1.16 patch release" {
-  for text in ["1.14.3", "1.16.0", "1.16.1", "1.16.9", "1.16.123"] {
+test "setup supports OpenSpec 1.14.3, each 1.16 patch release and each 2.2 patch release" {
+  for
+    text in [
+      "1.14.3", "1.16.0", "1.16.1", "1.16.9", "1.16.123", "2.2.0", "2.2.1", "2.2.17",
+    ] {
     assert_eq(SupportedOpenSpec(text).version().to_string(), text)
   }
   for
     text in [
-      "1.14.2", "1.14.4", "1.13.0", "1.15.0", "1.15.9", "1.17.0", "2.16.0", "0.16.0",
+      "1.14.2", "1.14.4", "1.13.0", "1.15.0", "1.15.9", "1.17.0", "2.0.0", "2.1.0",
+      "2.1.1", "2.3.0", "2.16.0", "3.2.0", "0.16.0",
     ] {
     let refused = try {
       let _ = SupportedOpenSpec(text)
@@ -318,12 +322,18 @@ test "setup supports OpenSpec 1.14.3 and each 1.16 patch release" {
 }
 
 ///|
+test "init keeps the skills in the project only for OpenSpec 2" {
+  for text in ["1.14.3", "1.16.0", "1.16.1"] {
+    assert_eq(SupportedOpenSpec(text).scope_arguments(), [])
+  }
+  for text in ["2.2.0", "2.2.1"] {
+    assert_eq(SupportedOpenSpec(text).scope_arguments(), ["--scope", "project"])
+  }
+}
+
+///|
 test "the supported versions text comes from the support table" {
-  assert_eq(supported_openspec, "1.14.3 or 1.16.x")
-  assert_eq(
-    supported_openspec,
-    supported.iter().map(Support::text).join(" or "),
-  )
+  assert_eq(supported_openspec, "1.14.3, 1.16.x or 2.2.x")
   let message = (text : String) => {
     try {
       let _ = SupportedOpenSpec(text)
@@ -332,6 +342,6 @@ test "the supported versions text comes from the support table" {
       error => error.message()
     }
   }
-  assert_eq(message("1.15.0"), "OpenSpec 1.15.0 is not 1.14.3 or 1.16.x")
+  assert_eq(message("1.15.0"), "OpenSpec 1.15.0 is not 1.14.3, 1.16.x or 2.2.x")
   assert_eq(message("1.16"), "OpenSpec version text is not X.Y.Z: 1.16")
 }

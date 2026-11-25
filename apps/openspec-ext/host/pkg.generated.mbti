@@ -8,6 +8,8 @@ import {
 // Values
 pub async fn check(@openspec-ext.RepositoryPath, @openspec-ext.CheckLevel) -> CheckReport
 
+pub fn init_arguments(@openspec-ext.SupportedOpenSpec) -> Array[String]
+
 pub async fn install(@openspec-ext.RepositoryPath, @openspec-ext.Tool) -> Unit
 
 pub async fn isolated_init(async (String, Map[String, String]) -> Int32) -> Unit
@@ -16,7 +18,7 @@ pub async fn setup(@openspec-ext.RepositoryPath) -> Unit
 
 pub fn setup_preferences() -> Json
 
-pub async fn setup_with(@openspec-ext.RepositoryPath, async (String) -> String?, async (String, String, Map[String, String]) -> Int32) -> Unit
+pub async fn setup_with(@openspec-ext.RepositoryPath, async (String) -> String?, async (String, String, Map[String, String], Array[String]) -> Int32) -> Unit
 
 // Errors
 pub suberror InstallError {

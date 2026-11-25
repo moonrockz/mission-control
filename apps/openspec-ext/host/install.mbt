@@ -247,13 +247,28 @@ async fn openspec_version_in(root : String) -> String? {
 }
 
 ///|
-/// Check the snapshot, require a supported OpenSpec CLI (1.14.3 or 1.16.x), and generate the
-/// core skills with isolated preferences. User preferences are untouched. Setup does not install.
+/// The `openspec init` arguments that generate the core skills in the repository for `openspec`.
+pub fn init_arguments(openspec : @extension.SupportedOpenSpec) -> Array[String] {
+  [
+    "init",
+    ..openspec.scope_arguments(),
+    "--tools",
+    setup_tools,
+    "--profile",
+    "core",
+    "--no-animation",
+  ]
+}
+
+///|
+/// Check the snapshot, require a supported OpenSpec CLI (1.14.3, 1.16.x or 2.2.x), and generate
+/// the core skills in the repository with isolated preferences. User preferences are untouched.
+/// Setup does not install.
 pub async fn setup(repository : @extension.RepositoryPath) -> Unit {
-  setup_with(repository, openspec_version_in, (root, _, environment) => {
+  setup_with(repository, openspec_version_in, (root, _, environment, arguments) => {
     @process.run(
       "openspec",
-      ["init", "--tools", setup_tools, "--profile", "core", "--no-animation"],
+      arguments,
       cwd=root,
       extra_env=environment,
       stdout=@stdio.stdout,
@@ -264,24 +279,28 @@ pub async fn setup(repository : @extension.RepositoryPath) -> Unit {
 
 ///|
 /// `setup` with its two processes passed in: `version_in(root)` gives the OpenSpec CLI version,
-/// and `run_init(root, home, environment)` runs `openspec init`. Tests pass both.
+/// and `run_init(root, home, environment, arguments)` runs `openspec` with the `init_arguments`
+/// for that version. Tests pass both.
 pub async fn setup_with(
   repository : @extension.RepositoryPath,
   version_in : async (String) -> String?,
-  run_init : async (String, String, Map[String, String]) -> Int32,
+  run_init : async (String, String, Map[String, String], Array[String]) -> Int32,
 ) -> Unit {
   let report = check(repository, Snapshot)
   guard report.problems.is_empty() else { raise CheckFailed(report.problems) }
   let root = report.root
   // Parse the version text at the process boundary; a text that is not supported stops setup.
-  let _ : @extension.SupportedOpenSpec = match version_in(root) {
+  let openspec : @extension.SupportedOpenSpec = match version_in(root) {
     Some(text) =>
       @extension.SupportedOpenSpec(text) catch {
         _ => raise OpenSpecVersion
       }
     None => raise OpenSpecVersion
   }
-  isolated_init((home, environment) => run_init(root, home, environment))
+  let arguments = init_arguments(openspec)
+  isolated_init((home, environment) => {
+    run_init(root, home, environment, arguments)
+  })
 }
 
 ///|
