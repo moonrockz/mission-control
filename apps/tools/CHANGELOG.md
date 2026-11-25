@@ -5,6 +5,21 @@ with its highlights written releases that version when it reaches main (see `app
 
 ## [Unreleased]
 
+`openspec setup` now works in repositories that pin OpenSpec 2.2. Before, it accepted only 1.14.3 and
+1.16.x. OpenSpec 2.2.0 was tested with the managed `html-design` files. The managed files and
+`openspec check` do not change.
+
+- `openspec setup` accepts OpenSpec 1.14.3, each 1.16 patch release (1.16.x) and each 2.2 patch release
+  (2.2.x). Other versions get `Setup requires OpenSpec 1.14.3, 1.16.x or 2.2.x`.
+- For OpenSpec 2, setup runs `openspec init --scope project`, so the skills stay in the repository and
+  are not installed in your home directory. For OpenSpec 1 the command does not change.
+- With OpenSpec 2.2, setup writes the OpenSpec 2 skill layout: one copy of each skill in
+  `.agents/skills/`, links in `.claude/skills/` and `.grok/skills/`, and the `openspec` router skill.
+  OpenSpec removes the copies it generated in `.cursor/`, `.gemini/`, `.github/` and `.opencode/`.
+  Commit the new layout.
+- Move the consumer mise pins to OpenSpec 2.2.0 and tools 0.1.3, then run
+  `mission-control-tools openspec install`, `mise run openspec:setup` and `mise run openspec:verify`.
+
 ## [0.1.2] - 2026-11-09
 
 The shared html-design bundle now guides authors through a concrete user or system journey. A running

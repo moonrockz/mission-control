@@ -170,6 +170,7 @@ pub struct SupportedOpenSpec {
   // private fields
 }
 pub fn SupportedOpenSpec::SupportedOpenSpec(String) -> Self raise OpenSpecVersionError
+pub fn SupportedOpenSpec::scope_arguments(Self) -> Array[String]
 pub fn SupportedOpenSpec::version(Self) -> @mission-control-contracts.Version
 
 pub struct Tool {

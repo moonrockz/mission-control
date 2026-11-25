@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>support-openspec-2-2-setup: design</title>
+<meta name="color-scheme" content="light dark">
+<style>
+:root { color-scheme: light dark; --bg: #fafafa; --fg: #18212f; --muted: #526071;
+  --line: #cbd5e1; --panel: #eef2f6; --link: #075caa; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #111827; --fg: #e5e7eb; --muted: #b0bdce;
+    --line: #475569; --panel: #1e293b; --link: #8cc8ff; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 1rem/1.6 system-ui, sans-serif; }
+main { max-width: 70rem; margin: auto; padding: clamp(1rem, 4vw, 3rem); }
+h1, h2, h3 { line-height: 1.25; overflow-wrap: anywhere; }
+h2 { margin-top: 2rem; border-bottom: 1px solid var(--line); padding-bottom: .4rem; }
+a { color: var(--link); }
+a:focus-visible { outline: 3px solid var(--link); outline-offset: 3px; }
+.meta { color: var(--muted); }
+.toc, pre, details { background: var(--panel); border: 1px solid var(--line);
+  border-radius: .4rem; padding: 1rem; }
+code { font-family: ui-monospace, monospace; overflow-wrap: anywhere; }
+pre { overflow-x: auto; } pre code { overflow-wrap: normal; }
+table { border-collapse: collapse; width: 100%; }
+th, td { border: 1px solid var(--line); padding: .6rem; text-align: left;
+  overflow-wrap: anywhere; }
+svg { max-width: 100%; height: auto; }
+@media print { main { max-width: none; padding: 0; } pre, tr { break-inside: avoid; } }
+</style>
+</head>
+<body>
+<main>
+<h1>support-openspec-2-2-setup: design</h1>
+<p class="meta">OpenSpec change support-openspec-2-2-setup | 2026-11-25 | archived | bead morphir-vwuy.1 (finos/morphir)</p>
+
+<nav class="toc" aria-label="Contents">
+<ul>
+<li><a href="#context">Context</a></li>
+<li><a href="#goals">Goals and non-goals</a></li>
+<li><a href="#decisions">Decisions</a>
+  <ul>
+  <li><a href="#ver-4">VER-4. 2.2 as a patch series</a></li>
+  <li><a href="#ver-5">VER-5. The version selects the init scope</a></li>
+  <li><a href="#ver-6">VER-6. Proof before support</a></li>
+  </ul>
+</li>
+<li><a href="#risks">Risks and trade-offs</a></li>
+<li><a href="#migration">Migration plan</a></li>
+</ul>
+</nav>
+
+<h2 id="context">Context</h2>
+<p>See <a href="proposal.md">proposal.md</a> (Why). A maintainer of finos/morphir moves the OpenSpec
+pin from 1.14.3 to 2.2.0 and runs <code>mise run openspec:setup</code>. The tools CLI parses
+<code>openspec --version</code> into <code>SupportedOpenSpec</code> (decision VER-1 of the archived change
+support-openspec-1-16-setup). The support table is <code>[Exact(1, 14, 3), Series(1, 16)]</code>, so setup
+prints <code>openspec-ext: Setup requires OpenSpec 1.14.3 or 1.16.x</code> and exits with 1.</p>
+<p>If the table accepted 2.2.0 and nothing else changed, setup would run
+<code>openspec init --tools … --profile core --no-animation</code>. OpenSpec 2.1 and later install the
+skills for every project on the machine for that command. Setup sets <code>XDG_CONFIG_HOME</code> to a
+temporary directory but keeps <code>HOME</code>, so the skills would go to the maintainer's
+<code>~/.agents/skills/</code>, and the repository would keep its old skills.</p>
+
+<h2 id="goals">Goals and non-goals</h2>
+<ul>
+<li>Goal: setup accepts 2.2.x and keeps the skills in the repository, with the rule in the typed version.</li>
+<li>Goal: setup with 1.14.3 and 1.16.x runs the same command as before.</li>
+<li>Non-goal: a choice of global skills. The repositories check in their skills, so that hosted agents and
+reviewers see the same files.</li>
+<li>Non-goal: a change to the OpenSpec 2 skill layout. Setup takes the files that <code>openspec init</code>
+writes.</li>
+</ul>
+
+<h2 id="decisions">Decisions</h2>
+
+<h3 id="ver-4">VER-4. 2.2 as a patch series</h3>
+<p>The support table becomes <code>[Exact(1, 14, 3), Series(1, 16), Series(2, 2)]</code>, and
+<code>supported_openspec</code> becomes <code>"1.14.3, 1.16.x or 2.2.x"</code>. As in VER-2, OpenSpec patch
+releases fix validation and do not change the schema format or the init options that setup uses.
+2.0.x and 2.1.x are not accepted: they were not tested, 2.1.0 needs Git and GitHub to install skills
+(OpenSpec changelog), and no consumer pins them.</p>
+<p>Alternative: accept every 2.x release. Rejected: a minor release can change <code>init</code> again, as
+2.1 did. Each minor series needs a proof (<a href="#ver-6">VER-6</a>).</p>
+
+<h3 id="ver-5">VER-5. The version selects the init scope</h3>
+<p><code>SupportedOpenSpec::scope_arguments</code> gives <code>["--scope", "project"]</code> for major version 2
+and later, and no arguments for 1. <code>host.init_arguments</code> builds the full argument list from it,
+and <code>setup_with</code> passes the list to <code>run_init</code>. The acceptance tests then check the exact
+arguments for each version, without an OpenSpec install.</p>
+<pre><code class="language-moonbit">pub fn init_arguments(openspec : @extension.SupportedOpenSpec) -&gt; Array[String]
+
+pub async fn setup_with(
+  repository : @extension.RepositoryPath,
+  version_in : async (String) -&gt; String?,
+  run_init : async (String, String, Map[String, String], Array[String]) -&gt; Int32,
+) -&gt; Unit</code></pre>
+<p>Alternative: always pass <code>--scope project</code>. Rejected: OpenSpec 1 refuses an unknown option, so
+consumers on 1.14.3 and 1.16.x would break. Alternative: set <code>HOME</code> to the temporary directory.
+Rejected: the skills would then be written to the temporary directory and removed with it.</p>
+
+<h3 id="ver-6">VER-6. Proof before support</h3>
+<p>The test of 2026-11-25 ran the built <code>mission-control-tools openspec setup</code> with OpenSpec 2.2.0
+against copies of Mission Control and finos/morphir:</p>
+<table>
+<thead><tr><th>Check</th><th>Mission Control</th><th>finos/morphir</th></tr></thead>
+<tbody>
+<tr><td><code>openspec schema validate html-design</code></td><td>pass</td><td>pass</td></tr>
+<tr><td><code>openspec schema which html-design</code> source</td><td>project</td><td>project</td></tr>
+<tr><td><code>openspec instructions</code> for the four artifacts</td><td>repository templates</td><td>not run</td></tr>
+<tr><td>Setup exit code</td><td>0</td><td>0</td></tr>
+<tr><td>Files changed by setup</td><td>agent skills only</td><td>agent skills only</td></tr>
+<tr><td>OpenSpec skills in the user's home</td><td>none</td><td>none</td></tr>
+<tr><td><code>openspec validate --all --strict</code> after setup</td><td>pass</td><td>pass</td></tr>
+<tr><td><code>mission-control-tools openspec check --bundle</code> after setup</td><td>pass</td><td>pass</td></tr>
+</tbody>
+</table>
+<p>The skill layout is the OpenSpec 2 layout: one copy of each core skill in <code>.agents/skills/</code>, a
+link to it in <code>.claude/skills/</code> and <code>.grok/skills/</code>, and the new <code>openspec</code> router
+skill with its <code>references/</code> folder. OpenSpec removes the copies that it generated in
+<code>.cursor/</code>, <code>.gemini/</code>, <code>.github/</code> and <code>.opencode/</code>, because those agents read
+<code>.agents/skills/</code>. The same setup with OpenSpec 1.14.3 against Mission Control exits with 0 and
+changes no file.</p>
+
+<h2 id="risks">Risks and trade-offs</h2>
+<ul>
+<li>[A Windows checkout without <code>core.symlinks</code> gets a text file for each link] → OpenSpec replaces
+it with a plain copy at the next <code>openspec update</code>. CI does not read the agent skills.</li>
+<li>[A later 2.2 patch changes the init output or the schema rules] → <code>openspec check --bundle</code> and
+<code>openspec validate --all --strict</code> in the consumer show it; a tools patch release can then
+narrow the series.</li>
+<li>[The refusal message changes] → Scripts that match the old text break. The exit code stays 1.</li>
+<li>[<code>setup_with</code> takes a different <code>run_init</code>] → <code>moonrockz/openspec-ext</code> is not
+published yet, and only the tests call <code>setup_with</code>.</li>
+</ul>
+
+<h2 id="migration">Migration plan</h2>
+<p>Release in tools-v0.1.3. A consumer moves its OpenSpec pin to 2.2.0 and its tools pin to 0.1.3, then
+runs <code>mission-control-tools openspec install</code>, <code>mise run openspec:setup</code> and
+<code>mise run openspec:verify</code>, and commits the new skill layout. To roll back, pin the old OpenSpec
+version and tools 0.1.2 again, and run setup.</p>
+</main>
+</body>
+</html>

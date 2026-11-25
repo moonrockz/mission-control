@@ -489,13 +489,15 @@ async test "setup refuses another OpenSpec version and runs no init" {
       Some("1.14.2"),
       Some("1.15.0"),
       Some("1.17.0"),
+      Some("2.1.1"),
+      Some("2.3.0"),
       Some("1.16"),
       Some("1.16.1-beta.1"),
       None,
     ] {
     let mut runs = 0
     let refused = try {
-      @host.setup_with(repository, _ => found, (_, _, _) => {
+      @host.setup_with(repository, _ => found, (_, _, _, _) => {
         runs += 1
         0
       })
@@ -504,26 +506,54 @@ async test "setup refuses another OpenSpec version and runs no init" {
       error => "\{error}"
     }
     @expect.expect_all(s => {
-      s.expect(refused).to_equal("Setup requires OpenSpec 1.14.3 or 1.16.x")
+      s
+      .expect(refused)
+      .to_equal("Setup requires OpenSpec 1.14.3, 1.16.x or 2.2.x")
       s.expect(runs).to_equal(0)
     })
   }
 }
 
 ///|
-async test "setup runs init for OpenSpec 1.14.3 and 1.16 patch releases" {
+async test "setup runs init for OpenSpec 1.14.3, 1.16 and 2.2 patch releases" {
   let root = @fs.tmpdir(prefix="openspec-ext-setup-supported")
   defer @fs.rmdir(root, recursive=true)
   let repository = @extension.RepositoryPath(root)
   @host.install(repository, tool("0.1.0"))
-  for version in ["1.14.3", "1.16.0", "1.16.1"] {
+  let tools = "agents,codex,claude,github-copilot,cursor,grok,gemini,opencode"
+  let in_place = [
+    "init", "--tools", tools, "--profile", "core", "--no-animation",
+  ]
+  let in_project = [
+    "init", "--scope", "project", "--tools", tools, "--profile", "core", "--no-animation",
+  ]
+  let real_root = @fs.realpath(root)
+  for
+    case in [
+      ("1.14.3", in_place),
+      ("1.16.0", in_place),
+      ("1.16.1", in_place),
+      ("2.2.0", in_project),
+      ("2.2.1", in_project),
+    ] {
+    let (version, expected) = case
     let mut seen_root = ""
-    @host.setup_with(repository, _ => Some(version), (r, _, environment) => {
+    let mut seen_arguments : Array[String] = []
+    @host.setup_with(repository, _ => Some(version), (
+      r,
+      _,
+      environment,
+      arguments,
+    ) => {
       seen_root = r
+      seen_arguments = arguments
       guard environment.get("OPENSPEC_TELEMETRY") is Some("0") else { return 9 }
       0
     })
-    @expect.expect(seen_root).to_equal(@fs.realpath(root))
+    @expect.expect_all(s => {
+      s.expect(seen_root).to_equal(real_root)
+      s.expect(seen_arguments).to_equal(expected)
+    })
   }
 }
 
@@ -542,7 +572,7 @@ async test "setup stops on a snapshot problem before it asks for the OpenSpec ve
         asked = true
         Some("1.14.3")
       },
-      (_, _, _) => 0,
+      (_, _, _, _) => 0,
     )
     ""
   } catch {
