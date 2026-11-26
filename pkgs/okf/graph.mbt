@@ -1,5 +1,6 @@
 ///|
 /// The target of a link after resolution and existence checks.
+#derive(Eq, Debug)
 pub(all) enum Target {
   /// A document of a loaded bundle.
   Doc(DocKey)
@@ -12,17 +13,18 @@ pub(all) enum Target {
   /// A target that does not exist. The path is `None` when the destination
   /// cannot name a store file.
   Broken(StorePath?)
-} derive(Eq, Debug)
+}
 
 ///|
 /// One link of the graph.
+#derive(Eq, Debug)
 pub(all) struct Edge {
   from : DocKey
   link : Link
   target : Target
   /// True when the target path leaves the bundle of the source document.
   escapes : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn Edge::is_broken(self : Edge) -> Bool {

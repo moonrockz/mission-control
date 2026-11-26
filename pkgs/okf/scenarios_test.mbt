@@ -423,7 +423,7 @@ test "validation reports invalid profiles and unknown config rule names" {
     conflicts[0]
     is ProfileInvalid(
       profile="dangling",
-      error=UnknownRegister(register="decision")
+      error=UnknownRegister(register="decision"),
     ),
   )
 }

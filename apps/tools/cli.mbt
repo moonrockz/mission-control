@@ -1,10 +1,11 @@
 ///|
 /// The exit code of the tools CLI: 0 for success, 1 for a failure and 2 for a usage error.
+#derive(Eq)
 pub(all) enum ExitCode {
   Success
   Failure
   Usage
-} derive(Eq)
+}
 
 ///|
 #deprecated
@@ -22,10 +23,11 @@ pub fn ExitCode::to_int(self : ExitCode) -> Int32 {
 
 ///|
 /// Text for a person, or one JSON object for an agent or CI.
+#derive(Eq)
 pub(all) enum Format {
   Text
   JsonReport
-} derive(Eq)
+}
 
 ///|
 #deprecated
@@ -33,12 +35,13 @@ pub extend Format with Eq::{equal, not_equal}
 
 ///|
 /// What `openspec check` compares a repository with.
+#derive(Eq)
 pub(all) enum CheckScope {
   /// The lock digests only. The result does not depend on the tool version.
   Snapshot
   /// The lock digests, the tool version in the lock and the bundle in this binary.
   Bundle
-} derive(Eq)
+}
 
 ///|
 #deprecated

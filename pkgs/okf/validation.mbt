@@ -1,10 +1,11 @@
 ///|
 /// The severity of a finding. Errors sort first.
+#derive(Eq, Compare, Hash, Debug)
 pub(all) enum Severity {
   Error
   Warning
   Info
-} derive(Eq, Compare, Hash, Debug)
+}
 
 ///|
 /// The short form of a severity, as reports print it: `error`, `warn` or `info`.
@@ -18,6 +19,7 @@ pub fn Severity::to_string(self : Severity) -> String {
 
 ///|
 /// What a finding is about.
+#derive(Eq, Debug)
 pub(all) enum FindingSubject {
   /// A document of a bundle.
   InBundle(BundleLabel, BundlePath)
@@ -27,7 +29,7 @@ pub(all) enum FindingSubject {
   ProfileSubject(String)
   /// The validation config.
   ConfigSubject
-} derive(Eq, Debug)
+}
 
 ///|
 /// The bundle label of the subject, when it is a document of a bundle.
@@ -61,6 +63,7 @@ fn FindingSubject::sort_key(self : FindingSubject) -> (Int32, String, String) {
 
 ///|
 /// One validation result. Only `validate` makes findings.
+#derive(Eq, Debug)
 pub struct Finding {
   severity : Severity
   rule : RuleName
@@ -68,16 +71,17 @@ pub struct Finding {
   line : Int32?
   message : String
   hint : String?
-} derive(Eq, Debug)
+}
 
 ///|
 /// What a rule reports. Validation adds the rule name and the severity.
+#derive(Eq, Debug)
 pub struct Issue {
   subject : FindingSubject
   line : Int32?
   message : String
   hint : String?
-} derive(Eq, Debug)
+}
 
 ///|
 /// An issue about one document of a bundle.

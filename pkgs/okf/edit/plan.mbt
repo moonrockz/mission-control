@@ -1,12 +1,13 @@
 ///|
 /// One change of an edit plan.
+#derive(Eq, Debug)
 pub(all) enum FileChange {
   Create(path~ : @okf.StorePath, text~ : String)
   /// A new binary file, such as an image asset.
   CreateBinary(path~ : @okf.StorePath, bytes~ : Bytes)
   Update(path~ : @okf.StorePath, before~ : String, after~ : String)
   Delete(path~ : @okf.StorePath)
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn FileChange::path(self : FileChange) -> @okf.StorePath {

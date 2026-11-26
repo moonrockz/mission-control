@@ -1,10 +1,11 @@
 ///|
 /// The result of normalizing a path: the segments that remain after `.` and
 /// `..` are removed, and how many `..` segments climbed above the start.
+#derive(Eq, Debug)
 pub(all) struct Normalized {
   segments : ReadOnlyArray[String]
   above : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// Splits `text` on `/` and `\`, removes empty and `.` segments, and applies
@@ -30,19 +31,21 @@ pub fn normalize_path(text : String) -> Normalized {
 
 ///|
 /// Raised for a path that cannot name a file inside a root.
+#derive(Eq, Debug)
 pub(all) suberror PathError {
   /// The path climbs above its root, for example `../outside.md`.
   EscapesRoot(String)
   /// The path names no file, for example `""` or `/`.
   EmptyPath(String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// A file path relative to the root of a document set or store. It never
 /// escapes that root. Its text form uses `/` and has no leading `/`.
+#derive(Eq, Hash, Debug)
 struct StorePath {
   segments : ReadOnlyArray[String]
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 /// Validates `text` as a store path. `/` and `\` are both separators.
@@ -109,9 +112,10 @@ pub fn StorePath::to_string(self : StorePath) -> String {
 ///|
 /// A path relative to a bundle root. Its text form starts with `/`, as OKF
 /// bundle-rooted links do, for example `/tables/customers.md`.
+#derive(Eq, Hash, Debug)
 struct BundlePath {
   segments : ReadOnlyArray[String]
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 /// Validates `text` as a bundle path. A leading `/` is optional.
@@ -195,9 +199,10 @@ pub fn BundlePath::to_string(self : BundlePath) -> String {
 ///|
 /// The OKF Concept ID: the bundle path without its leading `/` and without the
 /// `.md` extension, for example `tables/customers`.
+#derive(Eq, Hash, Debug)
 struct ConceptId {
   text : String
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 /// Validates `text` as a Concept ID. A trailing `.md` and a leading `/` are

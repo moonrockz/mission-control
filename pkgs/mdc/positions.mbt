@@ -1,5 +1,6 @@
 ///|
 /// The level of a Markdown heading, from 1 (`#`) to 6 (`######`).
+#derive(Eq, Compare, Hash, Debug)
 pub(all) enum HeadingLevel {
   H1
   H2
@@ -7,7 +8,7 @@ pub(all) enum HeadingLevel {
   H4
   H5
   H6
-} derive(Eq, Compare, Hash, Debug)
+}
 
 ///|
 /// The level as a number from 1 to 6.
@@ -43,6 +44,7 @@ pub impl Show for HeadingLevel with fn output(self, logger) {
 
 ///|
 /// Raised when a position or a range breaks its rules.
+#derive(Eq, Debug)
 pub(all) suberror PositionError {
   /// A line or a column is less than 1.
   InvalidPosition(line~ : Int32, column~ : Int32)
@@ -50,15 +52,16 @@ pub(all) suberror PositionError {
   StartAfterEnd(start~ : TextPosition, end~ : TextPosition)
   /// An offset is negative, or the start offset is after the end offset.
   InvalidOffsets(start~ : Int32, end~ : Int32)
-} derive(Eq, Debug)
+}
 
 ///|
 /// A position in a text: a line and a column, both counted from 1. Columns
 /// count UTF-16 code units. Positions order by line, then by column.
+#derive(Eq, Compare, Hash, Debug)
 struct TextPosition {
   line : Int32
   column : Int32
-} derive(Eq, Compare, Hash, Debug)
+}
 
 ///|
 /// Checks a position. Raises `InvalidPosition` when the line or the column is
@@ -99,12 +102,13 @@ pub impl Show for TextPosition with fn output(self, logger) {
 /// and the UTF-16 offsets of its start and of its end. The end offset is the
 /// offset after the last character. An empty range starts and ends at the
 /// same position and offset.
+#derive(Eq, Hash, Debug)
 struct SourceRange {
   start : TextPosition
   end : TextPosition
   start_offset : Int32
   end_offset : Int32
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 /// Checks a range. Raises `StartAfterEnd` when `start` is after `end`, and
@@ -151,6 +155,7 @@ pub fn SourceRange::end_offset(self : SourceRange) -> Int32 {
 
 ///|
 /// Raised when a frontmatter payload is not one YAML mapping.
+#derive(Eq, Debug)
 pub(all) suberror FrontmatterError {
   /// The payload is not valid YAML. The position is relative to the payload.
   InvalidYaml(at~ : TextPosition, message~ : String)
@@ -158,7 +163,7 @@ pub(all) suberror FrontmatterError {
   NotAMapping
   /// The payload holds more than one YAML document.
   MultipleDocuments(count~ : Int32)
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend HeadingLevel with Eq::{not_equal, equal}

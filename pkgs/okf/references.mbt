@@ -1,5 +1,6 @@
 ///|
 /// What a typed reference points to.
+#derive(Eq, Debug)
 pub(all) enum RefTarget {
   ToDocument(DocKey)
   ToRecord(register~ : RegisterName, record~ : DocKey)
@@ -11,17 +12,18 @@ pub(all) enum RefTarget {
   Malformed(String)
   /// The value has the right form, but names nothing that exists.
   Unresolved(String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// One typed reference of a document. The key is the frontmatter key, such as
 /// `sources`.
+#derive(Eq, Debug)
 pub struct TypedReference {
   key : FieldKey
   value : String
   line : Int32?
   target : RefTarget
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn TypedReference::is_resolved(self : TypedReference) -> Bool {
@@ -33,6 +35,7 @@ pub fn TypedReference::is_resolved(self : TypedReference) -> Bool {
 
 ///|
 /// Raised when a document reference does not parse.
+#derive(Eq, Debug)
 pub(all) suberror DocRefError {
   /// The text is neither `/path.md` nor `bundle-label:/path.md`.
   NotADocRef(String)
@@ -40,15 +43,16 @@ pub(all) suberror DocRefError {
   BadLabel(text~ : String, error~ : ValueError)
   /// The path part escapes the bundle or names no file.
   BadPath(text~ : String, error~ : PathError)
-} derive(Eq, Debug)
+}
 
 ///|
 /// A document reference: `bundle-label:/path.md`, or `/path.md` in the same
 /// bundle. It holds a valid label and a valid bundle path.
+#derive(Eq, Debug)
 struct DocRef {
   bundle : BundleLabel?
   path : BundlePath
-} derive(Eq, Debug)
+}
 
 ///|
 /// Parses `bundle-label:/path.md` or `/path.md`.
@@ -189,6 +193,7 @@ pub fn typed_references(
 
 ///|
 /// Raised when a GitHub URL is not a commit-pinned file URL.
+#derive(Eq, Debug)
 pub(all) suberror GitHubUrlError {
   /// The URL does not start with `https://github.com/`.
   NotGitHub(String)
@@ -197,13 +202,14 @@ pub(all) suberror GitHubUrlError {
   MissingPart(String)
   /// The commit is not 7 to 40 hexadecimal characters.
   NotACommit(String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// A commit SHA of 7 to 40 hexadecimal characters.
+#derive(Eq, Hash, Debug)
 struct CommitSha {
   text : String
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 fn is_hex(text : String) -> Bool {
@@ -230,12 +236,13 @@ pub fn CommitSha::to_string(self : CommitSha) -> String {
 
 ///|
 /// The parts of a commit-pinned GitHub URL. No part is empty.
+#derive(Eq, Debug)
 struct GitHubSource {
   org : String
   repo : String
   commit : CommitSha
   path : String
-} derive(Eq, Debug)
+}
 
 ///|
 /// Parses `https://github.com/<org>/<repo>/blob/<commit>/<path>` (or `tree`).

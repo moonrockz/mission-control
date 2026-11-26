@@ -1,24 +1,27 @@
 ///|
 /// One entry of an `index.md` section: `* [Title](link) - description`.
+#derive(Eq, Debug)
 pub(all) struct IndexEntry {
   text : String
   destination : String
   description : String?
   /// The file line, counted from 1.
   line : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// The heading of an index section.
+#derive(Eq, Debug)
 pub(all) enum IndexHeading {
   /// The lines before the first heading.
   Preamble
   /// A heading line with its text and level.
   Titled(String, @mdc.HeadingLevel)
-} derive(Eq, Debug)
+}
 
 ///|
 /// One section of an `index.md`: a heading with its entries and other lines.
+#derive(Eq, Debug)
 pub struct IndexSection {
   heading : IndexHeading
   /// The file line of the heading, or of the body start for the preamble.
@@ -26,7 +29,7 @@ pub struct IndexSection {
   entries : ReadOnlyArray[IndexEntry]
   /// Lines that are not entries, such as prose.
   text : ReadOnlyArray[String]
-} derive(Eq, Debug)
+}
 
 ///|
 /// The heading text, or `None` for the preamble.
@@ -39,9 +42,10 @@ pub fn IndexSection::title(self : IndexSection) -> String? {
 
 ///|
 /// The parsed body of an `index.md` (OKF v0.2, section 8).
+#derive(Eq, Debug)
 pub struct IndexModel {
   sections : ReadOnlyArray[IndexSection]
-} derive(Eq, Debug)
+}
 
 ///|
 /// Every entry, in document order.
@@ -447,6 +451,7 @@ pub extend IndexModel with @debug.Debug::{to_repr}
 
 ///|
 /// A section of a generated index.
+#derive(Eq, Debug)
 pub(all) enum IndexGroup {
   /// The concepts of one type.
   Typed(ConceptType)
@@ -454,7 +459,7 @@ pub(all) enum IndexGroup {
   Untyped
   /// The subdirectories.
   Subdirectories
-} derive(Eq, Debug)
+}
 
 ///|
 /// The heading text of the section.

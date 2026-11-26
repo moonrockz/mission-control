@@ -21,10 +21,11 @@ fn label(node : @mdc.Node) -> String {
 }
 
 ///|
+#derive(Eq, Debug)
 priv enum Event {
   Enter(String)
   Leave(String)
-} derive(Eq, Debug)
+}
 
 ///|
 fn decide(policy : Array[UInt32], index : Int32) -> @mdc.Control {

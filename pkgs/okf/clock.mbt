@@ -7,9 +7,10 @@ pub(open) trait Clock {
 
 ///|
 /// A clock that always gives the same instant, for tests and reproducible runs.
+#derive(Eq, Debug)
 pub(all) struct FixedClock {
   instant : Instant
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn FixedClock::FixedClock(instant : Instant) -> FixedClock {

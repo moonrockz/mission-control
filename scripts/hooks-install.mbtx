@@ -1,11 +1,10 @@
 ----
 import {
-  "moonbitlang/async@0.22.5",
-  "moonbitlang/async@0.22.5/fs",
-  "moonbitlang/async@0.22.5/process",
-  "moonbitlang/async@0.22.5/stdio",
+  "moonbitlang/async@0.22.10",
+  "moonbitlang/async@0.22.10/fs",
+  "moonbitlang/async@0.22.10/process",
+  "moonbitlang/async@0.22.10/stdio",
   "moonbitlang/core/env",
-  "moonbitlang/x@0.5.5/sys",
 }
 ----
 
@@ -34,7 +33,7 @@ enum ExitCode {
 ///|
 /// Ends the script with this exit code.
 fn ExitCode::exit(self : ExitCode) -> Unit {
-  @sys.exit(
+  @env.exit(
     match self {
       Failure => 1
       Usage => 2
@@ -82,19 +81,27 @@ async fn main {
     println(
       "❌ core.hooksPath is set to \{hooks_path.text().trim()}, so another tool owns the git hooks.",
     )
-    println("   lefthook would not be used. To move this checkout to lefthook on purpose, run:")
-    println("   git config --local --unset core.hooksPath && mise run hooks:install")
+    println(
+      "   lefthook would not be used. To move this checkout to lefthook on purpose, run:",
+    )
+    println(
+      "   git config --local --unset core.hooksPath && mise run hooks:install",
+    )
     ExitCode::Failure.exit()
   }
   // Only now, with git on its default hooks directory, retire the old hook.
   let hook = "\{out.text().trim()}/pre-push"
   if @fs.exists(hook) && @fs.read_file(hook).text().contains(legacy_marker) {
-    println("🧹 Removing the pre-push hook from the retired setup:hooks task...")
+    println(
+      "🧹 Removing the pre-push hook from the retired setup:hooks task...",
+    )
     @fs.remove(hook)
   }
   let code = @process.run(
-    "lefthook", ["install"],
-    stdout=@stdio.stdout, stderr=@stdio.stderr,
+    "lefthook",
+    ["install"],
+    stdout=@stdio.stdout,
+    stderr=@stdio.stderr,
   )
   if code != 0 {
     println("❌ lefthook install failed. Run 'mise install' to get lefthook.")

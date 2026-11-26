@@ -1,10 +1,11 @@
 ///|
 /// The line ending that a text uses most, so that edits can reuse it.
+#derive(Eq, Debug)
 pub(all) enum LineEnding {
   Lf
   CrLf
   Cr
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn LineEnding::text(self : LineEnding) -> String {
@@ -32,6 +33,7 @@ pub fn detect_line_ending(text : String) -> LineEnding {
 ///|
 /// One line of a text, with its start offset and its line ending. Only
 /// `split_lines` makes lines.
+#derive(Eq, Debug)
 pub struct Line {
   /// The line text without its line ending.
   text : String
@@ -39,7 +41,7 @@ pub struct Line {
   start : Int32
   /// The line ending after the line. A last line can have none.
   ending : LineEnding?
-} derive(Eq, Debug)
+}
 
 ///|
 /// The line ending text after the line: `"\n"`, `"\r\n"`, `"\r"`, or `""`
@@ -88,6 +90,7 @@ pub fn split_lines(text : String) -> Array[Line] {
 
 ///|
 /// How a document starts.
+#derive(Eq, Debug)
 pub(all) enum HeaderShape {
   /// The document does not start with a `---` line.
   NoBlock
@@ -95,10 +98,11 @@ pub(all) enum HeaderShape {
   Block(raw~ : String)
   /// A `---` first line with no closing line.
   Unterminated
-} derive(Eq, Debug)
+}
 
 ///|
 /// The split of a document into its frontmatter block and its Markdown body.
+#derive(Eq, Debug)
 pub(all) struct Header {
   shape : HeaderShape
   /// The text after the closing delimiter line, or the whole text without a block.
@@ -109,7 +113,7 @@ pub(all) struct Header {
   body_line : Int32
   /// True when the text starts with a byte order mark.
   bom : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 fn is_delimiter(line : String, marks : Array[String]) -> Bool {
@@ -157,6 +161,7 @@ pub fn split_header(text : String) -> Header {
 
 ///|
 /// One top-level key of a frontmatter block, located in the raw block text.
+#derive(Eq, Debug)
 pub(all) struct RawEntry {
   key : String
   /// The text after `key:` on the key line, without a trailing comment.
@@ -165,7 +170,7 @@ pub(all) struct RawEntry {
   first_line : Int32
   /// The 0-based index of the last line that belongs to the value.
   last_line : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 fn is_continuation(line : String) -> Bool {

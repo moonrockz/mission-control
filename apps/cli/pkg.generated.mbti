@@ -11,12 +11,14 @@ pub fn run(Array[String]) -> Run
 pub fn usage() -> String
 
 // Errors
+#derive(Eq, @debug.Debug)
 pub(all) suberror ExitCodeError {
   InvalidExitCode(Int32)
-} derive(Eq, @debug.Debug)
+}
 
 // Types and methods
-type ExitCode derive(Eq, Hash, @debug.Debug)
+#derive(Eq, Hash, @debug.Debug)
+type ExitCode
 pub fn ExitCode::ExitCode(Int32) -> Self raise ExitCodeError
 pub fn ExitCode::failure() -> Self
 pub fn ExitCode::success() -> Self

@@ -1,5 +1,6 @@
 ///|
 /// What an OpenSpec path holds.
+#derive(Eq, Debug)
 pub(all) enum Kind {
   SpecFile(capability~ : CapabilityPath)
   ProposalFile(change~ : ChangeName, state~ : ChangeState)
@@ -8,9 +9,9 @@ pub(all) enum Kind {
   DeltaFile(
     change~ : ChangeName,
     state~ : ChangeState,
-    capability~ : CapabilityPath
+    capability~ : CapabilityPath,
   )
-} derive(Eq, Debug)
+}
 
 ///|
 /// Classifies a path inside an `openspec/` tree. A path whose capability or

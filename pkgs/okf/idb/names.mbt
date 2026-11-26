@@ -1,17 +1,19 @@
 ///|
 /// Raised when an IndexedDB name breaks its rule.
+#derive(Eq, Debug)
 pub(all) suberror IdbNameError {
   /// The database name is empty.
   EmptyDatabaseName
   /// The object store name is empty.
   EmptyObjectStoreName
-} derive(Eq, Debug)
+}
 
 ///|
 /// The name of an IndexedDB database: a text that is not empty.
+#derive(Eq, Hash, Debug)
 struct DatabaseName {
   text : String
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 pub fn DatabaseName::DatabaseName(
@@ -41,9 +43,10 @@ pub impl Show for DatabaseName with fn output(self, logger) {
 
 ///|
 /// The name of an IndexedDB object store: a text that is not empty.
+#derive(Eq, Hash, Debug)
 struct ObjectStoreName {
   text : String
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 pub fn ObjectStoreName::ObjectStoreName(
@@ -73,16 +76,18 @@ pub impl Show for ObjectStoreName with fn output(self, logger) {
 
 ///|
 /// Raised when a quota breaks its rule.
+#derive(Eq, Debug)
 pub(all) suberror QuotaError {
   /// The quota is negative.
   NegativeQuota(Int32)
-} derive(Eq, Debug)
+}
 
 ///|
 /// A storage quota in bytes: zero or more.
+#derive(Eq, Hash, Debug)
 struct QuotaBytes {
   bytes : Int32
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 pub fn QuotaBytes::QuotaBytes(bytes : Int32) -> QuotaBytes raise QuotaError {

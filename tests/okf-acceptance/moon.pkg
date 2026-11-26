@@ -3,7 +3,7 @@ import {
   "moonbitlang/x/fs",
   "moonrockz/okf",
   "moonrockz/okf/edit",
-  "moonrockz/moonspec",
+  "moonrockz/moonspec/async" @moonspec,
   "moonrockz/expect",
   "moonbitlang/core/json",
   "moonbitlang/core/debug",

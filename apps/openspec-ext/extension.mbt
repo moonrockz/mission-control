@@ -35,10 +35,11 @@ pub fn RepositoryPath::text(self : RepositoryPath) -> String {
 
 ///|
 /// The tool that writes and checks a lock: a module name `owner/name` and its version.
+#derive(Eq)
 pub struct Tool {
   priv module_name : String
   priv version : @contracts.Version
-} derive(Eq)
+}
 
 ///|
 #deprecated
@@ -88,9 +89,10 @@ pub fn Tool::version(self : Tool) -> @contracts.Version {
 
 ///|
 /// A canonical lower-case SHA-256 digest, parsed once at the lock boundary.
+#derive(Eq)
 pub struct FileDigest {
   priv value : String
-} derive(Eq)
+}
 
 ///|
 #deprecated
@@ -124,10 +126,11 @@ pub fn digest(text : String) -> FileDigest {
 /// A file that an earlier bundle managed and the current bundle does not. Install deletes it
 /// when it still has the digest of the previous lock. Only these fixed paths are ever deleted,
 /// whatever other paths a lock names.
+#derive(Eq)
 pub(all) enum RetiredFile {
   Script
   ScriptFeature
-} derive(Eq)
+}
 
 ///|
 #deprecated
@@ -414,11 +417,12 @@ pub fn retirement(
 
 ///|
 /// An input of a check: the lock, the project config, or a managed file.
+#derive(Eq)
 pub enum Input {
   LockFile
   Config
   Managed(BundleFile)
-} derive(Eq)
+}
 
 ///|
 #deprecated

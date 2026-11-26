@@ -1,10 +1,11 @@
 ///|
 /// Generation choices for a small bundle. Every value it renders is valid by
 /// construction, and shrinking the choices keeps it valid.
+#derive(Debug)
 priv struct BundleCase {
   choices : ReadOnlyArray[UInt32]
   crlf : Bool
-} derive(Debug)
+}
 
 ///|
 impl @quickcheck.Arbitrary for BundleCase with fn arbitrary(size, state) {

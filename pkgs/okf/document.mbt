@@ -1,5 +1,6 @@
 ///|
 /// The kind of an OKF document, from its file name (OKF v0.2, section 3.1).
+#derive(Eq, Debug)
 pub(all) enum DocKind {
   /// The `index.md` at the bundle root.
   RootIndex
@@ -9,7 +10,7 @@ pub(all) enum DocKind {
   Log
   /// Any other Markdown file.
   Concept
-} derive(Eq, Debug)
+}
 
 ///|
 /// The kind of the Markdown file at `path`.

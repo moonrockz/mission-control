@@ -3,8 +3,8 @@ name = "moonrockz/mdc"
 version = "0.1.0"
 
 import {
-  "moonbit-community/cmark@0.4.12",
-  "moonbit-community/yaml@0.0.7",
+  "moonbit-community/cmark@0.4.17",
+  "moonbit-community/yaml@0.0.10",
 }
 
 description = "Markdown with YAML frontmatter and traversal APIs for Mission Control"

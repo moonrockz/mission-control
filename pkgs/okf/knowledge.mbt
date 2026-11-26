@@ -1,10 +1,11 @@
 ///|
 /// The result of a lookup that can match nothing, one item or several items.
+#derive(Eq, Debug)
 pub(all) enum Lookup[T] {
   NotFound
   Found(T)
   Ambiguous(ReadOnlyArray[T])
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn[T] Lookup::to_option(self : Lookup[T]) -> T? {
@@ -207,10 +208,11 @@ pub fn Knowledge::document_at(
 
 ///|
 /// A document key: the bundle label and the bundle path.
+#derive(Eq, Hash, Debug)
 pub(all) struct DocKey {
   bundle : BundleLabel
   path : BundlePath
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 pub impl Compare for DocKey with fn compare(self, other) {

@@ -1,9 +1,10 @@
 ///|
 /// The result of a text edit: the new text, and whether it differs from the input.
+#derive(Eq, Debug)
 pub(all) struct EditResult {
   text : String
   changed : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 fn result_of(before : String, after : String) -> EditResult {
@@ -12,6 +13,7 @@ fn result_of(before : String, after : String) -> EditResult {
 
 ///|
 /// Raised when an edit cannot apply to a text.
+#derive(Eq, Debug)
 pub(all) suberror EditError {
   /// The text has an unterminated frontmatter block.
   BrokenFrontmatter
@@ -27,7 +29,7 @@ pub(all) suberror EditError {
   LineBreak(field~ : String, text~ : String)
   /// A text that must not be blank, such as a section name, is blank.
   BlankText(field~ : String, text~ : String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// Checks that a text has no line break, so that it cannot add lines to a

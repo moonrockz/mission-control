@@ -1,5 +1,6 @@
 ///|
 /// The kind of a link destination.
+#derive(Eq, Debug)
 pub(all) enum LinkKind {
   /// A URI with a scheme, such as `https:` or `mailto:`.
   External
@@ -9,27 +10,29 @@ pub(all) enum LinkKind {
   BundleRooted
   /// A path relative to a base directory.
   Relative
-} derive(Eq, Debug)
+}
 
 ///|
 /// Where a link comes from. Only this package makes body links, from lines
 /// that it reads, so a body line is always a real file line.
+#derive(Eq, Debug)
 pub enum LinkOrigin {
   /// A link in a document body, with its file line, counted from 1.
   Body(line~ : Int32)
   /// A link that a profile adds.
   FromProfile
-} derive(Eq, Debug)
+}
 
 ///|
 /// One link. Its kind always follows from its destination, so only this
 /// package and `Link::Link` make links. `Link::Link` makes profile links.
+#derive(Eq, Debug)
 pub struct Link {
   text : String
   destination : String
   origin : LinkOrigin
   kind : LinkKind
-} derive(Eq, Debug)
+}
 
 ///|
 /// The file line of a body link.
@@ -239,10 +242,11 @@ pub fn Document::links(self : Document) -> Array[Link] {
 
 ///|
 /// A footnote reference in a body, such as `[^ga4-schema]`.
+#derive(Eq, Debug)
 pub(all) struct Citation {
   label : String
   line : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// The footnote references of a body, in order.
@@ -280,6 +284,7 @@ pub fn Document::cited_sources(self : Document) -> Array[(Citation, Source?)] {
 
 ///|
 /// Where a link points, before existence checks.
+#derive(Eq, Debug)
 pub(all) enum Resolution {
   /// A URI with a scheme.
   ExternalUri(String)
@@ -289,7 +294,7 @@ pub(all) enum Resolution {
   StoreTarget(path~ : StorePath, fragment~ : String?, escapes~ : Bool)
   /// The destination is empty or leaves the store root.
   Unresolvable(String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// Resolves a link of `doc` in `bundle` with the link base of `options`.

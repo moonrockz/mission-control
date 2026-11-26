@@ -1,11 +1,12 @@
 ///|
 /// A frontmatter key that a profile defines.
+#derive(Eq, Debug)
 pub(all) struct KeyDefinition {
   key : FieldKey
   /// The allowed values, or empty for any value.
   values : ReadOnlyArray[String]
   description : String
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn KeyDefinition::KeyDefinition(
@@ -120,6 +121,7 @@ pub extend KeyDefinition with @debug.Debug::{to_repr}
 
 ///|
 /// Two profiles that define the same key or register differently.
+#derive(Eq, Debug)
 pub(all) enum ProfileConflict {
   /// Two profiles define the frontmatter key with different values.
   KeyConflict(key~ : FieldKey, first~ : String, second~ : String)
@@ -127,11 +129,11 @@ pub(all) enum ProfileConflict {
   RegisterConflict(
     concept_type~ : ConceptType,
     first~ : String,
-    second~ : String
+    second~ : String,
   )
   /// A profile definition breaks a rule of a value type.
   ProfileInvalid(profile~ : String, error~ : ValueError)
-} derive(Eq, Debug)
+}
 
 ///|
 fn same_register(a : Register, b : Register) -> Bool {

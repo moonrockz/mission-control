@@ -1,5 +1,6 @@
 ///|
 /// A filter on concepts. Text comparison ignores letter case.
+#derive(Eq, Debug)
 pub(all) enum Filter {
   /// `type` equals the concept type.
   TypeIs(ConceptType)
@@ -11,7 +12,7 @@ pub(all) enum Filter {
   InBundle(BundleLabel)
   /// The frontmatter key has the value (as text, or as one item of a list).
   FieldIs(FieldKey, String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// True when the concept matches the filter.
@@ -48,6 +49,7 @@ pub fn Knowledge::filter(
 
 ///|
 /// What a facet counts.
+#derive(Eq, Debug)
 pub(all) enum Facet {
   /// The concept types.
   Type
@@ -59,7 +61,7 @@ pub(all) enum Facet {
   Bundles
   /// The values of a frontmatter key.
   Field(FieldKey)
-} derive(Eq, Debug)
+}
 
 ///|
 /// The values of a facet over the concepts that match `filters`, with their
@@ -105,23 +107,25 @@ pub fn Knowledge::facet(
 
 ///|
 /// A field that a text scan can match.
+#derive(Eq, Debug)
 pub(all) enum ScanField {
   TitleField
   DescriptionField
   TypeField
   TagsField
   PathField
-} derive(Eq, Debug)
+}
 
 ///|
 /// One result of a text scan.
+#derive(Eq, Debug)
 pub struct ScanHit {
   key : DocKey
   /// The fields that contain the text.
   fields : ReadOnlyArray[ScanField]
   /// The body lines that contain the text, as (file line, line text).
   lines : ReadOnlyArray[(Int32, String)]
-} derive(Eq, Debug)
+}
 
 ///|
 /// Finds the concepts whose title, description, type, tags or path contain
@@ -219,12 +223,13 @@ pub fn Knowledge::find_document(
 
 ///|
 /// One heading of a document outline.
+#derive(Eq, Debug)
 pub struct Heading {
   level : @mdc.HeadingLevel
   text : String
   slug : String
   line : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// A GitHub-style slug: lower case, letters, digits, `-` and `_`, with
@@ -287,11 +292,12 @@ pub fn Document::outline(self : Document) -> Array[Heading] {
 
 ///|
 /// One fenced or indented code block.
+#derive(Eq, Debug)
 pub(all) struct CodeBlock {
   language : String?
   code : String
   line : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// The code blocks of the body, in order.
@@ -332,12 +338,13 @@ pub fn Document::code_blocks(self : Document) -> Array[CodeBlock] {
 
 ///|
 /// The content under one heading, up to the next heading of the same or a higher level.
+#derive(Eq, Debug)
 pub struct SectionContent {
   heading : Heading
   /// The raw Markdown lines of the section, without the heading line.
   text : String
   code_blocks : ReadOnlyArray[CodeBlock]
-} derive(Eq, Debug)
+}
 
 ///|
 /// The section under the first heading with this text, ignoring letter case.

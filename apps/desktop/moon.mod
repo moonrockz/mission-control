@@ -16,5 +16,5 @@ keywords = [ "mission-control", "proton", "desktop", "ui" ]
 
 import {
   "moonrockz/mission-control-contracts@0.1.0",
-  "moonbit-community/proton_contract@0.4.0",
+  "moonbit-community/proton_contract@0.10.1",
 }

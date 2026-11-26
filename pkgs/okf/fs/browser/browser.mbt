@@ -318,6 +318,7 @@ pub async fn pick_directory() -> DirectoryHandle raise @provider.StoreError {
 
 ///|
 /// How a browser store writes files.
+#derive(Eq, Debug)
 pub(all) enum WriteMethod {
   /// `createWritable()` when the browser has it, and the worker otherwise.
   Auto
@@ -326,7 +327,7 @@ pub(all) enum WriteMethod {
   /// A dedicated worker that writes with `createSyncAccessHandle()`. It needs
   /// a store on the origin private file system.
   SyncAccessWorker
-} derive(Eq, Debug)
+}
 
 ///|
 /// The directory that the worker opens for a store.

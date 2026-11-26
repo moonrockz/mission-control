@@ -5,9 +5,9 @@ version = "0.1.0"
 import {
   "moonrockz/mdc@0.1.0",
   "moonrockz/ears@0.1.0",
-  "moonbit-community/cmark@0.4.12",
-  "moonbit-community/yaml@0.0.7",
-  "moonbitlang/async@0.22.5",
+  "moonbit-community/cmark@0.4.17",
+  "moonbit-community/yaml@0.0.10",
+  "moonbitlang/async@0.22.10",
 }
 
 description = "Read, query, validate and edit Open Knowledge Format (OKF) bundles"

@@ -2,7 +2,7 @@ import {
   "moonbitlang/async",
   "moonrockz/ears",
   "moonrockz/mdc",
-  "moonrockz/moonspec",
+  "moonrockz/moonspec/async" @moonspec,
   "moonrockz/expect",
   "moonbitlang/core/debug",
 } for "wbtest"

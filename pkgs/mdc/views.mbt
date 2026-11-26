@@ -1,23 +1,26 @@
 ///|
 /// An immutable view into a document's Markdown block. Only the parser and
 /// traversal create views; no mutable cmark value can be supplied by callers.
+#derive(Debug)
 struct BlockView {
   block : @cmark.Block
-} derive(Debug)
+}
 
 ///|
 pub extend BlockView with @debug.Debug::{to_repr}
 
 ///|
+#derive(Debug)
 struct InlineView {
   inline : @cmark.Inline
-} derive(Debug)
+}
 
 ///|
 pub extend InlineView with @debug.Debug::{to_repr}
 
 ///|
 /// Block alternatives contain only immutable inspection data.
+#derive(Eq, Debug)
 pub enum BlockKind {
   BlankLine
   BlockQuote
@@ -32,7 +35,7 @@ pub enum BlockKind {
   ExtMathBlock
   ExtTable
   ExtFootnoteDefinition
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend BlockKind with Eq::{equal, not_equal}
@@ -41,6 +44,7 @@ pub extend BlockKind with Eq::{equal, not_equal}
 pub extend BlockKind with @debug.Debug::{to_repr}
 
 ///|
+#derive(Eq, Debug)
 pub enum InlineKind {
   Autolink
   Break
@@ -54,7 +58,7 @@ pub enum InlineKind {
   Text(text~ : String)
   ExtStrikethrough
   ExtMathSpan(tex~ : String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend InlineKind with Eq::{equal, not_equal}

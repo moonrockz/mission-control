@@ -1,10 +1,11 @@
 ///|
 /// A ranked search request.
+#derive(Eq, Debug)
 pub struct SearchRequest {
   query : String
   filters : ReadOnlyArray[Filter]
   limit : SearchLimit
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn SearchRequest::SearchRequest(
@@ -17,11 +18,12 @@ pub fn SearchRequest::SearchRequest(
 
 ///|
 /// One ranked search result.
+#derive(Eq, Debug)
 pub(all) struct SearchHit {
   key : DocKey
   score : Double
   snippet : String
-} derive(Eq, Debug)
+}
 
 ///|
 /// Splits text into lower-case terms of letters and digits.

@@ -1,16 +1,18 @@
 ///|
 /// The content of one file in a document set.
+#derive(Eq, Debug)
 pub(all) enum FileContent {
   Text(String)
   Bytes(Bytes)
-} derive(Eq, Debug)
+}
 
 ///|
 /// One file of a document set: its store path and its content.
+#derive(Eq, Debug)
 pub(all) struct FileEntry {
   path : StorePath
   content : FileContent
-} derive(Eq, Debug)
+}
 
 ///|
 /// An immutable set of files in memory, sorted by path. It is the input of the

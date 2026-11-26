@@ -1,10 +1,11 @@
 ///|
 /// A YAML payload and its parsed mapping. Construct with `Frontmatter::Frontmatter`.
 /// The representation is hidden so text and parsed YAML always agree.
+#derive(Debug)
 struct Frontmatter {
   raw : String
   value : @yaml.Yaml
-} derive(Debug)
+}
 
 ///|
 pub extend Frontmatter with @debug.Debug::{to_repr}

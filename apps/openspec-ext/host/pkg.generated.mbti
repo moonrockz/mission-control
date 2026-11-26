@@ -2,6 +2,7 @@
 package "moonrockz/openspec-ext/host"
 
 import {
+  "moonbitlang/core/json",
   "moonrockz/openspec-ext",
 }
 
@@ -16,7 +17,7 @@ pub async fn isolated_init(async (String, Map[String, String]) -> Int32) -> Unit
 
 pub async fn setup(@openspec-ext.RepositoryPath) -> Unit
 
-pub fn setup_preferences() -> Json
+pub fn setup_preferences() -> @json.Json
 
 pub async fn setup_with(@openspec-ext.RepositoryPath, async (String) -> String?, async (String, String, Map[String, String], Array[String]) -> Int32) -> Unit
 

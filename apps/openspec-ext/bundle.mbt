@@ -1,6 +1,7 @@
 ///|
 /// Fixed paths for files owned by the portable html-design bundle.
 /// The set is closed: a consumer's task scripts and tests are not part of it.
+#derive(Eq)
 pub(all) enum BundleFile {
   Schema
   Proposal
@@ -9,7 +10,7 @@ pub(all) enum BundleFile {
   Tasks
   Notice
   License
-} derive(Eq)
+}
 
 ///|
 #deprecated
