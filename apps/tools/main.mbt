@@ -48,6 +48,6 @@ async fn main {
     eprintln(line)
   }
   if outcome.exit_code != Success {
-    @sys.exit(outcome.exit_code.to_int())
+    @env.exit(outcome.exit_code.to_int())
   }
 }

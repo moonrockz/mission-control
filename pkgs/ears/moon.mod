@@ -4,8 +4,8 @@ version = "0.1.0"
 
 import {
   "moonrockz/mdc@0.1.0",
-  "moonbit-community/yaml@0.0.7",
-  "moonrockz/expect@0.6.1",
+  "moonbit-community/yaml@0.0.10",
+  "moonrockz/expect@0.7.0",
 }
 
 description = "Immutable EARS requirements and extraction from text and MDC documents"

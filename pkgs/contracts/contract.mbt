@@ -1,16 +1,18 @@
 ///|
 /// A command the CLI, the web UI and the desktop shell all understand.
+#derive(Eq, Debug)
 pub(all) enum Command {
   Help
   Version
-} derive(Eq, Debug)
+}
 
 ///|
 /// Raised when a text names no command.
+#derive(Eq, Debug)
 pub(all) suberror CommandError {
   /// The text is not the name or an alias of a command.
   UnknownCommand(String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// Every command, in the order that the help text lists them.
@@ -52,19 +54,21 @@ pub fn Command::description(self : Command) -> String {
 
 ///|
 /// Raised when a text is not a version.
+#derive(Eq, Debug)
 pub(all) suberror VersionError {
   /// The text is not three non-negative integers joined with `.`, without
   /// leading zeros.
   InvalidVersion(String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// A version such as `0.0.2`: three non-negative integer parts.
+#derive(Eq, Compare, Hash, Debug)
 struct Version {
   major : Int32
   minor : Int32
   patch : Int32
-} derive(Eq, Compare, Hash, Debug)
+}
 
 ///|
 /// Parses `X.Y.Z`. Each part is a non-negative integer with at most nine

@@ -1,9 +1,10 @@
 ///|
 /// A path of child indices, relative to the cursor's starting node.
 /// Paths describe MDC traversal children, including layout nodes.
+#derive(Eq, Debug)
 struct NodePath {
   indices : ReadOnlyArray[Int32]
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend NodePath with Eq::{equal, not_equal}

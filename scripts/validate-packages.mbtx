@@ -1,8 +1,7 @@
 ----
 import {
-  "moonbitlang/async@0.22.5",
-  "moonbitlang/async@0.22.5/fs",
-  "moonbitlang/x@0.5.5/sys",
+  "moonbitlang/async@0.22.10",
+  "moonbitlang/async@0.22.10/fs",
   "moonbitlang/core/env",
 }
 ----
@@ -33,7 +32,7 @@ enum ExitCode {
 ///|
 /// Ends the script with this exit code.
 fn ExitCode::exit(self : ExitCode) -> Unit {
-  @sys.exit(
+  @env.exit(
     match self {
       Failure => 1
       Usage => 2

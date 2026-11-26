@@ -1,12 +1,13 @@
 ///|
 /// Raised by the conversions between `openspec/` trees and native bundles.
+#derive(Eq, Debug)
 pub(all) suberror ConvertError {
   /// A concept has a `capability`, `change` or `requirement` value that is not
   /// a valid name, so no safe path can be built from it.
   BadName(NameError)
   /// An index or log edit cannot apply.
   EditFailed(@edit.EditError)
-} derive(Eq, Debug)
+}
 
 ///|
 /// The keys that import writes, in order, from the derived metadata.

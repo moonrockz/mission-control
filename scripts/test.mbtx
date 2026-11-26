@@ -1,11 +1,10 @@
 ----
 import {
-  "moonbitlang/async@0.22.5",
-  "moonbitlang/async@0.22.5/process",
-  "moonbitlang/async@0.22.5/fs",
-  "moonbitlang/async@0.22.5/stdio",
+  "moonbitlang/async@0.22.10",
+  "moonbitlang/async@0.22.10/process",
+  "moonbitlang/async@0.22.10/fs",
+  "moonbitlang/async@0.22.10/stdio",
   "moonbitlang/core/env",
-  "moonbitlang/x@0.5.5/sys",
 }
 ----
 
@@ -32,7 +31,7 @@ enum ExitCode {
 ///|
 /// Ends the script with this exit code.
 fn ExitCode::exit(self : ExitCode) -> Unit {
-  @sys.exit(
+  @env.exit(
     match self {
       Failure => 1
       Usage => 2
@@ -48,12 +47,13 @@ let usage : String = "Usage: mise run test [-- <target>...], where a target is w
 /// A MoonBit backend that the build and the tests target. `scripts/build.mbtx`
 /// and `scripts/test.mbtx` keep the same copy, and `scripts/test-scripts.mbtx`
 /// checks that the copies are equal.
+#derive(Eq, Debug)
 enum Backend {
   Wasm
   WasmGc
   Js
   Native
-} derive(Eq, Debug)
+}
 
 ///|
 /// Every backend, in the order that a run with no target uses.

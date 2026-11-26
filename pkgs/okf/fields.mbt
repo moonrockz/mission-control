@@ -1,8 +1,9 @@
 ///|
 /// A point in time, in milliseconds since 1970-01-01T00:00:00Z.
+#derive(Eq, Compare, Hash, Debug)
 struct Instant {
   millis : Int64
-} derive(Eq, Compare, Hash, Debug)
+}
 
 ///|
 pub fn Instant::of_millis(millis : Int64) -> Instant {
@@ -148,20 +149,22 @@ pub fn Instant::parse_date(text : String) -> Instant? {
 
 ///|
 /// The lifecycle status of a concept (OKF v0.2, section 5.4).
+#derive(Eq, Debug)
 pub(all) enum Status {
   Draft
   Stable
   Deprecated
   /// Any other status word.
   Unknown(UnknownStatus)
-} derive(Eq, Debug)
+}
 
 ///|
 /// A status word that is not draft, stable or deprecated. Only `Status::parse`
 /// makes one, so it is never blank and never a known word.
+#derive(Eq, Hash, Debug)
 struct UnknownStatus {
   text : String
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 pub fn UnknownStatus::to_string(self : UnknownStatus) -> String {
@@ -200,6 +203,7 @@ pub fn Status::to_string(self : Status) -> String {
 ///|
 /// Who produced or verified knowledge (OKF v0.2, section 7). Only
 /// `Actor::parse` makes one, so no case holds an empty ID.
+#derive(Eq, Debug)
 pub enum Actor {
   /// An automated producer, `<producer>/<version>`.
   Producer(name~ : String, version~ : String)
@@ -209,7 +213,7 @@ pub enum Actor {
   Process(String)
   /// Any other form that is not blank, kept as written.
   Other(String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// Parses an actor. A blank text names no actor.
@@ -238,6 +242,7 @@ pub fn Actor::is_human(self : Actor) -> Bool {
 
 ///|
 /// One `sources` entry (OKF v0.2, section 5.1).
+#derive(Eq, Debug)
 pub(all) struct Source {
   resource : String
   id : String?
@@ -246,45 +251,50 @@ pub(all) struct Source {
   usage_count : Int32?
   last_modified : String?
   usage_window : UsageWindow?
-} derive(Eq, Debug)
+}
 
 ///|
 /// A `usage_window` mapping with its raw `from` and `to` texts.
+#derive(Eq, Debug)
 pub(all) struct UsageWindow {
   from : String?
   to : String?
-} derive(Eq, Debug)
+}
 
 ///|
 /// A `{by, at}` record, as in `generated` and `verified`. An attribution
 /// without an actor, such as a v0.1 `timestamp`, has no `by`.
+#derive(Eq, Debug)
 pub(all) struct Attribution {
   by : Actor?
   at : String?
-} derive(Eq, Debug)
+}
 
 ///|
 /// The derived trust tier (OKF v0.2, section 5.3).
+#derive(Eq, Compare, Debug)
 pub(all) enum TrustTier {
   Unverified
   MachineConfirmed
   HumanReviewed
-} derive(Eq, Compare, Debug)
+}
 
 ///|
 /// One `parameters` entry of an Attested Computation.
+#derive(Eq, Debug)
 pub(all) struct Parameter {
   name : String
   type_ : String?
   required : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 /// The `executor` of an Attested Computation.
+#derive(Eq, Debug)
 pub(all) struct Executor {
   resource : String?
   receipt : ReadOnlyArray[String]
-} derive(Eq, Debug)
+}
 
 ///|
 fn usage_window_of(fields : Fields) -> UsageWindow {

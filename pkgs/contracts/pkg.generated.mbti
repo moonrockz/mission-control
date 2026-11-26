@@ -11,25 +11,28 @@ pub let commands : ReadOnlyArray[Command]
 pub fn version() -> Version
 
 // Errors
+#derive(Eq, @debug.Debug)
 pub(all) suberror CommandError {
   UnknownCommand(String)
-} derive(Eq, @debug.Debug)
+}
 pub fn CommandError::equal(Self, Self) -> Bool
 pub fn CommandError::not_equal(Self, Self) -> Bool
 pub fn CommandError::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) suberror VersionError {
   InvalidVersion(String)
-} derive(Eq, @debug.Debug)
+}
 pub fn VersionError::equal(Self, Self) -> Bool
 pub fn VersionError::not_equal(Self, Self) -> Bool
 pub fn VersionError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) enum Command {
   Help
   Version
-} derive(Eq, @debug.Debug)
+}
 pub fn Command::Command(String) -> Self raise CommandError
 pub fn Command::description(Self) -> String
 pub fn Command::equal(Self, Self) -> Bool
@@ -38,7 +41,8 @@ pub fn Command::not_equal(Self, Self) -> Bool
 pub fn Command::proton_id(Self) -> String
 pub fn Command::to_repr(Self) -> @debug.Repr
 
-type Version derive(Compare, Eq, Hash, @debug.Debug)
+#derive(Compare, Eq, Hash, @debug.Debug)
+type Version
 pub fn Version::Version(String) -> Self raise VersionError
 pub fn Version::compare(Self, Self) -> Int32
 pub fn Version::current() -> Self

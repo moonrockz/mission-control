@@ -16,5 +16,4 @@ keywords = [ "mission-control", "command-line", "moonx" ]
 
 import {
   "moonrockz/mission-control-contracts@0.1.0",
-  "moonbitlang/x@0.5.5",
 }

@@ -72,7 +72,7 @@ impl @yaml.MarkedEventReceiver for LineReader with fn on_event(
 /// does not reach has no lines.
 fn key_lines(text : String) -> Map[String, KeyLines] {
   let reader = { lines: {}, depth: 0, key: None, in_list: false, }
-  @yaml.Parser::new(text).load(reader, false) catch {
+  @yaml.Parser(text).load(reader, false) catch {
     _ => ()
   }
   reader.lines

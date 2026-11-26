@@ -1,6 +1,7 @@
 ///|
 /// Raised when a text breaks the rules of an OKF value type. Each case names
 /// the input.
+#derive(Eq, Debug)
 pub(all) suberror ValueError {
   /// A bundle label with an empty segment, or a segment with `/`, `:` or white space.
   InvalidLabel(String)
@@ -27,7 +28,7 @@ pub(all) suberror ValueError {
   UnknownState(register~ : String, state~ : String)
   /// A reference field that names a register that no profile defines.
   UnknownRegister(register~ : String)
-} derive(Eq, Debug)
+}
 
 ///|
 fn is_space_char(c : Char) -> Bool {
@@ -38,9 +39,10 @@ fn is_space_char(c : Char) -> Bool {
 /// A bundle label: its group segments and its name, joined with `/`, such as
 /// `morphir/ir` or `my notes`. No segment is empty or holds `/`, `:` or a
 /// line break.
+#derive(Eq, Hash, Debug)
 struct BundleLabel {
   segments : ReadOnlyArray[String]
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 /// Parses a bundle label such as `morphir/ir`, or a bare name such as `ir`.
@@ -115,9 +117,10 @@ pub impl Compare for BundleLabel with fn compare(self, other) {
 ///|
 /// A directory below the root of a document set or store, given as segments.
 /// The root itself has no segments. No segment is empty, `.` or `..`.
+#derive(Eq, Hash, Debug)
 struct StoreDir {
   segments : ReadOnlyArray[String]
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 /// Parses a directory path such as `kb/bundles`. `/` and `\` are both
@@ -221,9 +224,10 @@ pub impl Compare for StoreDir with fn compare(self, other) {
 ///|
 /// One name in a directory listing: one segment that is not empty, `.` or
 /// `..` and has no `/` or `\`.
+#derive(Eq, Hash, Debug)
 struct EntryName {
   text : String
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 pub fn EntryName::EntryName(text : String) -> EntryName raise PathError {
@@ -249,9 +253,10 @@ pub impl Show for EntryName with fn output(self, logger) {
 ///|
 /// An OKF concept `type`, such as `Decision Record`. It is not blank, and two
 /// concept types are equal when they differ only in letter case.
+#derive(Debug)
 struct ConceptType {
   text : String
-} derive(Debug)
+}
 
 ///|
 pub fn ConceptType::ConceptType(text : String) -> ConceptType raise ValueError {
@@ -300,9 +305,10 @@ fn is_key_char(c : Char, first : Bool) -> Bool {
 /// A plain frontmatter key that edits can write and profiles can define: a
 /// letter, a digit or `_` first, then letters, digits, `_`, `.` or `-`. Reading
 /// metadata takes any YAML key as text.
+#derive(Eq, Hash, Debug)
 struct FieldKey {
   text : String
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 pub fn FieldKey::FieldKey(text : String) -> FieldKey raise ValueError {
@@ -336,9 +342,10 @@ pub impl Compare for FieldKey with fn compare(self, other) {
 
 ///|
 /// The name of a validation rule, in lower-case kebab case, such as `link-broken`.
+#derive(Eq, Hash, Debug)
 struct RuleName {
   text : String
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 pub fn RuleName::RuleName(text : String) -> RuleName raise ValueError {
@@ -376,9 +383,10 @@ pub let max_search_limit : Int32 = 1000
 
 ///|
 /// The number of results that a search request may give: 1 to `max_search_limit`.
+#derive(Eq, Hash, Debug)
 struct SearchLimit {
   value : Int32
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 pub fn SearchLimit::SearchLimit(value : Int32) -> SearchLimit raise ValueError {
@@ -401,10 +409,11 @@ pub fn SearchLimit::to_int(self : SearchLimit) -> Int32 {
 
 ///|
 /// A calendar date in the form `YYYY-MM-DD`, as log headings and log edits use.
+#derive(Eq, Hash, Debug)
 struct LogDate {
   text : String
   instant : Instant
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 /// Parses a real calendar date written exactly as `YYYY-MM-DD`.
@@ -446,12 +455,13 @@ pub impl Compare for LogDate with fn compare(self, other) {
 ///|
 /// The OKF version that a bundle declares in its root index. Only
 /// `OkfVersion::parse` makes values, so `Unknown` never holds a known version.
+#derive(Eq, Debug)
 pub enum OkfVersion {
   V01
   V02
   /// A version that this library does not know, with its text.
   Unknown(String)
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn OkfVersion::parse(text : String) -> OkfVersion {

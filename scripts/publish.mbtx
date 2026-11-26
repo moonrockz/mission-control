@@ -1,12 +1,11 @@
 ----
 import {
-  "moonbitlang/async@0.22.5",
-  "moonbitlang/async@0.22.5/fs",
-  "moonbitlang/async@0.22.5/process",
-  "moonbitlang/x@0.5.5/sys",
+  "moonbitlang/async@0.22.10",
+  "moonbitlang/async@0.22.10/fs",
+  "moonbitlang/async@0.22.10/process",
   "moonbitlang/core/env",
-  "moonrockz/moonspec@0.11.0",
-  "moonrockz/expect@0.6.1",
+  "moonrockz/moonspec@0.12.0/async" @moonspec,
+  "moonrockz/expect@0.7.0",
 }
 ----
 
@@ -34,7 +33,7 @@ enum ExitCode {
 ///|
 /// Ends the script with this exit code.
 fn ExitCode::exit(self : ExitCode) -> Unit {
-  @sys.exit(
+  @env.exit(
     match self {
       Failure => 1
       Usage => 2
@@ -59,12 +58,13 @@ let publish_list : Array[(String, String)] = [
 
 ///|
 /// What a `moon publish` run means.
+#derive(Eq, Debug)
 enum Outcome {
   Published
   AlreadyPublished
   Transient
   Failed
-} derive(Eq, Debug)
+}
 
 ///|
 fn classify(exit_code : Int32, output : String) -> Outcome {
@@ -84,9 +84,9 @@ fn classify(exit_code : Int32, output : String) -> Outcome {
 /// failure classes below, and a scenario of `features/publish.feature` checks
 /// that the copies are equal.
 fn has_word(text : String, word : String) -> Bool {
-  let is_word_char = (c : UInt16) => (c >= 48 && c <= 57) ||
-    (c >= 65 && c <= 90) ||
-    (c >= 97 && c <= 122)
+  let is_word_char = (c : UInt16) => {
+    (c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122)
+  }
   let n = word.length()
   let mut from = 0
   while from + n <= text.length() {
@@ -95,7 +95,8 @@ fn has_word(text : String, word : String) -> Bool {
       Some(i) => {
         let at = from + i
         let before_ok = at == 0 || !is_word_char(text.code_unit_at(at - 1))
-        let after_ok = at + n == text.length() || !is_word_char(text.code_unit_at(at + n))
+        let after_ok = at + n == text.length() ||
+          !is_word_char(text.code_unit_at(at + n))
         if before_ok && after_ok {
           return true
         }
@@ -108,6 +109,7 @@ fn has_word(text : String, word : String) -> Bool {
 
 ///|
 /// How a failed command failed.
+#derive(Eq, Debug)
 enum Failure {
   /// The version already exists on mooncakes.io.
   AlreadyPublished
@@ -119,7 +121,7 @@ enum Failure {
   Transient
   /// Any other failure.
   Other
-} derive(Eq, Debug)
+}
 
 ///|
 /// The words of each failure class, in the order that `classify_failure`
@@ -157,11 +159,10 @@ fn classify_failure(output : String) -> Failure {
 ///|
 /// A failed network command is worth a retry only when the failure is
 /// transient.
-fn is_transient(exit_code : Int, output : String) -> Bool {
+fn is_transient(exit_code : Int32, output : String) -> Bool {
   exit_code != 0 && classify_failure(output) is Transient
 }
 // End of the failures.
-
 
 ///|
 fn fail_with(message : String) -> Unit {
@@ -245,7 +246,10 @@ async fn publish_all() -> Unit {
 /// Retry that exact availability error with the same bounded network backoff.
 async fn verify_cli(version : String) -> Unit {
   let (code, out) = with_retry("verify published CLI", () => {
-    output_in(".", "moonx", ["moonrockz/mission-control-cli@\{version}", "version"])
+    output_in(".", "moonx", [
+      "moonrockz/mission-control-cli@\{version}",
+      "version",
+    ])
   })
   if code != 0 {
     fail_with("the published CLI could not run: \{out.trim()}")
@@ -284,7 +288,7 @@ fn PublishWorld::new(
   own_source : String,
   release_source : String,
 ) -> PublishWorld {
-  { moon_work, own_source, release_source, exit_code: 0, output: "" }
+  { moon_work, own_source, release_source, exit_code: 0, output: "", }
 }
 
 ///|
@@ -402,7 +406,7 @@ async test "publish feature" {
   let release_source = @fs.read_file("release.mbtx").text()
   @moonspec.run_or_fail(
     () => PublishWorld::new(moon_work, own_source, release_source),
-    @moonspec.RunOptions::new([
+    @moonspec.RunOptions::RunOptions([
       @moonspec.FeatureSource::File("features/publish.feature"),
     ]),
   )

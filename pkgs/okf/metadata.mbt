@@ -1,18 +1,20 @@
 ///|
 /// A frontmatter value. Every scalar is kept as text, so dates, timestamps and
 /// numbers stay as written. Typed accessors read the text when asked.
+#derive(Eq, Debug)
 pub(all) enum Value {
   Scalar(String)
   Seq(ReadOnlyArray[Value])
   Mapping(Fields)
   Null
-} derive(Eq, Debug)
+}
 
 ///|
 /// An ordered set of keys and values. Keys keep their source order.
+#derive(Eq, Debug)
 struct Fields {
   entries : ReadOnlyArray[(String, Value)]
-} derive(Eq, Debug)
+}
 
 ///|
 /// Builds fields from ordered pairs. A later pair for the same key replaces
@@ -159,22 +161,24 @@ fn value_of_yaml(yaml : @yaml.Yaml) -> Value {
 ///|
 /// The parsed frontmatter of a document: the raw block, its ordered fields and
 /// the location of each top-level key.
+#derive(Eq, Debug)
 struct Metadata {
   raw : String
   fields : Fields
   entries : ReadOnlyArray[RawEntry]
   /// The file line of the first line of the raw block.
   first_line : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// Raised when a frontmatter block cannot be read.
+#derive(Eq, Debug)
 pub(all) suberror MetadataError {
   /// The YAML is invalid, or not a mapping. The line and column are file positions.
   InvalidYaml(line~ : Int32, column~ : Int32, message~ : String)
   /// The block has no closing delimiter line.
   Unterminated
-} derive(Eq, Debug)
+}
 
 ///|
 /// Parses a raw frontmatter block. `first_line` is the file line of the first

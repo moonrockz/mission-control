@@ -4,16 +4,18 @@
 /// covers the paragraph, including markup. Markdown paths resolve against the
 /// retained MDC document. Ranges are absent if that document was parsed with
 /// `locs=false`.
+#derive(Eq, Debug)
 pub enum Origin {
   Text(@mdc.SourceRange)
   Markdown(path~ : @mdc.NodePath, span~ : @mdc.SourceRange?)
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 struct Occurrence {
   requirement : Requirement
   origin : Origin
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn Occurrence::requirement(self : Occurrence) -> Requirement {
@@ -26,11 +28,12 @@ pub fn Occurrence::origin(self : Occurrence) -> Origin {
 }
 
 ///|
+#derive(Eq, Debug)
 struct Diagnostic {
   text : String
   error : ParseError
   origin : Origin
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn Diagnostic::text(self : Diagnostic) -> String {
@@ -50,12 +53,13 @@ pub fn Diagnostic::origin(self : Diagnostic) -> Origin {
 ///|
 /// A requirement block: the requirements and diagnostics under one Markdown
 /// requirement heading. The name is the rest of the heading text, free text.
+#derive(Debug)
 struct RequirementBlock {
   name : String
   heading : @mdc.SourceRange?
   requirements : ReadOnlyArray[Occurrence]
   diagnostics : ReadOnlyArray[Diagnostic]
-} derive(Debug)
+}
 
 ///|
 pub fn RequirementBlock::name(self : RequirementBlock) -> String {
@@ -87,12 +91,13 @@ pub fn RequirementBlock::diagnostics(
 /// The Markdown constructor retains its MDC document and frontmatter. With
 /// Markdown requirement headings, `blocks()` gives the blocks, and
 /// `requirements()` and `diagnostics()` list the contents of every block.
+#derive(Debug)
 struct Specification {
   requirements : ReadOnlyArray[Occurrence]
   diagnostics : ReadOnlyArray[Diagnostic]
   blocks : ReadOnlyArray[RequirementBlock]
   document : @mdc.Document?
-} derive(Debug)
+}
 
 ///|
 pub fn Specification::requirements(

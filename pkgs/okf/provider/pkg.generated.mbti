@@ -21,72 +21,80 @@ pub async fn load_set(&DocumentStore, under? : @okf.StoreDir, assets? : Bool) ->
 pub fn safe_path(String) -> @okf.StorePath raise StoreError
 
 // Errors
+#derive(Eq, @debug.Debug)
 pub(all) suberror IndexError {
   NotBuilt
   InvalidMetadata(schema_version~ : Int32, document_count~ : Int32)
   IndexFailed(String)
-} derive(Eq, @debug.Debug)
+}
 pub fn IndexError::equal(Self, Self) -> Bool
 pub fn IndexError::not_equal(Self, Self) -> Bool
 pub fn IndexError::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) suberror RootError {
   BlankRoot(String)
-} derive(Eq, @debug.Debug)
+}
 pub fn RootError::equal(Self, Self) -> Bool
 pub fn RootError::not_equal(Self, Self) -> Bool
 pub fn RootError::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) suberror StoreError {
   NotFound(StoreLocation)
   PermissionDenied(StoreLocation)
   InvalidPath(String)
   Failed(StoreLocation, String)
-} derive(Eq, @debug.Debug)
+}
 pub fn StoreError::equal(Self, Self) -> Bool
 pub fn StoreError::not_equal(Self, Self) -> Bool
 pub fn StoreError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub(all) enum EntryKind {
   File
   Directory
-} derive(Eq, @debug.Debug)
+}
 pub fn EntryKind::equal(Self, Self) -> Bool
 pub fn EntryKind::not_equal(Self, Self) -> Bool
 pub fn EntryKind::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub struct IndexMetadata {
   schema_version : Int32
   built_at : @okf.Instant
   document_count : Int32
-} derive(Eq, @debug.Debug)
+}
 pub fn IndexMetadata::IndexMetadata(schema_version~ : Int32, built_at~ : @okf.Instant, document_count~ : Int32) -> Self raise IndexError
 pub fn IndexMetadata::equal(Self, Self) -> Bool
 pub fn IndexMetadata::not_equal(Self, Self) -> Bool
 pub fn IndexMetadata::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum IndexStatus {
   Missing
   Fresh
   Stale(String)
-} derive(Eq, @debug.Debug)
+}
 pub fn IndexStatus::equal(Self, Self) -> Bool
 pub fn IndexStatus::not_equal(Self, Self) -> Bool
 pub fn IndexStatus::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) struct StoreEntry {
   name : @okf.EntryName
   kind : EntryKind
-} derive(Eq, @debug.Debug)
+}
 pub fn StoreEntry::equal(Self, Self) -> Bool
 pub fn StoreEntry::not_equal(Self, Self) -> Bool
 pub fn StoreEntry::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum StoreLocation {
   FileAt(@okf.StorePath)
   DirectoryAt(@okf.StoreDir)
-} derive(Eq, @debug.Debug)
+}
 pub fn StoreLocation::equal(Self, Self) -> Bool
 pub fn StoreLocation::not_equal(Self, Self) -> Bool
 pub fn StoreLocation::output(Self, &Logger) -> Unit
@@ -94,7 +102,8 @@ pub fn StoreLocation::to_repr(Self) -> @debug.Repr
 pub fn StoreLocation::to_string(Self) -> String
 pub impl Show for StoreLocation
 
-type StoreRoot derive(Eq, Hash, @debug.Debug)
+#derive(Eq, Hash, @debug.Debug)
+type StoreRoot
 pub fn StoreRoot::StoreRoot(String) -> Self raise RootError
 pub fn StoreRoot::equal(Self, Self) -> Bool
 pub fn StoreRoot::hash(Self) -> Int32

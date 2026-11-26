@@ -18,5 +18,5 @@ keywords = [ "mission-control", "rabbita", "web", "ui" ]
 
 import {
   "moonrockz/mission-control-contracts@0.1.0",
-  "moonbit-community/rabbita@0.16.5",
+  "moonbit-community/rabbita@0.17.0",
 }

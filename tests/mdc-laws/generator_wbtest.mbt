@@ -1,12 +1,13 @@
 ///|
 /// Generate valid documents by construction, including nested Markdown,
 /// Unicode metadata, optional headers/BOMs and all supported newline forms.
+#derive(Debug)
 priv struct DocumentCase {
   choices : ReadOnlyArray[UInt32]
   style : UInt32
   bom : Bool
   with_header : Bool
-} derive(Debug)
+}
 
 ///|
 impl @quickcheck.Arbitrary for DocumentCase with fn arbitrary(size, state) {

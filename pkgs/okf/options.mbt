@@ -1,24 +1,27 @@
 ///|
 /// The base for relative links and relative path-valued fields.
+#derive(Eq, Debug)
 pub(all) enum LinkBase {
   /// The directory of the file that holds the link (OKF v0.2, section 6.2).
   FileDirectory
   /// The bundle root, as many OKF bundles write paths in practice.
   BundleRoot
-} derive(Eq, Debug)
+}
 
 ///|
 /// Which `log.md` files a bundle loads.
+#derive(Eq, Debug)
 pub(all) enum NestedLogs {
   /// A `log.md` at any depth (OKF v0.2, section 3.1).
   AllLevels
   /// Only the bundle-root `log.md`. Nested ones are reported as ignored.
   RootOnly
-} derive(Eq, Debug)
+}
 
 ///|
 /// The options for each known difference between the OKF v0.2 specification
 /// and existing tools. `Options::default()` follows the specification.
+#derive(Eq, Debug)
 pub(all) struct Options {
   /// The base for relative links.
   link_base : LinkBase
@@ -33,7 +36,7 @@ pub(all) struct Options {
   v01_fields : Bool
   /// Count links from `index.md` files as backlinks for orphan detection.
   index_links_count : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 /// The OKF v0.2 behavior.

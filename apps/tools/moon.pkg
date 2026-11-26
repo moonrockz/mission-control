@@ -6,13 +6,18 @@ import {
   "moonrockz/openspec-ext/host",
   "moonbitlang/async",
   "moonbitlang/core/env",
-  "moonbitlang/x/sys",
 }
 
 import {
   "moonbitlang/core/json",
   "moonbitlang/async/fs" @async_fs,
 } for "wbtest"
+
+// MoonBit 0.10.22 requires `moonbitlang/async` for `async fn main` and `async test` ([4037]),
+// yet reports it as `unused_package` ([0029]) when nothing references `@async` directly.
+// Remove this override once the compiler credits `async fn main` or the package moves to `moonbitlang/core/async`.
+
+warnings = "-unused_package"
 
 // The commands use moonbitlang/async/fs and async/process through openspec-ext/host. They have no
 // JS or wasm-gc backend. The release builds native binaries only.

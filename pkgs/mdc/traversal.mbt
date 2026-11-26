@@ -1,21 +1,23 @@
 ///|
 /// Immutable nodes visited in document order. Obtain a root from `doc.root()`.
+#derive(Debug)
 pub(all) enum Node {
   Document(Document)
   Frontmatter(Frontmatter)
   Block(BlockView)
   Inline(InlineView)
-} derive(Debug)
+}
 
 ///|
 pub extend Node with @debug.Debug::{to_repr}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum Control {
   Continue
   SkipChildren
   Stop
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend Control with Eq::{equal, not_equal}
@@ -206,11 +208,12 @@ pub fn[V : Visitor] Document::accept(self : Document, visitor : V) -> Unit {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum FoldAction[A] {
   Continue(A)
   SkipChildren(A)
   Stop(A)
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend FoldAction with Eq::{equal, not_equal}

@@ -28,31 +28,35 @@ pub fn walk(Node, (Node) -> Control, leave? : (Node) -> Unit) -> Unit
 pub fn walk_cursor(Node, (Cursor) -> Control, leave? : (Cursor) -> Unit) -> Unit
 
 // Errors
+#derive(Eq, @debug.Debug)
 pub(all) suberror FrontmatterError {
   InvalidYaml(at~ : TextPosition, message~ : String)
   NotAMapping
   MultipleDocuments(count~ : Int32)
-} derive(Eq, @debug.Debug)
+}
 pub fn FrontmatterError::equal(Self, Self) -> Bool
 pub fn FrontmatterError::not_equal(Self, Self) -> Bool
 pub fn FrontmatterError::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) suberror ParseError {
   UnterminatedFrontmatter
   InvalidFrontmatter(FrontmatterError)
-} derive(@debug.Debug)
+}
 pub fn ParseError::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) suberror PositionError {
   InvalidPosition(line~ : Int32, column~ : Int32)
   StartAfterEnd(start~ : TextPosition, end~ : TextPosition)
   InvalidOffsets(start~ : Int32, end~ : Int32)
-} derive(Eq, @debug.Debug)
+}
 pub fn PositionError::equal(Self, Self) -> Bool
 pub fn PositionError::not_equal(Self, Self) -> Bool
 pub fn PositionError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub enum BlockKind {
   BlankLine
   BlockQuote
@@ -67,22 +71,24 @@ pub enum BlockKind {
   ExtMathBlock
   ExtTable
   ExtFootnoteDefinition
-} derive(Eq, @debug.Debug)
+}
 pub fn BlockKind::equal(Self, Self) -> Bool
 pub fn BlockKind::not_equal(Self, Self) -> Bool
 pub fn BlockKind::to_repr(Self) -> @debug.Repr
 
-type BlockView derive(@debug.Debug)
+#derive(@debug.Debug)
+type BlockView
 pub fn BlockView::kind(Self) -> BlockKind
 pub fn BlockView::location(Self) -> @cmark_base.TextLoc
 pub fn BlockView::to_cmark(Self) -> @cmark.Block
 pub fn BlockView::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum Control {
   Continue
   SkipChildren
   Stop
-} derive(Eq, @debug.Debug)
+}
 pub fn Control::equal(Self, Self) -> Bool
 pub fn Control::not_equal(Self, Self) -> Bool
 pub fn Control::to_repr(Self) -> @debug.Repr
@@ -107,7 +113,8 @@ pub fn Cursor::to_repr(Self) -> @debug.Repr
 pub fn Cursor::walk(Self, (Self) -> Control, leave? : (Self) -> Unit) -> Unit
 pub impl @debug.Debug for Cursor
 
-type Document derive(@debug.Debug)
+#derive(@debug.Debug)
+type Document
 pub fn Document::Document(String, strict? : Bool, layout? : Bool, locs? : Bool, file? : String) -> Self raise ParseError
 pub fn[V : Visitor] Document::accept(Self, V) -> Unit
 pub fn[V : CursorVisitor] Document::accept_cursor(Self, V) -> Unit
@@ -128,11 +135,12 @@ pub fn Document::source_range(Self, @cmark_base.TextLoc) -> SourceRange?
 pub fn Document::to_cmark(Self) -> @cmark.Doc
 pub fn Document::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum FoldAction[A] {
   Continue(A)
   SkipChildren(A)
   Stop(A)
-} derive(Eq, @debug.Debug)
+}
 pub fn[A : Eq] FoldAction::equal(Self[A], Self[A]) -> Bool
 pub fn[A : Eq] FoldAction::not_equal(Self[A], Self[A]) -> Bool
 pub fn[A : @debug.Debug] FoldAction::to_repr(Self[A]) -> @debug.Repr
@@ -143,12 +151,14 @@ pub fn[A : CursorFold] Folder::from_cursor_trait() -> Self[A]
 pub fn[A : Fold] Folder::from_trait() -> Self[A]
 pub fn[A] Folder::with_cursor((A, Cursor) -> FoldAction[A]) -> Self[A]
 
-type Frontmatter derive(@debug.Debug)
+#derive(@debug.Debug)
+type Frontmatter
 pub fn Frontmatter::Frontmatter(String) -> Self raise FrontmatterError
 pub fn Frontmatter::raw(Self) -> String
 pub fn Frontmatter::to_repr(Self) -> @debug.Repr
 pub fn Frontmatter::value(Self) -> @yaml.Yaml
 
+#derive(Compare, Eq, Hash, @debug.Debug)
 pub(all) enum HeadingLevel {
   H1
   H2
@@ -156,7 +166,7 @@ pub(all) enum HeadingLevel {
   H4
   H5
   H6
-} derive(Compare, Eq, Hash, @debug.Debug)
+}
 pub fn HeadingLevel::compare(Self, Self) -> Int32
 pub fn HeadingLevel::equal(Self, Self) -> Bool
 pub fn HeadingLevel::hash(Self) -> Int32
@@ -173,6 +183,7 @@ pub fn HeadingLevel::to_repr(Self) -> @debug.Repr
 pub fn HeadingLevel::to_string(Self) -> String
 pub impl Show for HeadingLevel
 
+#derive(Eq, @debug.Debug)
 pub enum InlineKind {
   Autolink
   Break
@@ -186,23 +197,25 @@ pub enum InlineKind {
   Text(text~ : String)
   ExtStrikethrough
   ExtMathSpan(tex~ : String)
-} derive(Eq, @debug.Debug)
+}
 pub fn InlineKind::equal(Self, Self) -> Bool
 pub fn InlineKind::not_equal(Self, Self) -> Bool
 pub fn InlineKind::to_repr(Self) -> @debug.Repr
 
-type InlineView derive(@debug.Debug)
+#derive(@debug.Debug)
+type InlineView
 pub fn InlineView::kind(Self) -> InlineKind
 pub fn InlineView::location(Self) -> @cmark_base.TextLoc
 pub fn InlineView::to_cmark(Self) -> @cmark.Inline
 pub fn InlineView::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) enum Node {
   Document(Document)
   Frontmatter(Frontmatter)
   Block(BlockView)
   Inline(InlineView)
-} derive(@debug.Debug)
+}
 pub fn[V : CursorVisitor] Node::accept_cursor(Self, V) -> Unit
 pub fn Node::at(Self, NodePath) -> Self?
 pub fn Node::children(Self) -> ReadOnlyArray[Self]
@@ -214,7 +227,8 @@ pub fn[A : CursorReducer] Node::reduce_cursor_with(Self) -> A
 pub fn[A : Reducer] Node::reduce_with(Self) -> A
 pub fn Node::to_repr(Self) -> @debug.Repr
 
-type NodePath derive(Eq, @debug.Debug)
+#derive(Eq, @debug.Debug)
+type NodePath
 pub fn NodePath::equal(Self, Self) -> Bool
 pub fn NodePath::indices(Self) -> ReadOnlyArray[Int32]
 pub fn NodePath::not_equal(Self, Self) -> Bool
@@ -223,7 +237,8 @@ pub fn NodePath::to_repr(Self) -> @debug.Repr
 pub fn NodePath::to_string(Self) -> String
 pub impl Show for NodePath
 
-type SourceRange derive(Eq, Hash, @debug.Debug)
+#derive(Eq, Hash, @debug.Debug)
+type SourceRange
 pub fn SourceRange::SourceRange(start~ : TextPosition, end~ : TextPosition, start_offset~ : Int32, end_offset~ : Int32) -> Self raise PositionError
 pub fn SourceRange::end(Self) -> TextPosition
 pub fn SourceRange::end_offset(Self) -> Int32
@@ -235,7 +250,8 @@ pub fn SourceRange::start(Self) -> TextPosition
 pub fn SourceRange::start_offset(Self) -> Int32
 pub fn SourceRange::to_repr(Self) -> @debug.Repr
 
-type TextPosition derive(Compare, Eq, Hash, @debug.Debug)
+#derive(Compare, Eq, Hash, @debug.Debug)
+type TextPosition
 pub fn TextPosition::TextPosition(line~ : Int32, column~ : Int32) -> Self raise PositionError
 pub fn TextPosition::column(Self) -> Int32
 pub fn TextPosition::compare(Self, Self) -> Int32

@@ -1,12 +1,11 @@
 ----
 import {
-  "moonbitlang/async@0.22.5",
-  "moonbitlang/async@0.22.5/fs",
-  "moonbitlang/async@0.22.5/process",
-  "moonbitlang/x@0.5.5/sys",
+  "moonbitlang/async@0.22.10",
+  "moonbitlang/async@0.22.10/fs",
+  "moonbitlang/async@0.22.10/process",
   "moonbitlang/core/env",
-  "moonrockz/moonspec@0.11.0",
-  "moonrockz/expect@0.6.1",
+  "moonrockz/moonspec@0.12.0/async" @moonspec,
+  "moonrockz/expect@0.7.0",
 }
 ----
 
@@ -39,7 +38,7 @@ enum ExitCode {
 ///|
 /// Ends the script with this exit code.
 fn ExitCode::exit(self : ExitCode) -> Unit {
-  @sys.exit(
+  @env.exit(
     match self {
       Failure => 1
       Usage => 2
@@ -77,11 +76,12 @@ let tag_prefix : String = "tools-v"
 /// zero. `scripts/release.mbtx` and `scripts/versions.mbtx` keep the same
 /// copy, and a scenario of `features/versions.feature` checks that the copies
 /// are equal.
+#derive(Eq, Compare, Debug)
 struct Version {
-  major : Int
-  minor : Int
-  patch : Int
-} derive(Eq, Compare, Debug)
+  major : Int32
+  minor : Int32
+  patch : Int32
+}
 
 ///|
 impl Show for Version with fn output(self, logger) {
@@ -90,7 +90,7 @@ impl Show for Version with fn output(self, logger) {
 
 ///|
 /// One part of a version: 1 to 9 digits with no leading zero.
-fn version_part(text : StringView) -> Int? {
+fn version_part(text : StringView) -> Int32? {
   guard text.length() > 0 &&
     text.length() <= 9 &&
     !(text.length() > 1 && text.has_prefix("0")) else {
@@ -110,7 +110,8 @@ fn Version::parse(text : StringView) -> Version? {
   match text.split(".").collect() {
     [major, minor, patch] =>
       match (version_part(major), version_part(minor), version_part(patch)) {
-        (Some(major), Some(minor), Some(patch)) => Some({ major, minor, patch })
+        (Some(major), Some(minor), Some(patch)) =>
+          Some({ major, minor, patch, })
         _ => None
       }
     _ => None
@@ -235,17 +236,23 @@ fn changelog_section(changelog : String, version : Version) -> String? {
 
 ///|
 /// The state of the changelog section of a version.
+#derive(Eq, Debug)
 enum ChangelogState {
   NoSection
   Placeholder
   Ready
-} derive(Eq, Debug)
+}
 
 ///|
 fn ChangelogState::of_section(section : String?) -> ChangelogState {
   match section {
     None => NoSection
-    Some(text) => if text.contains(highlights_marker) { Placeholder } else { Ready }
+    Some(text) =>
+      if text.contains(highlights_marker) {
+        Placeholder
+      } else {
+        Ready
+      }
   }
 }
 
@@ -253,23 +260,44 @@ fn ChangelogState::of_section(section : String?) -> ChangelogState {
 /// The GitHub release notes: the changelog section, the mise entries and the attestation check.
 fn release_notes(version : Version, section : String) -> String {
   [
-    section, "", "## Install with mise", "", "Add this entry to `.config/mise/config.toml` and run `mise install`. mise downloads the archive of the platform from the `\{tag_of(version)}` release and checks it against the GitHub asset digest and its attestation.",
-    "", "```toml", mise_entry(version), "```", "", "A repository that also installs the main `mission-control` CLI from `github:\{repository}` needs an alias for the tools CLI. Renovate does not bump this form.",
-    "", "```toml", mise_alias_entry(version), "```", "", "## Verify a download",
-    "", "Each archive and `checksums.txt` has a GitHub build provenance attestation from `\{workflow_path}`:",
-    "", "```shell", attestation_command("mission-control-tools-linux-x64.tar.gz"),
-    "sha256sum -c checksums.txt", "```", "", "The executable is at the root of each archive. The migration steps for a repository that keeps a copy of `scripts/openspec-ext.mbtx` are in [apps/tools/README.md](https://github.com/\{repository}/blob/\{tag_of(version)}/apps/tools/README.md).",
+    section,
+    "",
+    "## Install with mise",
+    "",
+    "Add this entry to `.config/mise/config.toml` and run `mise install`. mise downloads the archive of the platform from the `\{tag_of(version)}` release and checks it against the GitHub asset digest and its attestation.",
+    "",
+    "```toml",
+    mise_entry(version),
+    "```",
+    "",
+    "A repository that also installs the main `mission-control` CLI from `github:\{repository}` needs an alias for the tools CLI. Renovate does not bump this form.",
+    "",
+    "```toml",
+    mise_alias_entry(version),
+    "```",
+    "",
+    "## Verify a download",
+    "",
+    "Each archive and `checksums.txt` has a GitHub build provenance attestation from `\{workflow_path}`:",
+    "",
+    "```shell",
+    attestation_command("mission-control-tools-linux-x64.tar.gz"),
+    "sha256sum -c checksums.txt",
+    "```",
+    "",
+    "The executable is at the root of each archive. The migration steps for a repository that keeps a copy of `scripts/openspec-ext.mbtx` are in [apps/tools/README.md](https://github.com/\{repository}/blob/\{tag_of(version)}/apps/tools/README.md).",
   ].join("\n") +
   "\n"
 }
 
 ///|
 /// The state of the GitHub release of a version.
+#derive(Eq, Debug)
 enum ReleaseState {
   Missing
   Incomplete
   Complete
-} derive(Eq, Debug)
+}
 
 ///|
 fn missing_names(
@@ -319,12 +347,13 @@ fn InputError::message(self : InputError) -> String {
 
 ///|
 /// What started a run.
+#derive(Eq, Debug)
 enum RunTrigger {
   /// A manual run with `dry_run`. It only checks.
   DryRun
   /// A push to main, or a manual run without `dry_run`. It can release.
   Push
-} derive(Eq, Debug)
+}
 
 ///|
 fn RunTrigger::parse(
@@ -344,13 +373,17 @@ fn RunTrigger::parse(
 
 ///|
 /// The ref of a run: a branch, or a tools tag such as `tools-v0.1.0`.
+#derive(Eq, Debug)
 enum GitRef {
   Branch(String)
   Tag(Version)
-} derive(Eq, Debug)
+}
 
 ///|
-fn GitRef::parse(ref_type : String, ref_name : String) -> GitRef raise InputError {
+fn GitRef::parse(
+  ref_type : String,
+  ref_name : String,
+) -> GitRef raise InputError {
   match ref_type {
     "branch" => Branch(ref_name)
     "tag" =>
@@ -371,18 +404,20 @@ fn GitRef::name(self : GitRef) -> String {
 }
 
 ///|
+#derive(Eq, Debug)
 enum MainState {
   OnMain
   OffMain
-} derive(Eq, Debug)
+}
 
 ///|
 /// What a run does.
+#derive(Eq, Debug)
 enum Plan {
   Release(Version)
   DryRun(Version)
   Skip(String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// Why a run cannot release.
@@ -440,8 +475,7 @@ fn plan_outputs(p : Plan) -> String {
   match p {
     Release(v) =>
       "release=true\ndry_run=false\nversion=\{v}\ntag=\{tag_of(v)}\n"
-    DryRun(v) =>
-      "release=false\ndry_run=true\nversion=\{v}\ntag=\{tag_of(v)}\n"
+    DryRun(v) => "release=false\ndry_run=true\nversion=\{v}\ntag=\{tag_of(v)}\n"
     Skip(_) => "release=false\ndry_run=false\n"
   }
 }
@@ -491,7 +525,7 @@ fn fail_with(message : String) -> Unit {
 }
 
 ///|
-async fn output_of(cmd : String, args : Array[String]) -> (Int, String) {
+async fn output_of(cmd : String, args : Array[String]) -> (Int32, String) {
   let (code, out, err) = @process.collect_output(cmd, args) catch {
     _ => return (1, "cannot start \{cmd}")
   }
@@ -505,7 +539,7 @@ async fn tools_version() -> Version {
     Some(v) => v
     None => {
       fail_with("\{tools_mod} has no version of the form X.Y.Z")
-      { major: 0, minor: 0, patch: 0 }
+      { major: 0, minor: 0, patch: 0, }
     }
   }
 }
@@ -527,7 +561,11 @@ async fn inspect_release(tag : String) -> (Bool, Array[String], Bool) {
     ".isDraft, (.assets[].name)",
   ])
   if code == 0 {
-    let lines = out.split("\n").filter(n => n.trim() != "").map(n => n.trim().to_owned()).collect()
+    let lines = out
+      .split("\n")
+      .filter(n => n.trim() != "")
+      .map(n => n.trim().to_owned())
+      .collect()
     let is_draft = lines.length() > 0 && lines[0] == "true"
     return (true, lines.filter(n => n != "true" && n != "false"), is_draft)
   }
@@ -545,9 +583,10 @@ async fn run_plan() -> Unit {
   let ref_type = @env.get_env_var("GITHUB_REF_TYPE").unwrap_or("")
   let ref_name = @env.get_env_var("GITHUB_REF_NAME").unwrap_or("")
   let dry_run = @env.get_env_var("DRY_RUN").unwrap_or("")
-  let (trigger, git_ref) = try
-    (RunTrigger::parse(event, dry_run), GitRef::parse(ref_type, ref_name))
-  catch {
+  let (trigger, git_ref) = (
+    RunTrigger::parse(event, dry_run),
+    GitRef::parse(ref_type, ref_name),
+  ) catch {
     e => {
       fail_with(e.message())
       return
@@ -623,15 +662,17 @@ async fn github(version : Version) -> Unit {
   }
   let complete = complete_release(
     () => inspect_release(tag),
-    (exists, remote, draft) => github_steps(
-      exists,
-      remote,
-      tag~,
-      title="mission-control-tools \{version}",
-      target~,
-      notes_file~,
-      is_draft=draft,
-    ),
+    (exists, remote, draft) => {
+      github_steps(
+        exists,
+        remote,
+        tag~,
+        title="mission-control-tools \{version}",
+        target~,
+        notes_file~,
+        is_draft=draft,
+      )
+    },
     args => {
       let full = args.copy()
       full.push("--repo")
@@ -648,7 +689,9 @@ async fn github(version : Version) -> Unit {
     },
   )
   if complete {
-    println("The GitHub release \{tag} has all \{release_assets().length()} assets.")
+    println(
+      "The GitHub release \{tag} has all \{release_assets().length()} assets.",
+    )
   } else {
     fail_with("the GitHub release \{tag} is still not complete")
   }
@@ -693,7 +736,10 @@ async fn status() -> Unit {
   let tag = tag_of(version)
   let findings = []
   let (tag_code, _) = output_of("git", [
-    "rev-parse", "--verify", "--quiet", "refs/tags/\{tag}",
+    "rev-parse",
+    "--verify",
+    "--quiet",
+    "refs/tags/\{tag}",
   ])
   let (exists, assets, draft) = inspect_release(tag)
   let state = ReleaseState::of(exists~, draft~, assets~)
@@ -701,7 +747,9 @@ async fn status() -> Unit {
     (_, Complete) => findings.push(Good("\{tag} is released with every asset"))
     (false, Missing) =>
       findings.push(
-        Good("\{tag} is not released yet; merge its \{changelog_path} section to release it"),
+        Good(
+          "\{tag} is not released yet; merge its \{changelog_path} section to release it",
+        ),
       )
     _ =>
       findings.push(
@@ -711,7 +759,10 @@ async fn status() -> Unit {
       )
   }
   let (latest_code, latest) = output_of("gh", [
-    "api", "repos/\{repository}/releases/latest", "--jq", ".tag_name",
+    "api",
+    "repos/\{repository}/releases/latest",
+    "--jq",
+    ".tag_name",
   ])
   if latest_code == 0 && latest.trim().has_prefix(tag_prefix) {
     findings.push(
@@ -822,19 +873,19 @@ impl @moonspec.World for ReleaseToolsWorld with fn configure(self, setup) {
   })
   setup.when1("the plan runs for version {string}", fn(version : String) raise {
     let v = version_of(version)
-    let changelog = ChangelogState::of_section(changelog_section(self.changelog, v))
-    let result = try {
-      Ok(
-        plan(
-          self.trigger,
-          self.git_ref,
-          v,
-          main=self.main,
-          release=self.release,
-          changelog~,
-        ),
-      )
-    } catch {
+    let changelog = ChangelogState::of_section(
+      changelog_section(self.changelog, v),
+    )
+    let result = Ok(
+      plan(
+        self.trigger,
+        self.git_ref,
+        v,
+        main=self.main,
+        release=self.release,
+        changelog~,
+      ),
+    ) catch {
       e => Err(e.message())
     }
     self.result = plan_name(result)
@@ -926,7 +977,7 @@ async test "release tools feature" {
       result: "",
       steps: [],
     },
-    @moonspec.RunOptions::new([
+    @moonspec.RunOptions::RunOptions([
       @moonspec.FeatureSource::File("features/release_tools.feature"),
     ]),
   )
@@ -937,27 +988,33 @@ async test "release tools feature" {
 /// A fake GitHub release for `complete_release`: each `run` call fails until `failures` reaches 0,
 /// and a successful `release create` makes the release complete.
 struct FakeRelease {
-  mut failures : Int
+  mut failures : Int32
   mut exists : Bool
-  mut runs : Int
+  mut runs : Int32
 }
 
 ///|
-async fn run_fake(
-  failures : Int,
-) -> (Bool, Int) {
-  let fake = FakeRelease::{ failures, exists: false, runs: 0 }
+async fn run_fake(failures : Int32) -> (Bool, Int32) {
+  let fake = FakeRelease::{ failures, exists: false, runs: 0, }
   let complete = complete_release(
-    () => if fake.exists { (true, release_assets(), false) } else { (false, [], false) },
-    (exists, remote, draft) => github_steps(
-      exists,
-      remote,
-      tag="tools-v0.1.0",
-      title="mission-control-tools 0.1.0",
-      target="abc",
-      notes_file="notes.md",
-      is_draft=draft,
-    ),
+    () => {
+      if fake.exists {
+        (true, release_assets(), false)
+      } else {
+        (false, [], false)
+      }
+    },
+    (exists, remote, draft) => {
+      github_steps(
+        exists,
+        remote,
+        tag="tools-v0.1.0",
+        title="mission-control-tools 0.1.0",
+        target="abc",
+        notes_file="notes.md",
+        is_draft=draft,
+      )
+    },
     _ => {
       fake.runs += 1
       if fake.failures > 0 {

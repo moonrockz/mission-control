@@ -21,10 +21,11 @@ priv enum StandInKind {
 
 ///|
 /// The writer of one stand-in write.
+#derive(Eq, Debug)
 priv enum StandInWriter {
   WritableWrite
   SyncWrite
-} derive(Eq, Debug)
+}
 
 ///|
 /// An in-memory stand-in for a `FileSystemDirectoryHandle`, for tests outside

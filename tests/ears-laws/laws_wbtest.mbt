@@ -1,11 +1,12 @@
 ///|
 /// Shrink generation choices, then render again, preserving valid EARS syntax.
+#derive(Debug)
 priv struct RequirementCase {
   feature : Bool
   states : ReadOnlyArray[UInt32]
   trigger : UInt32
   style : UInt32
-} derive(Debug)
+}
 
 ///|
 impl @quickcheck.Arbitrary for RequirementCase with fn arbitrary(size, state) {
@@ -179,13 +180,14 @@ test "law: text and Markdown extraction agree and spans recover the original sen
 ///|
 /// A sentence in a dialect: the clauses of a strict case, with a lead-in, a
 /// subject opener or system noun, and a modal verb that the dialect adds.
+#derive(Debug)
 priv struct DialectCase {
   base : RequirementCase
   lead : UInt32
   opener : UInt32
   modal : Bool
   negated : Bool
-} derive(Debug)
+}
 
 ///|
 impl @quickcheck.Arbitrary for DialectCase with fn arbitrary(size, state) {

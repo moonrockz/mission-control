@@ -63,7 +63,5 @@ mise exec -- openspec schema validate html-design
 mise exec -- openspec validate --all --strict
 ```
 
-The packaged host uses the module dependencies in `moon.mod`, which keep `moonbitlang/async@0.22.5`.
-`moonrockz/zig-cross@0.3.2` cannot compile the `fs.c` stub of async 0.22.7: its forced `-include limits.h`
-comes before `#define _GNU_SOURCE`, so `O_PATH` is not declared. Move `moon.mod` to 0.22.7 after a zig-cross
-release that passes `-DNAME_MAX=255` in place of the forced include.
+The packaged host uses the module dependencies in `moon.mod`, including `moonbitlang/async@0.22.10`,
+which cross-compiles on Linux with `moonrockz/zig-cross@0.4.1`.

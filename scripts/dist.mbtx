@@ -1,20 +1,19 @@
 ----
 import {
-  "moonbitlang/async@0.22.5",
-  "moonbitlang/async@0.22.5/fs",
-  "moonbitlang/async@0.22.5/gzip",
-  "moonbitlang/async@0.22.5/io",
-  "moonbitlang/async@0.22.5/process",
-  "moonbitlang/async@0.22.5/shell",
-  "moonbitlang/async@0.22.5/stdio",
+  "moonbitlang/async@0.22.10",
+  "moonbitlang/async@0.22.10/fs",
+  "moonbitlang/async@0.22.10/gzip",
+  "moonbitlang/async@0.22.10/io",
+  "moonbitlang/async@0.22.10/process",
+  "moonbitlang/async@0.22.10/shell",
+  "moonbitlang/async@0.22.10/stdio",
   "moonbitlang/core/env",
   "moonbitlang/core/encoding/hex",
   "moonbitlang/core/encoding/utf8",
-  "moonbitlang/x@0.5.5/crypto",
-  "moonbitlang/x@0.5.5/sys",
+  "moonbitlang/x@0.5.8/crypto",
   "moonbit-community/zipc@0.2.2",
-  "moonrockz/moonspec@0.11.0",
-  "moonrockz/expect@0.6.1",
+  "moonrockz/moonspec@0.12.0/async" @moonspec,
+  "moonrockz/expect@0.7.0",
 }
 ----
 
@@ -48,7 +47,7 @@ enum ExitCode {
 ///|
 /// Ends the script with this exit code.
 fn ExitCode::exit(self : ExitCode) -> Unit {
-  @sys.exit(
+  @env.exit(
     match self {
       Failure => 1
       Usage => 2
@@ -62,12 +61,13 @@ let usage : String = "Usage: dist.mbtx [build | build-windows | pack] [tools]"
 
 ///|
 /// The command-line application that a release ships.
+#derive(Eq)
 enum Product {
   /// The main `mission-control` CLI, released under `vX.Y.Z`.
   Cli
   /// The `mission-control-tools` CLI, released under `tools-vX.Y.Z`.
   Tools
-} derive(Eq)
+}
 
 ///|
 /// The MoonBit package that holds the command-line application.
@@ -131,24 +131,32 @@ fn Product::has_wasm(self : Product) -> Bool {
 
 ///|
 /// A native release target: one archive with one executable.
+#derive(Eq, Debug)
 enum DistTarget {
   LinuxX64
   LinuxArm64
   DarwinArm64
   DarwinX64
   WindowsX64
-} derive(Eq, Debug)
+}
 
 ///|
 /// Every native release target, in release order.
 let dist_targets : Array[DistTarget] = [
-  LinuxX64, LinuxArm64, DarwinArm64, DarwinX64, WindowsX64,
+  LinuxX64,
+  LinuxArm64,
+  DarwinArm64,
+  DarwinX64,
+  WindowsX64,
 ]
 
 ///|
 /// The targets that zig cross-builds. windows-x64 is built on a Windows host.
 let cross_targets : Array[DistTarget] = [
-  LinuxX64, LinuxArm64, DarwinArm64, DarwinX64,
+  LinuxX64,
+  LinuxArm64,
+  DarwinArm64,
+  DarwinX64,
 ]
 
 ///|
@@ -248,7 +256,7 @@ fn missing_outputs(
 
 ///|
 /// Compare strings by code unit (`String::compare` compares length first).
-fn compare_lexical(a : String, b : String) -> Int {
+fn compare_lexical(a : String, b : String) -> Int32 {
   let n = if a.length() < b.length() { a.length() } else { b.length() }
   for i in 0..<n {
     let c = a.code_unit_at(i).compare(b.code_unit_at(i))
@@ -278,7 +286,7 @@ fn checksums_text(files : Array[(String, Bytes)]) -> String {
 
 ///|
 /// `n` in octal, left-padded with zeros to `width` digits.
-fn octal(n : Int, width : Int) -> String {
+fn octal(n : Int32, width : Int32) -> String {
   let digits = StringBuilder()
   let mut rest = n
   let reversed : Array[Char] = []
@@ -286,7 +294,7 @@ fn octal(n : Int, width : Int) -> String {
     reversed.push('0')
   }
   while rest > 0 {
-    reversed.push(Int::unsafe_to_char(48 + rest % 8))
+    reversed.push(Int32::unsafe_to_char(48 + rest % 8))
     rest = rest / 8
   }
   for _ in reversed.length()..<width {
@@ -300,7 +308,7 @@ fn octal(n : Int, width : Int) -> String {
 
 ///|
 /// Write ASCII `text` into `block` at `offset`.
-fn put_text(block : FixedArray[Byte], offset : Int, text : String) -> Unit {
+fn put_text(block : FixedArray[Byte], offset : Int32, text : String) -> Unit {
   for i in 0..<text.length() {
     block[offset + i] = text.code_unit_at(i).to_int().to_byte()
   }
@@ -502,7 +510,9 @@ async fn pack(product : Product) -> Unit {
   if !missing.is_empty() {
     fail_with("\{dist_dir}/ lacks: \{missing.join(", ")}")
   }
-  println("✅ Wrote \{expected_outputs(product).length()} files to \{dist_dir}/")
+  println(
+    "✅ Wrote \{expected_outputs(product).length()} files to \{dist_dir}/",
+  )
 }
 
 ///|
@@ -575,11 +585,11 @@ fn DistWorld::new() -> DistWorld {
 }
 
 ///|
-fn text_of(tar : Bytes, offset : Int, len : Int) -> String {
+fn text_of(tar : Bytes, offset : Int32, len : Int32) -> String {
   let buf = StringBuilder()
   for i = offset; i < offset + len; i = i + 1 {
     if tar[i] != b'\x00' {
-      buf.write_char(Int::unsafe_to_char(tar[i].to_int()))
+      buf.write_char(Int32::unsafe_to_char(tar[i].to_int()))
     }
   }
   buf.to_string()
@@ -620,7 +630,9 @@ impl @moonspec.World for DistWorld with fn configure(self, setup) {
       None => "usage error"
     }
   })
-  setup.then1("the step and the product are {string}", fn(expected : String) raise {
+  setup.then1("the step and the product are {string}", fn(
+    expected : String,
+  ) raise {
     @expect.expect(self.parsed).to_equal(expected)
   })
   setup.then2("the archive is {string} and the binary is {string}", fn(
@@ -648,7 +660,11 @@ impl @moonspec.World for DistWorld with fn configure(self, setup) {
   })
   setup.then1("the host is Windows: {string}", fn(answer : String) raise {
     @expect.expect(is_windows_host(self.os).to_string()).to_equal(
-      if answer == "yes" { "true" } else { "false" },
+      if answer == "yes" {
+        "true"
+      } else {
+        "false"
+      },
     )
   })
   setup.then1("the cross-built targets are {string}", fn(names : String) raise {
@@ -673,12 +689,12 @@ impl @moonspec.World for DistWorld with fn configure(self, setup) {
   })
   setup.when2("I write a tar of the file {string} with {int} content bytes", fn(
     name : String,
-    size : Int,
+    size : Int32,
   ) {
     self.tar = ustar_file(name, Bytes::from_array(FixedArray::make(size, b'x')))
   })
   setup.then2("the header field at {int} is {string}", fn(
-    offset : Int,
+    offset : Int32,
     expected : String,
   ) raise {
     @expect.expect(text_of(self.tar, offset, expected.length())).to_equal(
@@ -690,7 +706,7 @@ impl @moonspec.World for DistWorld with fn configure(self, setup) {
     @expect.expect(self.tar[154]).to_equal(b'\x00')
     @expect.expect(self.tar[155]).to_equal(b' ')
   })
-  setup.then1("the tar is {int} bytes long", fn(length : Int) raise {
+  setup.then1("the tar is {int} bytes long", fn(length : Int32) raise {
     @expect.expect(self.tar.length()).to_equal(length)
   })
   setup.then0("the last 1024 bytes are zero", fn() raise {
@@ -705,7 +721,7 @@ impl @moonspec.World for DistWorld with fn configure(self, setup) {
 async test "dist feature" {
   @moonspec.run_or_fail(
     DistWorld::new,
-    @moonspec.RunOptions::new([
+    @moonspec.RunOptions::RunOptions([
       @moonspec.FeatureSource::File("features/dist.feature"),
     ]),
   )

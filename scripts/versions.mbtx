@@ -1,12 +1,11 @@
 ----
 import {
-  "moonbitlang/async@0.22.5",
-  "moonbitlang/async@0.22.5/fs",
-  "moonbitlang/async@0.22.5/process",
+  "moonbitlang/async@0.22.10",
+  "moonbitlang/async@0.22.10/fs",
+  "moonbitlang/async@0.22.10/process",
   "moonbitlang/core/env",
-  "moonbitlang/x@0.5.5/sys",
-  "moonrockz/moonspec@0.11.0",
-  "moonrockz/expect@0.6.1",
+  "moonrockz/moonspec@0.12.0/async" @moonspec,
+  "moonrockz/expect@0.7.0",
 }
 ----
 
@@ -44,7 +43,7 @@ enum ExitCode {
 ///|
 /// Ends the script with this exit code.
 fn ExitCode::exit(self : ExitCode) -> Unit {
-  @sys.exit(
+  @env.exit(
     match self {
       Failure => 1
       Usage => 2
@@ -62,13 +61,9 @@ let usage : String = "Usage: versions.mbtx check [X.Y.Z] | set X.Y.Z | check-too
 /// version-like string in the same file (for example a specification version) is not touched.
 let version_files : Array[(String, String)] = [
   ("pkgs/contracts/contract.mbt", "let current_version : String = \""),
-  (
-    "apps/cli/cli_wbtest.mbt", "inspect(@contracts.version(), content=\"",
-  ),
+  ("apps/cli/cli_wbtest.mbt", "inspect(@contracts.version(), content=\""),
   ("pkgs/contracts/contract_wbtest.mbt", "inspect(version(), content=\""),
-  (
-    "apps/web/app_wbtest.mbt", "inspect(@contracts.version(), content=\"",
-  ),
+  ("apps/web/app_wbtest.mbt", "inspect(@contracts.version(), content=\""),
   (
     "apps/desktop/shell_wbtest.mbt", "inspect(version_reply().version, content=\"",
   ),
@@ -98,11 +93,12 @@ fn fail_with(message : String) -> Unit {
 /// zero. `scripts/release.mbtx` and `scripts/versions.mbtx` keep the same
 /// copy, and a scenario of `features/versions.feature` checks that the copies
 /// are equal.
+#derive(Eq, Compare, Debug)
 struct Version {
-  major : Int
-  minor : Int
-  patch : Int
-} derive(Eq, Compare, Debug)
+  major : Int32
+  minor : Int32
+  patch : Int32
+}
 
 ///|
 impl Show for Version with fn output(self, logger) {
@@ -111,7 +107,7 @@ impl Show for Version with fn output(self, logger) {
 
 ///|
 /// One part of a version: 1 to 9 digits with no leading zero.
-fn version_part(text : StringView) -> Int? {
+fn version_part(text : StringView) -> Int32? {
   guard text.length() > 0 &&
     text.length() <= 9 &&
     !(text.length() > 1 && text.has_prefix("0")) else {
@@ -131,7 +127,8 @@ fn Version::parse(text : StringView) -> Version? {
   match text.split(".").collect() {
     [major, minor, patch] =>
       match (version_part(major), version_part(minor), version_part(patch)) {
-        (Some(major), Some(minor), Some(patch)) => Some({ major, minor, patch })
+        (Some(major), Some(minor), Some(patch)) =>
+          Some({ major, minor, patch, })
         _ => None
       }
     _ => None
@@ -148,28 +145,32 @@ fn is_version_like(text : String) -> Bool {
   text.code_unit_at(0) <= 57 &&
   text
   .iter()
-  .all(c => (c >= '0' && c <= '9') ||
+  .all(c => {
+    (c >= '0' && c <= '9') ||
     (c >= 'a' && c <= 'z') ||
     (c >= 'A' && c <= 'Z') ||
     c == '.' ||
     c == '-' ||
-    c == '+')
+    c == '+'
+  })
 }
 
 ///|
 /// Why the root `moon.mod` has no version.
+#derive(Eq, Debug)
 enum RootVersionError {
   /// The file has no version line.
   NoVersionLine
   /// The version line holds a text that is not of the form X.Y.Z.
   NotAVersion(String)
-} derive(Eq, Debug)
+}
 
 ///|
 fn RootVersionError::message(self : RootVersionError) -> String {
   match self {
     NoVersionLine => "The root moon.mod has no version line."
-    NotAVersion(text) => "The root moon.mod version \{text} is not a version of the form X.Y.Z."
+    NotAVersion(text) =>
+      "The root moon.mod version \{text} is not a version of the form X.Y.Z."
   }
 }
 
@@ -186,7 +187,10 @@ fn root_version(moon_mod : String) -> Result[Version, RootVersionError] {
 ///|
 /// Each place in `text` where `head`, a version-like text and a closing quote follow each other.
 /// A place is `(start, end, version)`: the version lies at `start..<end` of `text`.
-fn versions_after(text : String, head : String) -> Array[(Int, Int, String)] {
+fn versions_after(
+  text : String,
+  head : String,
+) -> Array[(Int32, Int32, String)] {
   let found = []
   let mut from = 0
   while from + head.length() < text.length() {
@@ -208,7 +212,7 @@ fn versions_after(text : String, head : String) -> Array[(Int, Int, String)] {
 /// The text with each version of `places` replaced by `version`.
 fn splice(
   text : String,
-  places : Array[(Int, Int, String)],
+  places : Array[(Int32, Int32, String)],
   version : String,
 ) -> String {
   let buf = StringBuilder()
@@ -273,7 +277,7 @@ fn set_mod_version(moon_mod : String, version : String) -> String? {
 fn sibling_places(
   text : String,
   siblings : Array[String],
-) -> Array[(Int, Int, String)] {
+) -> Array[(Int32, Int32, String)] {
   let places = []
   for name in siblings {
     for place in versions_after(text, "\"\{name}@") {
@@ -618,7 +622,7 @@ fn VersionsWorld::new(
   own_source : String,
   release_source : String,
 ) -> VersionsWorld {
-  { own_source, release_source, text: "", result: "", files: [], found: [] }
+  { own_source, release_source, text: "", result: "", files: [], found: [], }
 }
 
 ///|
@@ -639,7 +643,7 @@ impl @moonspec.World for VersionsWorld with fn configure(self, setup) {
     @expect.expect(mod_version(self.text).unwrap_or("none")).to_equal(expected)
   })
   setup.then0("there is no module version", fn() raise {
-    @expect.expect((mod_version(self.text) is None)).to_equal(true)
+    @expect.expect(mod_version(self.text) is None).to_equal(true)
   })
   setup.when1("I set the module version to {string}", fn(version : String) {
     self.result = set_mod_version(self.text, version).unwrap_or("none")
@@ -680,19 +684,26 @@ impl @moonspec.World for VersionsWorld with fn configure(self, setup) {
   ) {
     self.found = tools_mismatches(self.files, expected)
   })
-  setup.when1("I set the versions of the files to {string}", fn(version : String) {
+  setup.when1("I set the versions of the files to {string}", fn(
+    version : String,
+  ) {
     self.result = self.files
       .map(file => set_source_version(file.0, file.1, version))
       .join("|")
   })
-  setup.then1("the root version check gives {string}", fn(expected : String) raise {
+  setup.then1("the root version check gives {string}", fn(
+    expected : String,
+  ) raise {
     let actual = match root_version(self.text) {
       Ok(v) => "\{v}"
       Err(error) => error.message()
     }
     @expect.expect(actual).to_equal(expected)
   })
-  setup.then2("{string} is a version: {string}", fn(text : String, answer : String) raise {
+  setup.then2("{string} is a version: {string}", fn(
+    text : String,
+    answer : String,
+  ) raise {
     @expect.expect(if Version::parse(text) is Some(_) { "yes" } else { "no" }).to_equal(
       answer,
     )
@@ -718,7 +729,7 @@ async test "versions feature" {
   let release_source = @fs.read_file("release.mbtx").text()
   @moonspec.run_or_fail(
     () => VersionsWorld::new(own_source, release_source),
-    @moonspec.RunOptions::new([
+    @moonspec.RunOptions::RunOptions([
       @moonspec.FeatureSource::File("features/versions.feature"),
     ]),
   )
@@ -762,11 +773,9 @@ async test "set-tools to a new version keeps the tools tests green" {
     "\{copy}/moon.work",
     "members = [\n  \"./pkgs/contracts\",\n  \"./apps/openspec-ext\",\n  \"./apps/tools\",\n]\n",
   )
-  let bumped = Version::{ major: 9, minor: 8, patch: 7 }
+  let bumped = Version::{ major: 9, minor: 8, patch: 7, }
   set_tools(bumped, root=copy)
-  @expect.expect(tools_mismatches(tools_files(root=copy), "9.8.7")).to_equal(
-    [],
-  )
+  @expect.expect(tools_mismatches(tools_files(root=copy), "9.8.7")).to_equal([])
   let (code, out, err) = @process.collect_output(
     "moon",
     ["test", "apps/tools", "--target", "wasm"],

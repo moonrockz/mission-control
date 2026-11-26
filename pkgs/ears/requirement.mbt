@@ -1,4 +1,5 @@
 ///|
+#derive(Eq, Debug)
 pub(all) enum Pattern {
   Ubiquitous
   StateDriven
@@ -6,26 +7,28 @@ pub(all) enum Pattern {
   OptionalFeature
   UnwantedBehaviour
   Complex
-} derive(Eq, Debug)
+}
 
 ///|
 /// The trigger of a requirement. Only the parser makes triggers, so the
 /// condition is never empty and its white space is folded.
+#derive(Eq, Debug)
 pub enum Trigger {
   /// A `When` clause.
   Event(String)
   /// An `If ... then` clause.
   Unwanted(String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// A clause keyword of EARS.
+#derive(Eq, Hash, Debug)
 pub(all) enum Keyword {
   Where
   While
   When
   If
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 /// Every clause keyword, in the order that a sentence uses them. The parser
@@ -61,18 +64,20 @@ pub impl Show for Keyword with fn output(self, logger) {
 
 ///|
 /// Raised when an offset is not a position in a sentence.
+#derive(Eq, Debug)
 pub(all) suberror PositionError {
   /// The offset is negative.
   NegativeOffset(Int32)
-} derive(Eq, Debug)
+}
 
 ///|
 /// A place in the normalized sentence: the UTF-16 offset of a character,
 /// counted from 0, or the length of the sentence for its end, such as the
 /// place after a final `shall`.
+#derive(Eq, Compare, Hash, Debug)
 struct SentencePosition {
   offset : Int32
-} derive(Eq, Compare, Hash, Debug)
+}
 
 ///|
 pub fn SentencePosition::SentencePosition(
@@ -97,13 +102,15 @@ pub impl Show for SentencePosition with fn output(self, logger) {
 ///|
 /// The modal verb of a requirement, such as `shall` or `must`, and whether
 /// `not` follows it.
+#derive(Eq, Debug)
 pub struct Modal {
   verb : Word
   negated : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 /// The subject of a requirement.
+#derive(Eq, Debug)
 pub enum Subject {
   /// A determiner, such as `the` or `each`, and the system after it.
   Determined(opener~ : Word, system~ : String)
@@ -112,11 +119,12 @@ pub enum Subject {
   /// A pronoun, such as `it`. Block parsing resolves it to the system of an
   /// earlier sentence.
   Pronoun(opener~ : Word, resolved~ : String?)
-} derive(Eq, Debug)
+}
 
 ///|
 /// A validated EARS sentence. Only the parser can construct a requirement.
 /// Free-text clauses retain their case and punctuation, with whitespace folded.
+#derive(Eq, Debug)
 struct Requirement {
   lead_in : String?
   feature : String?
@@ -125,7 +133,7 @@ struct Requirement {
   subject : Subject
   modal : Modal
   response : String
-} derive(Eq, Debug)
+}
 
 ///|
 /// The lead-in phrase before the clauses, such as `Otherwise` or
@@ -268,6 +276,7 @@ pub fn Requirement::to_string(self : Requirement) -> String {
 /// Why a sentence is not an EARS requirement. Each case except
 /// `EmptyRequirement` has the position in the normalized sentence where the
 /// parse failed.
+#derive(Eq, Debug)
 pub(all) suberror ParseError {
   /// The sentence is empty or white space.
   EmptyRequirement
@@ -288,7 +297,7 @@ pub(all) suberror ParseError {
   /// In a requirement block, the pronoun subject at the position has no
   /// earlier sentence with a system to refer to.
   UnresolvedPronoun(pronoun~ : Word, at~ : SentencePosition)
-} derive(Eq, Debug)
+}
 
 ///|
 /// The position where the parse failed, or `None` for an empty sentence.

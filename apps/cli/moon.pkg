@@ -3,7 +3,6 @@ pkgtype(kind: "executable")
 import {
   "moonrockz/mission-control-contracts" @contracts,
   "moonbitlang/core/env",
-  "moonbitlang/x/sys",
 }
 
 options(

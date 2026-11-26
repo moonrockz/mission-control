@@ -51,10 +51,11 @@ pub fn UsageError::to_string(Self) -> String
 pub impl Show for UsageError
 
 // Types and methods
+#derive(Eq)
 pub(all) enum CheckScope {
   Snapshot
   Bundle
-} derive(Eq)
+}
 #deprecated
 pub fn CheckScope::equal(Self, Self) -> Bool
 #deprecated
@@ -66,21 +67,23 @@ pub enum Command {
   OpenSpec(OpenSpecCommand, @openspec-ext.RepositoryPath)
 }
 
+#derive(Eq)
 pub(all) enum ExitCode {
   Success
   Failure
   Usage
-} derive(Eq)
+}
 #deprecated
 pub fn ExitCode::equal(Self, Self) -> Bool
 #deprecated
 pub fn ExitCode::not_equal(Self, Self) -> Bool
 pub fn ExitCode::to_int(Self) -> Int32
 
+#derive(Eq)
 pub(all) enum Format {
   Text
   JsonReport
-} derive(Eq)
+}
 #deprecated
 pub fn Format::equal(Self, Self) -> Bool
 #deprecated

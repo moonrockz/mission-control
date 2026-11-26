@@ -1,21 +1,23 @@
 ///|
 /// One `log.md` entry, such as `* **Update**: Added revenue metric.`
+#derive(Eq, Debug)
 pub(all) struct LogEntry {
   /// The bold first word, such as `Update`, when it is present.
   label : String?
   text : String
   line : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// The heading of a `log.md` section. Only the log parser makes values, so
 /// `Undated` never holds a date.
+#derive(Eq, Debug)
 pub enum LogHeading {
   /// A calendar date, `YYYY-MM-DD`.
   Dated(LogDate)
   /// Any other heading text.
   Undated(String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// The heading as written.
@@ -42,17 +44,19 @@ fn LogHeading::parse(text : String) -> LogHeading {
 
 ///|
 /// One `log.md` section, from one `##` heading to the next.
+#derive(Eq, Debug)
 pub struct LogSection {
   heading : LogHeading
   line : Int32
   entries : ReadOnlyArray[LogEntry]
-} derive(Eq, Debug)
+}
 
 ///|
 /// The parsed body of a `log.md` (OKF v0.2, section 9).
+#derive(Eq, Debug)
 pub struct LogModel {
   sections : ReadOnlyArray[LogSection]
-} derive(Eq, Debug)
+}
 
 ///|
 fn parse_log_entry(line : String, number : Int32) -> LogEntry? {
@@ -129,6 +133,7 @@ pub fn LogModel::undated_sections(self : LogModel) -> Array[LogSection] {
 ///|
 /// A region of a document that starts at a marker comment, such as
 /// `<!-- kb:sources -->`, and runs to the end of the document.
+#derive(Eq, Debug)
 pub(all) struct Region {
   marker : String
   /// The text before the marker line, including the marker line.
@@ -137,7 +142,7 @@ pub(all) struct Region {
   content : String
   /// The file line of the marker.
   line : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// The comment form of a marker name: `<!-- name -->`.

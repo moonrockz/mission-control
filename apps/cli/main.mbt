@@ -6,7 +6,7 @@ fn main {
     Unknown(command) => {
       eprintln("mission-control: unknown command '\{command}'")
       eprintln(usage())
-      @sys.exit(result.exit_code().to_int())
+      @env.exit(result.exit_code().to_int())
     }
   }
 }

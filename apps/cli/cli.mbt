@@ -1,15 +1,17 @@
 ///|
 /// Raised when a number is not an exit code.
+#derive(Eq, Debug)
 pub(all) suberror ExitCodeError {
   /// The number is outside 0 to 255.
   InvalidExitCode(Int32)
-} derive(Eq, Debug)
+}
 
 ///|
 /// The exit code of a process: a number from 0 to 255.
+#derive(Eq, Hash, Debug)
 struct ExitCode {
   value : Int32
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 pub fn ExitCode::ExitCode(value : Int32) -> ExitCode raise ExitCodeError {

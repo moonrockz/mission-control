@@ -1,8 +1,9 @@
 ///|
 /// A register name, such as `decision`. It is not blank.
+#derive(Eq, Hash, Debug)
 struct RegisterName {
   text : String
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 pub fn RegisterName::RegisterName(
@@ -27,9 +28,10 @@ pub impl Show for RegisterName with fn output(self, logger) {
 ///|
 /// A state of a register, such as `Accepted`. It is not blank, and it is
 /// compared exactly as written.
+#derive(Eq, Hash, Debug)
 struct StateName {
   text : String
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 pub fn StateName::StateName(text : String) -> StateName raise ValueError {
@@ -51,9 +53,10 @@ pub impl Show for StateName with fn output(self, logger) {
 
 ///|
 /// A record ID, such as `0042`. It is not blank.
+#derive(Eq, Hash, Debug)
 struct RecordId {
   text : String
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 pub fn RecordId::RecordId(text : String) -> RecordId raise ValueError {
@@ -80,9 +83,10 @@ pub impl Compare for RecordId with fn compare(self, other) {
 
 ///|
 /// The width of a padded record ID: 1 to 9 digits.
+#derive(Eq, Hash, Debug)
 struct IdWidth {
   value : Int32
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 pub fn IdWidth::IdWidth(value : Int32) -> IdWidth raise ValueError {
@@ -105,12 +109,13 @@ pub fn IdWidth::to_int(self : IdWidth) -> Int32 {
 
 ///|
 /// How a register finds the ID of a record.
+#derive(Eq, Debug)
 pub(all) enum IdRule {
   /// The leading digits of the file name, padded with zeros to the width.
   LeadingDigits(IdWidth)
   /// The value of a frontmatter key.
   FieldValue(FieldKey)
-} derive(Eq, Debug)
+}
 
 ///|
 /// One record of a register: a typed view of one concept.
@@ -506,6 +511,7 @@ pub fn Register::duplicates(
 
 ///|
 /// Why a register refuses a transition.
+#derive(Eq, Debug)
 pub(all) enum TransitionDenial {
   /// The target state is not a state of the register.
   UnknownState(StateName)
@@ -513,7 +519,7 @@ pub(all) enum TransitionDenial {
   NotAllowed(from~ : StateName?, to~ : StateName)
   /// The transition exists, but the obligations with these names are not met.
   Refused(ReadOnlyArray[String])
-} derive(Eq, Debug)
+}
 
 ///|
 /// Checks whether `record` can move to state `to`: `Ok` when it can, else the
@@ -687,6 +693,7 @@ pub fn Register::successors(
 
 ///|
 /// What a reference field names.
+#derive(Eq, Debug)
 pub(all) enum ReferenceKind {
   /// A document: `bundle-label:/path.md`, or `/path.md` in the same bundle.
   DocumentRef
@@ -694,22 +701,24 @@ pub(all) enum ReferenceKind {
   RecordRef(register~ : RegisterName)
   /// A path or URL, resolved like a link.
   PathRef
-} derive(Eq, Debug)
+}
 
 ///|
 /// A frontmatter field whose values name documents or records.
+#derive(Eq, Debug)
 pub(all) struct ReferenceField {
   key : FieldKey
   kind : ReferenceKind
-} derive(Eq, Debug)
+}
 
 ///|
 /// A template for new concepts of one type. The body can use `{{title}}`,
 /// `{{description}}` and `{{type}}`.
+#derive(Eq, Debug)
 pub(all) struct Template {
   concept_type : ConceptType
   body : String
-} derive(Eq, Debug)
+}
 
 ///|
 pub extend RegisterName with Eq::{not_equal, equal}

@@ -172,9 +172,10 @@ test "law: a generated index lists every concept of its directory" {
 ///|
 /// A random supersession graph over records 1..n: each record may name a
 /// successor and may list predecessors.
+#derive(Debug)
 priv struct SupersessionCase {
   choices : ReadOnlyArray[UInt32]
-} derive(Debug)
+}
 
 ///|
 impl @quickcheck.Arbitrary for SupersessionCase with fn arbitrary(size, state) {

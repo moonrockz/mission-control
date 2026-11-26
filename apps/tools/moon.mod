@@ -19,6 +19,5 @@ supported_targets = "wasm+native"
 import {
   "moonrockz/mission-control-contracts@0.1.0",
   "moonrockz/openspec-ext@0.1.0",
-  "moonbitlang/async@0.22.5",
-  "moonbitlang/x@0.5.5",
+  "moonbitlang/async@0.22.10",
 }

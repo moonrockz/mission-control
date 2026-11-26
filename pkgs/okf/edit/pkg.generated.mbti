@@ -40,6 +40,7 @@ pub fn target_index(@okf.Bundle, @okf.BundlePath) -> @okf.BundlePath?
 pub fn yaml_scalar(String) -> String
 
 // Errors
+#derive(Eq, @debug.Debug)
 pub(all) suberror EditError {
   BrokenFrontmatter
   NoEntry(String)
@@ -47,16 +48,17 @@ pub(all) suberror EditError {
   InvalidValue(String)
   LineBreak(field~ : String, text~ : String)
   BlankText(field~ : String, text~ : String)
-} derive(Eq, @debug.Debug)
+}
 pub fn EditError::equal(Self, Self) -> Bool
 pub fn EditError::not_equal(Self, Self) -> Bool
 pub fn EditError::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) suberror PlanError {
   PathRefused(PathRefusal)
   EditFailed(EditError)
   TransitionRefused(TransitionRefusal)
-} derive(@debug.Debug)
+}
 pub fn PlanError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
@@ -68,26 +70,29 @@ pub fn EditPlan::is_empty(Self) -> Bool
 pub fn EditPlan::render(Self) -> String
 pub fn EditPlan::then(Self, Self) -> Self
 
+#derive(Eq, @debug.Debug)
 pub(all) struct EditResult {
   text : String
   changed : Bool
-} derive(Eq, @debug.Debug)
+}
 pub fn EditResult::equal(Self, Self) -> Bool
 pub fn EditResult::not_equal(Self, Self) -> Bool
 pub fn EditResult::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum FileChange {
   Create(path~ : @okf.StorePath, text~ : String)
   CreateBinary(path~ : @okf.StorePath, bytes~ : Bytes)
   Update(path~ : @okf.StorePath, before~ : String, after~ : String)
   Delete(path~ : @okf.StorePath)
-} derive(Eq, @debug.Debug)
+}
 pub fn FileChange::equal(Self, Self) -> Bool
 pub fn FileChange::not_equal(Self, Self) -> Bool
 pub fn FileChange::path(Self) -> @okf.StorePath
 pub fn FileChange::to_repr(Self) -> @debug.Repr
 
-type IndexEntryLine derive(Eq, Hash, @debug.Debug)
+#derive(Eq, Hash, @debug.Debug)
+type IndexEntryLine
 pub fn IndexEntryLine::IndexEntryLine(String, String, description? : String) -> Self raise EditError
 pub fn IndexEntryLine::equal(Self, Self) -> Bool
 pub fn IndexEntryLine::hash(Self) -> Int32
@@ -98,17 +103,19 @@ pub fn IndexEntryLine::to_repr(Self) -> @debug.Repr
 pub fn IndexEntryLine::to_string(Self) -> String
 pub impl Show for IndexEntryLine
 
+#derive(Eq, @debug.Debug)
 pub(all) enum PathRefusal {
   ReservedName(String)
   EscapesBundle(String)
   AlreadyExists(String)
   NotMarkdown(String)
-} derive(Eq, @debug.Debug)
+}
 pub fn PathRefusal::equal(Self, Self) -> Bool
 pub fn PathRefusal::not_equal(Self, Self) -> Bool
 pub fn PathRefusal::to_repr(Self) -> @debug.Repr
 
-type RawYaml derive(Eq, Hash, @debug.Debug)
+#derive(Eq, Hash, @debug.Debug)
+type RawYaml
 pub fn RawYaml::RawYaml(String) -> Self raise EditError
 pub fn RawYaml::equal(Self, Self) -> Bool
 pub fn RawYaml::hash(Self) -> Int32
@@ -121,7 +128,8 @@ pub fn RawYaml::to_repr(Self) -> @debug.Repr
 pub fn RawYaml::to_string(Self) -> String
 pub impl Show for RawYaml
 
-type SectionName derive(Eq, Hash, @debug.Debug)
+#derive(Eq, Hash, @debug.Debug)
+type SectionName
 pub fn SectionName::SectionName(String) -> Self raise EditError
 pub fn SectionName::equal(Self, Self) -> Bool
 pub fn SectionName::hash(Self) -> Int32
@@ -132,12 +140,13 @@ pub fn SectionName::to_repr(Self) -> @debug.Repr
 pub fn SectionName::to_string(Self) -> String
 pub impl Show for SectionName
 
+#derive(@debug.Debug)
 pub(all) enum TransitionRefusal {
   Refused(@okf.TransitionDenial)
   NoStateKey(register~ : @okf.RegisterName)
   StateKeyInExtra(@okf.FieldKey)
   PreviewInvalid(@okf.MetadataError)
-} derive(@debug.Debug)
+}
 pub fn TransitionRefusal::to_repr(Self) -> @debug.Repr
 
 // Type aliases

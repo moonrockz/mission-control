@@ -1,14 +1,16 @@
 ///|
 /// The kind of a YAML value that a lexicon key needs.
+#derive(Eq, Debug)
 pub(all) enum ValueKind {
   Text
   List
   Mapping
   Number
-} derive(Eq, Debug)
+}
 
 ///|
 /// Raised when a lexicon value breaks a rule.
+#derive(Eq, Debug)
 pub(all) suberror LexiconError {
   /// A word that is empty, or that has white space, a comma or a full stop.
   InvalidWord(String)
@@ -27,7 +29,7 @@ pub(all) suberror LexiconError {
   WrongType(key~ : String, line~ : Int32, expected~ : ValueKind)
   /// An entry of `key` that breaks the rule of its kind.
   InvalidEntry(key~ : String, line~ : Int32, error~ : LexiconError)
-} derive(Eq, Debug)
+}
 
 ///|
 fn has_space_char(text : String) -> Bool {
@@ -152,9 +154,10 @@ pub impl @debug.Debug for Phrase with fn to_repr(self) {
 ///|
 /// The start of a Markdown heading text that marks a requirement, such as
 /// `Requirement:`: not empty, with no line break.
+#derive(Eq, Hash, Debug)
 struct HeadingPrefix {
   text : String
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 pub fn HeadingPrefix::HeadingPrefix(
@@ -175,10 +178,11 @@ pub fn HeadingPrefix::to_string(self : HeadingPrefix) -> String {
 /// A Markdown heading that starts a requirement block: a heading of `level`
 /// whose text starts with `prefix`, with letter case. The rest of the text
 /// names the block.
+#derive(Eq, Hash, Debug)
 struct HeadingRule {
   level : @mdc.HeadingLevel
   prefix : HeadingPrefix
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 pub fn HeadingRule::HeadingRule(
@@ -276,6 +280,7 @@ impl Dialect with fn headings(_) {
 /// A dialect defined as data: a name and lists of vocabulary. A caller
 /// builds one in code or reads one from a lexicon file with
 /// `Lexicon::from_yaml`.
+#derive(Eq, Debug)
 struct Lexicon {
   name : String
   modals : ReadOnlyArray[Word]
@@ -284,7 +289,7 @@ struct Lexicon {
   systems : ReadOnlyArray[Phrase]
   lead_ins : ReadOnlyArray[Phrase]
   headings : ReadOnlyArray[HeadingRule]
-} derive(Eq, Debug)
+}
 
 ///|
 /// A lexicon. The name is free text for reports.

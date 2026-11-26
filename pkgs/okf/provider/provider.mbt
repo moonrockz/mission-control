@@ -1,24 +1,27 @@
 ///|
 /// Whether a store entry is a file or a directory.
+#derive(Eq, Debug)
 pub(all) enum EntryKind {
   File
   Directory
-} derive(Eq, Debug)
+}
 
 ///|
 /// One entry of a directory listing.
+#derive(Eq, Debug)
 pub(all) struct StoreEntry {
   name : @okf.EntryName
   kind : EntryKind
-} derive(Eq, Debug)
+}
 
 ///|
 /// Where a store error happened, relative to the store root. A store error
 /// never names a host path.
+#derive(Eq, Debug)
 pub(all) enum StoreLocation {
   FileAt(@okf.StorePath)
   DirectoryAt(@okf.StoreDir)
-} derive(Eq, Debug)
+}
 
 ///|
 pub fn StoreLocation::to_string(self : StoreLocation) -> String {
@@ -35,6 +38,7 @@ pub impl Show for StoreLocation with fn output(self, logger) {
 
 ///|
 /// Raised by a document store.
+#derive(Eq, Debug)
 pub(all) suberror StoreError {
   /// The file or directory does not exist.
   NotFound(StoreLocation)
@@ -45,21 +49,23 @@ pub(all) suberror StoreError {
   InvalidPath(String)
   /// Any other failure, with the location and a message.
   Failed(StoreLocation, String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// The root of a store, such as a host directory or a browser directory name.
 /// It is not blank.
+#derive(Eq, Hash, Debug)
 struct StoreRoot {
   text : String
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 /// Raised when a store root breaks its rule.
+#derive(Eq, Debug)
 pub(all) suberror RootError {
   /// The root is empty or only white space.
   BlankRoot(String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// Checks a store root. A trailing `/` is removed, except from `/` itself.
@@ -250,22 +256,24 @@ pub async fn apply(
 
 ///|
 /// Whether a derived index matches the knowledge it was built from.
+#derive(Eq, Debug)
 pub(all) enum IndexStatus {
   /// The index was never built.
   Missing
   Fresh
   /// The index differs from the knowledge, with a reason.
   Stale(String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// The metadata that an index records at build time: a schema version of at
 /// least 1 and a document count of at least 0.
+#derive(Eq, Debug)
 pub struct IndexMetadata {
   schema_version : Int32
   built_at : @okf.Instant
   document_count : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// Checks index metadata. Raises `InvalidMetadata` for a schema version below
@@ -283,6 +291,7 @@ pub fn IndexMetadata::IndexMetadata(
 
 ///|
 /// Raised by index and search providers.
+#derive(Eq, Debug)
 pub(all) suberror IndexError {
   /// The index was never built.
   NotBuilt
@@ -290,7 +299,7 @@ pub(all) suberror IndexError {
   InvalidMetadata(schema_version~ : Int32, document_count~ : Int32)
   /// Any other failure.
   IndexFailed(String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// A derived index over loaded knowledge. An implementation can keep it in

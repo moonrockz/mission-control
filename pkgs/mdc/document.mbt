@@ -2,13 +2,14 @@
 /// An immutable MDC document. Cmark locations are relative to `body()`;
 /// `source_range` translates them to the original input. Offsets count UTF-16
 /// code units.
+#derive(Debug)
 struct Document {
   frontmatter : Frontmatter?
   markdown : @cmark.Doc
   body : String
   body_offset : Int32
   body_line : Int32
-} derive(Debug)
+}
 
 ///|
 pub extend Document with @debug.Debug::{to_repr}
@@ -90,13 +91,14 @@ pub fn Document::root(self : Document) -> Node {
 }
 
 ///|
+#derive(Debug)
 pub(all) suberror ParseError {
   /// The frontmatter has no closing delimiter line.
   UnterminatedFrontmatter
   /// The frontmatter payload is not one YAML mapping. An `InvalidYaml`
   /// position is a position in the document.
   InvalidFrontmatter(FrontmatterError)
-} derive(Debug)
+}
 
 ///|
 pub extend ParseError with @debug.Debug::{to_repr}

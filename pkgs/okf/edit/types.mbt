@@ -2,9 +2,10 @@
 /// A raw YAML value for a frontmatter key: one line, or a first line and
 /// indented continuation lines, so that it cannot add keys or close the
 /// frontmatter block.
+#derive(Eq, Hash, Debug)
 struct RawYaml {
   text : String
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 /// Checks a raw YAML value. Raises `InvalidValue` when a later line is not
@@ -47,9 +48,10 @@ pub impl Show for RawYaml with fn output(self, logger) {
 
 ///|
 /// The heading text of an index section: one line that is not blank.
+#derive(Eq, Hash, Debug)
 struct SectionName {
   text : String
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 /// Checks a section name. Raises `LineBreak` for a line break and `BlankText`
@@ -76,9 +78,10 @@ pub impl Show for SectionName with fn output(self, logger) {
 /// The line of an index entry: `* [title](destination) - description`. The
 /// title, the destination and the description are each one line, so the
 /// entry is one line.
+#derive(Eq, Hash, Debug)
 struct IndexEntryLine {
   text : String
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 /// Builds an index entry line. Raises `LineBreak` when a part has a line
@@ -113,6 +116,7 @@ pub impl Show for IndexEntryLine with fn output(self, logger) {
 
 ///|
 /// Why a new concept path is refused.
+#derive(Eq, Debug)
 pub(all) enum PathRefusal {
   /// The file name is `index.md` or `log.md`.
   ReservedName(String)
@@ -122,10 +126,11 @@ pub(all) enum PathRefusal {
   AlreadyExists(String)
   /// The path does not end with `.md`.
   NotMarkdown(String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// Why a register transition is refused.
+#derive(Debug)
 pub(all) enum TransitionRefusal {
   /// The register refuses the transition.
   Refused(@okf.TransitionDenial)
@@ -135,10 +140,11 @@ pub(all) enum TransitionRefusal {
   StateKeyInExtra(@okf.FieldKey)
   /// The edit would leave frontmatter that does not parse.
   PreviewInvalid(@okf.MetadataError)
-} derive(Debug)
+}
 
 ///|
 /// Raised by the planners. One error covers every way that a plan can fail.
+#derive(Debug)
 pub(all) suberror PlanError {
   /// The path of a new concept is refused.
   PathRefused(PathRefusal)
@@ -146,7 +152,7 @@ pub(all) suberror PlanError {
   EditFailed(EditError)
   /// A register refuses a transition.
   TransitionRefused(TransitionRefusal)
-} derive(Debug)
+}
 
 ///|
 pub extend RawYaml with Eq::{not_equal, equal}

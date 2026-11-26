@@ -1,11 +1,10 @@
 ----
 import {
-  "moonbitlang/async@0.22.5",
-  "moonbitlang/async@0.22.5/fs",
-  "moonbitlang/async@0.22.5/process",
-  "moonbitlang/async@0.22.5/stdio",
+  "moonbitlang/async@0.22.10",
+  "moonbitlang/async@0.22.10/fs",
+  "moonbitlang/async@0.22.10/process",
+  "moonbitlang/async@0.22.10/stdio",
   "moonbitlang/core/env",
-  "moonbitlang/x@0.5.5/sys",
 }
 ----
 
@@ -30,7 +29,7 @@ enum ExitCode {
 ///|
 /// Ends the script with this exit code.
 fn ExitCode::exit(self : ExitCode) -> Unit {
-  @sys.exit(
+  @env.exit(
     match self {
       Failure => 1
       Usage => 2
@@ -49,10 +48,17 @@ let site : String = "_build/okf-browser/site"
 let built : String = "_build/js/debug/build/moonrockz/mission-control-tests/okf-browser/okf-browser.js"
 
 ///|
-async fn run_or_exit(command : String, args : Array[String], env? : Map[String, String] = {}) -> Unit {
+async fn run_or_exit(
+  command : String,
+  args : Array[String],
+  env~ : Map[String, String] = {},
+) -> Unit {
   let code = @process.run(
-    command, args,
-    extra_env=env, stdout=@stdio.stdout, stderr=@stdio.stderr,
+    command,
+    args,
+    extra_env=env,
+    stdout=@stdio.stdout,
+    stderr=@stdio.stderr,
   )
   if code != 0 {
     println("❌ \{command} \{args.join(" ")} failed")
@@ -74,14 +80,20 @@ async fn main {
   println("🔨 Building the browser page...")
   run_or_exit("moon", ["build", "tests/okf-browser", "--target", "js"])
   @fs.mkdir(site, recursive=true, allow_exist=true)
-  @fs.write_file(site + "/okf-browser.js", @fs.read_file(built).binary(), create_mode=CreateOrTruncate)
+  @fs.write_file(
+    site + "/okf-browser.js",
+    @fs.read_file(built).binary(),
+    create_mode=CreateOrTruncate,
+  )
   @fs.write_file(
     site + "/index.html",
     @fs.read_file("tests/okf-browser/index.html").binary(),
     create_mode=CreateOrTruncate,
   )
   // `require("@playwright/test")` resolves through NODE_PATH to the package that mise installs.
-  let (_, out) = @process.collect_stdout("mise", ["where", "npm:@playwright/test"])
+  let (_, out) = @process.collect_stdout("mise", [
+    "where", "npm:@playwright/test",
+  ])
   let package_dir = out.text().trim(chars=" \n\r").to_owned()
   let env : Map[String, String] = {
     "NODE_PATH": package_dir + "/lib/node_modules",
@@ -96,6 +108,10 @@ async fn main {
     )
   }
   println("🧪 Running the browser checks...")
-  run_or_exit("playwright", ["test", "-c", "tests/okf-browser/playwright.config.cjs"], env~)
+  run_or_exit(
+    "playwright",
+    ["test", "-c", "tests/okf-browser/playwright.config.cjs"],
+    env~,
+  )
   println("✅ The browser checks passed")
 }

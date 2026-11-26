@@ -1,8 +1,9 @@
 ///|
+#derive(Eq, Debug)
 priv enum PositionEvent {
   At(path~ : String, node~ : String)
   After(path~ : String, node~ : String)
-} derive(Eq, Debug)
+}
 
 ///|
 // Independent recursive specification of paths and callback order.

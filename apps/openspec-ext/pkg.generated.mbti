@@ -74,6 +74,7 @@ pub fn OpenSpecVersionError::to_string(Self) -> String
 pub impl Show for OpenSpecVersionError
 
 // Types and methods
+#derive(Eq)
 pub(all) enum BundleFile {
   Schema
   Proposal
@@ -82,7 +83,7 @@ pub(all) enum BundleFile {
   Tasks
   Notice
   License
-} derive(Eq)
+}
 pub fn BundleFile::content(Self) -> String
 #deprecated
 pub fn BundleFile::equal(Self, Self) -> Bool
@@ -95,9 +96,10 @@ pub(all) enum CheckLevel {
   Bundle(Tool)
 }
 
+#derive(Eq)
 pub struct FileDigest {
   // private fields
-} derive(Eq)
+}
 pub fn FileDigest::FileDigest(String) -> Self raise ExtensionError
 #deprecated
 pub fn FileDigest::equal(Self, Self) -> Bool
@@ -105,11 +107,12 @@ pub fn FileDigest::equal(Self, Self) -> Bool
 pub fn FileDigest::not_equal(Self, Self) -> Bool
 pub fn FileDigest::text(Self) -> String
 
+#derive(Eq)
 pub enum Input {
   LockFile
   Config
   Managed(BundleFile)
-} derive(Eq)
+}
 #deprecated
 pub fn Input::equal(Self, Self) -> Bool
 #deprecated
@@ -149,10 +152,11 @@ pub struct RepositoryPath {
 pub fn RepositoryPath::RepositoryPath(String) -> Self raise ExtensionError
 pub fn RepositoryPath::text(Self) -> String
 
+#derive(Eq)
 pub(all) enum RetiredFile {
   Script
   ScriptFeature
-} derive(Eq)
+}
 #deprecated
 pub fn RetiredFile::equal(Self, Self) -> Bool
 #deprecated
@@ -173,9 +177,10 @@ pub fn SupportedOpenSpec::SupportedOpenSpec(String) -> Self raise OpenSpecVersio
 pub fn SupportedOpenSpec::scope_arguments(Self) -> Array[String]
 pub fn SupportedOpenSpec::version(Self) -> @mission-control-contracts.Version
 
+#derive(Eq)
 pub struct Tool {
   // private fields
-} derive(Eq)
+}
 pub fn Tool::Tool(String, @mission-control-contracts.Version) -> Self raise ExtensionError
 #deprecated
 pub fn Tool::equal(Self, Self) -> Bool

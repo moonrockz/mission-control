@@ -1,16 +1,18 @@
 ///|
 /// One OpenSpec scenario: `#### Scenario: name` with its WHEN, THEN and AND
 /// clauses. The name and the clauses are free text.
+#derive(Eq, Debug)
 pub struct Scenario {
   name : String
   when_ : ReadOnlyArray[String]
   then_ : ReadOnlyArray[String]
   line : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// One OpenSpec requirement: `### Requirement: name`, its text and its
 /// scenarios, and the EARS sentences of its text.
+#derive(Eq, Debug)
 pub struct Requirement {
   name : RequirementName
   text : String
@@ -23,39 +25,43 @@ pub struct Requirement {
   /// The sentences of the text that do not parse as EARS. Their spans are
   /// relative to the text.
   sentence_diagnostics : ReadOnlyArray[@ears.Diagnostic]
-} derive(Eq, Debug)
+}
 
 ///|
 /// A delta operation of a change spec.
+#derive(Eq, Debug)
 pub(all) enum DeltaOp {
   Added
   Modified
   Removed
   Renamed
-} derive(Eq, Debug)
+}
 
 ///|
 /// One complete rename of a `RENAMED Requirements` section: a `FROM:` line and
 /// the `TO:` line after it.
+#derive(Eq, Debug)
 pub struct Rename {
   from : RequirementName
   to : RequirementName
   /// The file line of the `FROM:` line.
   line : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// A rename with one part only. The view gives no rename for it, and
 /// validation reports it.
+#derive(Eq, Debug)
 pub(all) enum IncompleteRename {
   /// A `FROM:` line without a `TO:` line after it.
   MissingTo(from~ : RequirementName, line~ : Int32)
   /// A `TO:` line without a `FROM:` line before it.
   MissingFrom(to~ : RequirementName, line~ : Int32)
-} derive(Eq, Debug)
+}
 
 ///|
 /// One delta section: `## ADDED Requirements` and so on.
+#derive(Eq, Debug)
 pub struct DeltaSection {
   op : DeltaOp
   requirements : ReadOnlyArray[Requirement]
@@ -63,10 +69,11 @@ pub struct DeltaSection {
   renames : ReadOnlyArray[Rename]
   /// For `RENAMED`: the renames with one part only.
   incomplete_renames : ReadOnlyArray[IncompleteRename]
-} derive(Eq, Debug)
+}
 
 ///|
 /// The structured content of one spec file: a main specification, or a delta.
+#derive(Eq, Debug)
 pub struct SpecModel {
   capability : CapabilityPath
   purpose : String?
@@ -77,28 +84,31 @@ pub struct SpecModel {
   /// The file lines of `### Requirement:` headings without a name. The view
   /// gives no requirement for them, and validation reports them.
   unnamed_requirements : ReadOnlyArray[Int32]
-} derive(Eq, Debug)
+}
 
 ///|
 /// One task of a `tasks.md`: `- [ ] 1.1 text`. A task without a number has
 /// no number.
+#derive(Eq, Debug)
 pub struct Task {
   number : TaskNumber?
   text : String
   done : Bool
   line : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 /// One `## N. Group` of a `tasks.md`. Tasks before the first `##` heading
 /// form a group without a heading.
+#derive(Eq, Debug)
 pub struct TaskGroup {
   heading : String?
   tasks : ReadOnlyArray[Task]
-} derive(Eq, Debug)
+}
 
 ///|
 /// One OpenSpec change.
+#derive(Eq, Debug)
 pub struct Change {
   name : ChangeName
   state : ChangeState
@@ -106,14 +116,15 @@ pub struct Change {
   design : String?
   task_groups : ReadOnlyArray[TaskGroup]
   deltas : ReadOnlyArray[SpecModel]
-} derive(Eq, Debug)
+}
 
 ///|
 /// The structured view of OpenSpec content.
+#derive(Eq, Debug)
 pub struct OpenSpecView {
   specs : ReadOnlyArray[SpecModel]
   changes : ReadOnlyArray[Change]
-} derive(Eq, Debug)
+}
 
 ///|
 fn[T] frozen(items : Array[T]) -> ReadOnlyArray[T] {

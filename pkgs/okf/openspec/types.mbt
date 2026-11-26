@@ -1,10 +1,11 @@
 ///|
 /// Raised when a text is not a valid OpenSpec name.
+#derive(Eq, Debug)
 pub(all) suberror NameError {
   /// A value of `key` (`capability`, `change`, `requirement` or `task`) that
   /// breaks the rules of its name type. The rules are on each type.
   InvalidName(key~ : String, value~ : String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// True when `part` is a safe OpenSpec path segment: not empty, not `.` or
@@ -43,9 +44,10 @@ fn is_windows_device(part : String) -> Bool {
 ///|
 /// A capability path such as `okf/documents`: one or more safe segments
 /// joined with `/`, so that a path built from it stays inside its directory.
+#derive(Eq, Hash, Debug)
 struct CapabilityPath {
   text : String
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 pub fn CapabilityPath::CapabilityPath(
@@ -74,9 +76,10 @@ pub impl Compare for CapabilityPath with fn compare(self, other) {
 
 ///|
 /// A change name such as `add-okf-module`: one safe segment.
+#derive(Eq, Hash, Debug)
 struct ChangeName {
   text : String
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 pub fn ChangeName::ChangeName(text : String) -> ChangeName raise NameError {
@@ -104,9 +107,10 @@ pub impl Compare for ChangeName with fn compare(self, other) {
 ///|
 /// A requirement name: one line that is not blank, without surrounding white
 /// space.
+#derive(Eq, Hash, Debug)
 struct RequirementName {
   text : String
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 /// Parses a requirement name. Surrounding spaces and tabs are removed.
@@ -134,10 +138,11 @@ pub impl Show for RequirementName with fn output(self, logger) {
 /// A task number such as `1.2`: dot-separated positive integers. Task numbers
 /// order by their numbers, so `1.2` comes before `1.10`. The text is
 /// normalized, so `01.2` and `1.2` are the same number.
+#derive(Eq, Hash, Debug)
 struct TaskNumber {
   parts : ReadOnlyArray[Int32]
   text : String
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 pub fn TaskNumber::TaskNumber(text : String) -> TaskNumber raise NameError {
@@ -193,6 +198,7 @@ pub impl Compare for TaskNumber with fn compare(self, other) {
 
 ///|
 /// The OKF types that the OpenSpec profile defines.
+#derive(Eq, Hash, Debug)
 pub(all) enum OpenSpecType {
   Specification
   ChangeProposal
@@ -201,7 +207,7 @@ pub(all) enum OpenSpecType {
   SpecDelta
   RequirementConcept
   ScenarioConcept
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 /// Every OpenSpec type, in a fixed order.
@@ -259,10 +265,11 @@ fn type_of(doc : @okf.Document) -> OpenSpecType? {
 
 ///|
 /// The state of a change.
+#derive(Eq, Hash, Debug)
 pub(all) enum ChangeState {
   Active
   Archived
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 pub fn ChangeState::to_string(self : ChangeState) -> String {

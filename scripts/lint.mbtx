@@ -1,9 +1,8 @@
 ----
 import {
-  "moonbitlang/async@0.22.5",
-  "moonbitlang/async@0.22.5/process",
-  "moonbitlang/async@0.22.5/stdio",
-  "moonbitlang/x@0.5.5/sys",
+  "moonbitlang/async@0.22.10",
+  "moonbitlang/async@0.22.10/process",
+  "moonbitlang/async@0.22.10/stdio",
   "moonbitlang/core/env",
 }
 ----
@@ -26,7 +25,7 @@ enum ExitCode {
 ///|
 /// Ends the script with this exit code.
 fn ExitCode::exit(self : ExitCode) -> Unit {
-  @sys.exit(
+  @env.exit(
     match self {
       Failure => 1
       Usage => 2
@@ -47,8 +46,10 @@ async fn main {
   }
   for task in ["lint:yaml", "lint:moonbit"] {
     let code = @process.run(
-      "mise", ["run", task],
-      stdout=@stdio.stdout, stderr=@stdio.stderr,
+      "mise",
+      ["run", task],
+      stdout=@stdio.stdout,
+      stderr=@stdio.stderr,
     )
     if code != 0 {
       ExitCode::Failure.exit()
